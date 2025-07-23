@@ -13,12 +13,17 @@ import {
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 
-const AddPeriodScreen = ({ navigation }) => {
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [flowLevel, setFlowLevel] = useState(null)
-  const [symptoms, setSymptoms] = useState('')
-  const [notes, setNotes] = useState('')
+const AddPeriodScreen = ({ navigation, route }) => {
+  const editMode = route?.params?.editMode || false
+  const periodData = route?.params?.periodData || {}
+  
+  const [startDate, setStartDate] = useState(editMode ? periodData.start_date : '')
+  const [endDate, setEndDate] = useState(editMode ? periodData.end_date || '' : '')
+  const [flowLevel, setFlowLevel] = useState(editMode ? periodData.flow_level : null)
+  const [symptoms, setSymptoms] = useState(editMode ? (periodData.symptoms ? periodData.symptoms.join(', ') : '') : '')
+  const [mood, setMood] = useState(editMode ? periodData.mood || '' : '')
+  const [energy, setEnergy] = useState(editMode ? periodData.energy || '' : '')
+  const [notes, setNotes] = useState(editMode ? periodData.notes || '' : '')
   const [loading, setLoading] = useState(false)
 
   const flowLevels = [
@@ -92,25 +97,40 @@ const AddPeriodScreen = ({ navigation }) => {
         .filter(s => s.length > 0)
 
       const periodData = {
-        user_id: user.id,
+        ...(editMode ? {} : { user_id: user.id }),
         start_date: startDate,
         end_date: endDate || null,
         flow_level: flowLevel,
         symptoms: symptomsArray.length > 0 ? symptomsArray : null,
+        mood: mood.trim() || null,
+        energy: energy.trim() || null,
         notes: notes.trim() || null
       }
 
-      const { error } = await supabase
-        .from('periods')
-        .insert([periodData])
+      let error
+      
+      if (editMode) {
+        // Update existing period
+        const { error: updateError } = await supabase
+          .from('periods')
+          .update(periodData)
+          .eq('id', route.params.periodData.id)
+        error = updateError
+      } else {
+        // Insert new period
+        const { error: insertError } = await supabase
+          .from('periods')
+          .insert([periodData])
+        error = insertError
+      }
 
       if (error) {
         console.error('Error saving period:', error)
-        Alert.alert('Error', 'Failed to save period entry')
+        Alert.alert('Error', `Failed to ${editMode ? 'update' : 'save'} period entry`)
       } else {
         Alert.alert(
           'Success',
-          'Period entry saved successfully!',
+          `Period entry ${editMode ? 'updated' : 'saved'} successfully!`,
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         )
       }
@@ -131,7 +151,7 @@ const AddPeriodScreen = ({ navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.cancelButton}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Period</Text>
+        <Text style={styles.headerTitle}>{editMode ? 'Edit Period' : 'Add Period'}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -195,18 +215,48 @@ const AddPeriodScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Symptoms</Text>
-          <Text style={styles.inputDescription}>
-            Enter symptoms separated by commas (e.g., cramps, headache, bloating)
-          </Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Enter symptoms..."
-            value={symptoms}
-            onChangeText={setSymptoms}
-            multiline
-            numberOfLines={3}
-          />
+          <Text style={styles.sectionTitle}>Symptoms & Wellness</Text>
+          
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Physical Symptoms</Text>
+            <Text style={styles.inputDescription}>
+              Enter symptoms separated by commas (e.g., cramps, headache, bloating)
+            </Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Enter symptoms..."
+              value={symptoms}
+              onChangeText={setSymptoms}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Mood & Emotions</Text>
+            <Text style={styles.inputDescription}>
+              How are you feeling? (e.g., happy, anxious, calm, irritable)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Describe your mood..."
+              value={mood}
+              onChangeText={setMood}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Energy Level</Text>
+            <Text style={styles.inputDescription}>
+              Rate your energy (e.g., high, medium, low, exhausted)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="How energetic do you feel?"
+              value={energy}
+              onChangeText={setEnergy}
+            />
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -229,7 +279,7 @@ const AddPeriodScreen = ({ navigation }) => {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>Save Period Entry</Text>
+            <Text style={styles.saveButtonText}>{editMode ? 'Update Period Entry' : 'Save Period Entry'}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -303,6 +353,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     fontSize: 16,
+    color: '#333',
   },
   textArea: {
     height: 80,

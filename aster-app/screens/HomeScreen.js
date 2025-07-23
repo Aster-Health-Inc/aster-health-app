@@ -7,15 +7,20 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  ScrollView
 } from 'react-native'
 import { supabase } from '../lib/supabase'
+import CycleWheel from '../components/CycleWheel'
+import DailyInsights from '../components/DailyInsights'
+import { calculateCyclePhase } from '../utils/cycleCalculations'
 
 const HomeScreen = ({ navigation }) => {
   const [user, setUser] = useState(null)
   const [periods, setPeriods] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [cycleData, setCycleData] = useState(null)
 
   useEffect(() => {
     getUser()
@@ -43,6 +48,12 @@ const HomeScreen = ({ navigation }) => {
         Alert.alert('Error', 'Failed to load period data')
       } else {
         setPeriods(data || [])
+        // Calculate cycle data from most recent period
+        if (data && data.length > 0) {
+          const latestPeriod = data[0]
+          const calculatedCycleData = calculateCyclePhase(latestPeriod.start_date)
+          setCycleData(calculatedCycleData)
+        }
       }
     } catch (error) {
       console.error('Error fetching periods:', error)
@@ -56,6 +67,39 @@ const HomeScreen = ({ navigation }) => {
   const onRefresh = () => {
     setRefreshing(true)
     fetchPeriods()
+  }
+
+  const handleDeletePeriod = async (periodId) => {
+    Alert.alert(
+      'Delete Period Entry',
+      'Are you sure you want to delete this period entry? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('periods')
+                .delete()
+                .eq('id', periodId)
+
+              if (error) {
+                console.error('Error deleting period:', error)
+                Alert.alert('Error', 'Failed to delete period entry')
+              } else {
+                Alert.alert('Success', 'Period entry deleted successfully')
+                fetchPeriods() // Refresh the list
+              }
+            } catch (error) {
+              console.error('Error deleting period:', error)
+              Alert.alert('Error', 'An unexpected error occurred')
+            }
+          }
+        }
+      ]
+    )
   }
 
   const handleSignOut = async () => {
@@ -146,42 +190,116 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Your Period History</Text>
+      <ScrollView 
+        style={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#e91e63']}
+            tintColor="#e91e63"
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <CycleWheel cycleData={cycleData} />
+        
+        <DailyInsights cycleData={cycleData} />
+
+        <View style={styles.quickActions}>
           <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => navigation.navigate('AddPeriod')}
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('HormoneEducation')}
           >
-            <Text style={styles.addButtonText}>+ Add Period</Text>
+            <Text style={styles.actionEmoji}>🧬</Text>
+            <Text style={styles.actionText}>Learn About Hormones</Text>
           </TouchableOpacity>
         </View>
 
-        {periods.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              No period entries yet
-            </Text>
-            <Text style={styles.emptyStateSubtext}>
-              Tap "Add Period" to start tracking
-            </Text>
+        <View style={styles.content}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Period History</Text>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => navigation.navigate('AddPeriod')}
+            >
+              <Text style={styles.addButtonText}>+ Add Period</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <FlatList
-            data={periods}
-            renderItem={renderPeriodItem}
-            keyExtractor={(item) => item.id}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={['#e91e63']}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
+
+          {periods.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                No period entries yet
+              </Text>
+              <Text style={styles.emptyStateSubtext}>
+                Tap "Add Period" to start tracking
+              </Text>
+            </View>
+          ) : (
+            periods.map((item) => (
+              <View key={item.id} style={styles.periodCard}>
+                <View style={styles.periodHeader}>
+                  <View style={styles.periodInfo}>
+                    <Text style={styles.periodDate}>
+                      {formatDate(item.start_date)}
+                      {item.end_date && ` - ${formatDate(item.end_date)}`}
+                    </Text>
+                    {item.flow_level && (
+                      <Text style={styles.flowLevel}>
+                        {getFlowLevelText(item.flow_level)}
+                      </Text>
+                    )}
+                  </View>
+                  
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity 
+                      style={styles.editButton}
+                      onPress={() => navigation.navigate('AddPeriod', { 
+                        editMode: true, 
+                        periodData: item 
+                      })}
+                    >
+                      <Text style={styles.editButtonText}>✏️</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.deleteButton}
+                      onPress={() => handleDeletePeriod(item.id)}
+                    >
+                      <Text style={styles.deleteButtonText}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {item.symptoms && item.symptoms.length > 0 && (
+                  <Text style={styles.symptoms}>
+                    Symptoms: {item.symptoms.join(', ')}
+                  </Text>
+                )}
+                
+                {item.mood && (
+                  <Text style={styles.mood}>
+                    Mood: {item.mood}
+                  </Text>
+                )}
+                
+                {item.energy && (
+                  <Text style={styles.energy}>
+                    Energy: {item.energy}
+                  </Text>
+                )}
+                
+                {item.notes && (
+                  <Text style={styles.notes} numberOfLines={2}>
+                    Notes: {item.notes}
+                  </Text>
+                )}
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
     </View>
   )
 }
@@ -190,6 +308,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  scrollContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -235,7 +356,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   content: {
-    flex: 1,
     padding: 20,
   },
   sectionHeader: {
@@ -289,8 +409,14 @@ const styles = StyleSheet.create({
   periodHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
+  },
+  periodInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   periodDate: {
     fontSize: 16,
@@ -311,6 +437,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontStyle: 'italic',
+  },
+  quickActions: {
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  actionButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e91e63',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  actionEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  actionText: {
+    color: '#e91e63',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#e3f2fd',
+  },
+  editButtonText: {
+    fontSize: 16,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#ffe6ee',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+  },
+  mood: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  energy: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
   },
 })
 

@@ -7,8 +7,10 @@ import { supabase } from './lib/supabase'
 
 import LoginScreen from './screens/LoginScreen'
 import SignUpScreen from './screens/SignUpScreen'
+import DashboardScreen from './screens/DashboardScreen'
 import HomeScreen from './screens/HomeScreen'
 import AddPeriodScreen from './screens/AddPeriodScreen'
+import HormoneEducationScreen from './screens/HormoneEducationScreen'
 
 const Stack = createStackNavigator()
 
@@ -45,8 +47,10 @@ export default function App() {
       >
         {session && session.user ? (
           <>
-            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="CycleTracking" component={HomeScreen} />
             <Stack.Screen name="AddPeriod" component={AddPeriodScreen} />
+            <Stack.Screen name="HormoneEducation" component={HormoneEducationScreen} />
           </>
         ) : (
           <>
