@@ -12,6 +12,7 @@ import {
   Platform
 } from 'react-native'
 import { supabase } from '../lib/supabase'
+import SymptomSelector from '../components/SymptomSelector'
 
 const AddPeriodScreen = ({ navigation, route }) => {
   const editMode = route?.params?.editMode || false
@@ -20,7 +21,7 @@ const AddPeriodScreen = ({ navigation, route }) => {
   const [startDate, setStartDate] = useState(editMode ? periodData.start_date : '')
   const [endDate, setEndDate] = useState(editMode ? periodData.end_date || '' : '')
   const [flowLevel, setFlowLevel] = useState(editMode ? periodData.flow_level : null)
-  const [symptoms, setSymptoms] = useState(editMode ? (periodData.symptoms ? periodData.symptoms.join(', ') : '') : '')
+  const [selectedSymptoms, setSelectedSymptoms] = useState(editMode ? [] : []) // Will be populated from old symptoms if editing
   const [mood, setMood] = useState(editMode ? periodData.mood || '' : '')
   const [energy, setEnergy] = useState(editMode ? periodData.energy || '' : '')
   const [notes, setNotes] = useState(editMode ? periodData.notes || '' : '')
@@ -91,10 +92,8 @@ const AddPeriodScreen = ({ navigation, route }) => {
         return
       }
 
-      const symptomsArray = symptoms
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
+      // Keep old symptoms format for backward compatibility
+      const symptomsArray = selectedSymptoms.map(s => s.name);
 
       const periodData = {
         ...(editMode ? {} : { user_id: user.id }),
@@ -108,6 +107,7 @@ const AddPeriodScreen = ({ navigation, route }) => {
       }
 
       let error
+      let periodId
       
       if (editMode) {
         // Update existing period
@@ -116,12 +116,43 @@ const AddPeriodScreen = ({ navigation, route }) => {
           .update(periodData)
           .eq('id', route.params.periodData.id)
         error = updateError
+        periodId = route.params.periodData.id
       } else {
         // Insert new period
-        const { error: insertError } = await supabase
+        const { data: insertData, error: insertError } = await supabase
           .from('periods')
           .insert([periodData])
+          .select('id')
         error = insertError
+        periodId = insertData?.[0]?.id
+      }
+
+      // Save structured symptoms to user_symptoms table
+      if (!error && periodId && selectedSymptoms.length > 0) {
+        // First, delete existing symptoms for this period (for edit mode)
+        if (editMode) {
+          await supabase
+            .from('user_symptoms')
+            .delete()
+            .eq('period_id', periodId)
+        }
+
+        // Insert new symptoms
+        const symptomEntries = selectedSymptoms.map(symptom => ({
+          user_id: user.id,
+          period_id: periodId,
+          symptom_id: symptom.id,
+          severity: symptom.severity || null
+        }))
+
+        const { error: symptomError } = await supabase
+          .from('user_symptoms')
+          .insert(symptomEntries)
+
+        if (symptomError) {
+          console.error('Error saving symptoms:', symptomError)
+          // Don't fail the whole operation for symptom errors
+        }
       }
 
       if (error) {
@@ -215,23 +246,15 @@ const AddPeriodScreen = ({ navigation, route }) => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Symptoms & Wellness</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Physical Symptoms</Text>
-            <Text style={styles.inputDescription}>
-              Enter symptoms separated by commas (e.g., cramps, headache, bloating)
-            </Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Enter symptoms..."
-              value={symptoms}
-              onChangeText={setSymptoms}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
+          <SymptomSelector
+            selectedSymptoms={selectedSymptoms}
+            onSymptomsChange={setSelectedSymptoms}
+          />
+        </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Additional Wellness</Text>
+          
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Mood & Emotions</Text>
             <Text style={styles.inputDescription}>

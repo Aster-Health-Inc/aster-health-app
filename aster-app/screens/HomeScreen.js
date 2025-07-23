@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase'
 import CycleWheel from '../components/CycleWheel'
 import DailyInsights from '../components/DailyInsights'
 import { calculateCyclePhase } from '../utils/cycleCalculations'
+import { updatePredictionsForUser, getActivePrediction } from '../utils/cyclePredictions'
 
 const HomeScreen = ({ navigation }) => {
   const [user, setUser] = useState(null)
@@ -21,6 +22,7 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [cycleData, setCycleData] = useState(null)
+  const [cyclePrediction, setCyclePrediction] = useState(null)
 
   useEffect(() => {
     getUser()
@@ -39,7 +41,16 @@ const HomeScreen = ({ navigation }) => {
 
       const { data, error } = await supabase
         .from('periods')
-        .select('*')
+        .select(`
+          *,
+          user_symptoms (
+            severity,
+            symptom_categories (
+              name,
+              emoji
+            )
+          )
+        `)
         .eq('user_id', user.id)
         .order('start_date', { ascending: false })
 
@@ -53,6 +64,13 @@ const HomeScreen = ({ navigation }) => {
           const latestPeriod = data[0]
           const calculatedCycleData = calculateCyclePhase(latestPeriod.start_date)
           setCycleData(calculatedCycleData)
+          
+          // Update cycle predictions
+          if (user) {
+            updatePredictionsForUser(user.id).then(() => {
+              getActivePrediction(user.id).then(setCyclePrediction)
+            })
+          }
         }
       }
     } catch (error) {
@@ -204,7 +222,7 @@ const HomeScreen = ({ navigation }) => {
       >
         <CycleWheel cycleData={cycleData} />
         
-        <DailyInsights cycleData={cycleData} />
+        <DailyInsights cycleData={cycleData} cyclePrediction={cyclePrediction} />
 
         <View style={styles.quickActions}>
           <TouchableOpacity 
@@ -272,10 +290,28 @@ const HomeScreen = ({ navigation }) => {
                   </View>
                 </View>
                 
+                {/* Show old symptoms format for backward compatibility */}
                 {item.symptoms && item.symptoms.length > 0 && (
                   <Text style={styles.symptoms}>
                     Symptoms: {item.symptoms.join(', ')}
                   </Text>
+                )}
+                
+                {/* Show new structured symptoms */}
+                {item.user_symptoms && item.user_symptoms.length > 0 && (
+                  <View style={styles.structuredSymptoms}>
+                    <Text style={styles.symptomsLabel}>Symptoms:</Text>
+                    <View style={styles.symptomTags}>
+                      {item.user_symptoms.map((userSymptom, index) => (
+                        <View key={index} style={styles.symptomTag}>
+                          <Text style={styles.symptomTagText}>
+                            {userSymptom.symptom_categories.emoji} {userSymptom.symptom_categories.name}
+                            {userSymptom.severity && ` (${userSymptom.severity}/5)`}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
                 )}
                 
                 {item.mood && (
@@ -493,6 +529,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
+  },
+  structuredSymptoms: {
+    marginBottom: 8,
+  },
+  symptomsLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  symptomTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  symptomTag: {
+    backgroundColor: '#e91e63',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  symptomTagText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '500',
   },
 })
 

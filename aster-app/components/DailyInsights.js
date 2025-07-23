@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { getPhaseInfo } from '../utils/cycleCalculations';
 
-const DailyInsights = ({ cycleData }) => {
+const DailyInsights = ({ cycleData, cyclePrediction }) => {
   if (!cycleData) {
     return (
       <View style={styles.container}>
@@ -60,6 +60,24 @@ const DailyInsights = ({ cycleData }) => {
           ))}
         </ScrollView>
       </View>
+
+      {cyclePrediction && (
+        <View style={styles.predictionSection}>
+          <Text style={styles.sectionTitle}>Smart Predictions</Text>
+          <View style={styles.predictionCard}>
+            <Text style={styles.predictionLabel}>Next Period Expected:</Text>
+            <Text style={styles.predictionDate}>
+              {new Date(cyclePrediction.predicted_period_date).toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric'
+              })}
+            </Text>
+            <Text style={styles.confidence}>
+              {Math.round(cyclePrediction.confidence_score * 100)}% confidence
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -165,6 +183,33 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  predictionSection: {
+    marginTop: 15,
+  },
+  predictionCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  predictionLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+  },
+  predictionDate: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#e91e63',
+    marginBottom: 4,
+  },
+  confidence: {
+    fontSize: 12,
+    color: '#999',
+    fontStyle: 'italic',
   },
 });
 
