@@ -7,10 +7,6 @@ import { supabase } from './lib/supabase'
 
 import LoginScreen from './screens/LoginScreen'
 import SignUpScreen from './screens/SignUpScreen'
-import DashboardScreen from './screens/DashboardScreen'
-import HomeScreen from './screens/HomeScreen'
-import AddPeriodScreen from './screens/AddPeriodScreen'
-import HormoneEducationScreen from './screens/HormoneEducationScreen'
 import BasicInfoScreen from './screens/BasicInfoScreen'
 import SurveyPromptScreen from './screens/SurveyPromptScreen'
 import FlowIntensityScreen from './screens/FlowIntensityScreen'
@@ -21,6 +17,7 @@ import ConsentScreen from './screens/ConsentScreen'
 import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen'
 import ReminderScreen from './screens/ReminderScreen'
 import CarouselWalkthroughScreen from './screens/CarouselWalkthroughScreen'
+import OnboardingRouterScreen from './screens/OnboardingRouterScreen'
 
 const Stack = createStackNavigator()
 
@@ -50,37 +47,26 @@ export default function App() {
   return (
     <NavigationContainer>
       <StatusBar style="auto" />
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        {session && session.user ? (
-          <>
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="CycleTracking" component={HomeScreen} />
-            <Stack.Screen name="AddPeriod" component={AddPeriodScreen} />
-            <Stack.Screen name="HormoneEducation" component={HormoneEducationScreen} />
-            <Stack.Screen name="SurveyPrompt" component={SurveyPromptScreen} />
-            <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
-            <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
-            <Stack.Screen name="Reminder" component={ReminderScreen} />
-            <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
-            <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
-          </>
-        ) : (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!session || !session.user ? (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Consent" component={ConsentScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
-             <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
+          </>
+        ) : null}
+
+        {session && session.user && (
+          <>
+            <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+            <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
             <Stack.Screen name="SurveyPrompt" component={SurveyPromptScreen} />
             <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
             <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
-            <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
+            <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
           </>
         )}

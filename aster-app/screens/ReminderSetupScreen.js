@@ -1,6 +1,6 @@
 // screens/ReminderSetupScreen.js
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { useNavigation } from '@react-navigation/native'
 
@@ -37,6 +37,14 @@ export default function ReminderSetupScreen() {
 
       <TouchableOpacity style={styles.button} onPress={requestNotificationPermission}>
         <Text style={styles.buttonText}>Allow notifications</Text>
+      </TouchableOpacity>
+
+      {/* 🚀 Testing Shortcut Button */}
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#555', marginTop: 20 }]}
+        onPress={() => navigation.navigate('Reminder')}
+      >
+        <Text style={styles.buttonText}>Skip & Go to Reminder Screen</Text>
       </TouchableOpacity>
     </View>
   )

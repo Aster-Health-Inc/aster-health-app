@@ -1,13 +1,18 @@
-// screens/FlowIntensityScreen.js
 import React, { useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
+import { supabase } from '../lib/supabase'
 
 export default function FlowIntensityScreen() {
   const navigation = useNavigation()
-
-  const typicalDays = 6 // This can be dynamic later
+  const typicalDays = 6
   const [flowRatings, setFlowRatings] = useState(Array(typicalDays).fill(null))
+
+  const intensityLabels = {
+    1: 'light',
+    2: 'medium',
+    3: 'heavy'
+  }
 
   const updateRating = (dayIndex, rating) => {
     const updated = [...flowRatings]
@@ -15,23 +20,41 @@ export default function FlowIntensityScreen() {
     setFlowRatings(updated)
   }
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (flowRatings.includes(null)) {
-      alert('Please rate each day from 1 to 3')
+      alert('Please rate each day as light, medium, or heavy')
       return
     }
 
-    console.log('Flow ratings:', flowRatings)
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
 
-    // Optionally save to Supabase here
+      const entries = flowRatings.map((intensity, index) => ({
+        user_id: user.id,
+        day_number: index + 1,
+        intensity, // save numeric value (1 = light, 2 = medium, 3 = heavy)
+      }))
 
-    navigation.navigate('OptionalCycleHistory')
+      const { error: insertError } = await supabase.from('flow_intensity_logs').insert(entries)
+
+      if (insertError) {
+        console.log('❌ Insert error:', insertError)
+        alert('Something went wrong saving flow ratings.')
+      } else {
+        console.log('✅ Flow ratings saved:', entries)
+        navigation.navigate('OptionalCycleHistory')
+      }
+    } catch (err) {
+      console.log('❌ Unexpected error:', err)
+      alert('Unexpected error. Try again.')
+    }
   }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Flow intensity</Text>
-      <Text style={styles.subtitle}>Rate flow intensity for each day (1 = light, 3 = heavy)</Text>
+      <Text style={styles.title}>Flow Intensity</Text>
+      <Text style={styles.subtitle}>Rate the intensity for each day of your period</Text>
 
       {flowRatings.map((rating, i) => (
         <View key={i} style={styles.dayRow}>
@@ -41,8 +64,8 @@ export default function FlowIntensityScreen() {
               <TouchableOpacity
                 key={value}
                 style={[
-                  styles.ratingCircle,
-                  rating === value && styles.selectedCircle,
+                  styles.ratingBox,
+                  rating === value && styles.selectedBox,
                 ]}
                 onPress={() => updateRating(i, value)}
               >
@@ -52,7 +75,7 @@ export default function FlowIntensityScreen() {
                     rating === value && styles.selectedText,
                   ]}
                 >
-                  {value}
+                  {intensityLabels[value]}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -63,6 +86,7 @@ export default function FlowIntensityScreen() {
       <TouchableOpacity style={styles.button} onPress={handleContinue}>
         <Text style={styles.buttonText}>Continue →</Text>
       </TouchableOpacity>
+
       <TouchableOpacity onPress={() => navigation.navigate('OptionalCycleHistory')}>
         <Text style={styles.skipText}>I’m not sure</Text>
       </TouchableOpacity>
@@ -100,23 +124,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-start',
   },
-  ratingCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  ratingBox: {
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: '#999',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     marginRight: 12,
+    backgroundColor: '#fff',
   },
-  selectedCircle: {
+  selectedBox: {
     backgroundColor: '#000',
     borderColor: '#000',
   },
   ratingText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
+    textTransform: 'capitalize',
   },
   selectedText: {
     color: '#fff',

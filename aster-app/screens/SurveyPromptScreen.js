@@ -1,7 +1,8 @@
 // screens/SurveyPromptScreen.js
-import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
+import { supabase } from '../lib/supabase'
+
 
 export default function SurveyPromptScreen() {
   const navigation = useNavigation()
@@ -24,6 +25,12 @@ export default function SurveyPromptScreen() {
         onPress={() => navigation.navigate('ReminderSetup')}
       >
         <Text style={styles.skipText}>Skip for now</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={async () => {
+        await supabase.auth.signOut()
+        navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })
+        }}>
+          <Text style={{ color: 'red', marginTop: 20 }}>Log Out and Reset</Text>
       </TouchableOpacity>
     </View>
   )

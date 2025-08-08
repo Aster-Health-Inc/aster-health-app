@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 
@@ -20,7 +20,6 @@ const SignUpScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false)
 
   const isFormFilled = email.trim() && password.trim() && confirmPassword.trim()
-
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
   const handleSignUp = async () => {
@@ -36,78 +35,88 @@ const SignUpScreen = ({ navigation }) => {
         password: password,
       })
 
-      if (error) Alert.alert('Sign Up Error', error.message)
-      else Alert.alert('Account Created!', 'You can now log in.', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') },
-      ])
+      if (error) {
+        Alert.alert('Sign Up Error', error.message)
+      } else {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError || !user) throw userError
+
+        // Insert into public.users
+        const { error: insertError } = await supabase.from('users').insert([
+          { id: user.id, email: user.email }
+        ])
+
+        if (insertError) {
+          console.log('❌ Failed to insert into public.users:', insertError)
+        }
+
+        Alert.alert('Account Created!', 'Welcome to Aster!', [
+          {
+            text: 'Continue',
+            onPress: () =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'OnboardingRouter' }],
+              }),
+          },
+        ])
+      }
     } catch (err) {
-      Alert.alert('Error', err.message)
+      console.log('❌ Unexpected error during signup:', err)
+      Alert.alert('Unexpected Error', 'Something went wrong.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <Text style={styles.title}>Sign Up</Text>
-          <Text style={styles.subtitle}>Start tracking your health today</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : null}
+      style={styles.container}
+    >
+      <ScrollView contentContainerStyle={styles.innerContainer}>
+        <Text style={styles.title}>Create your account</Text>
 
-          {/* Inputs */}
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            placeholderTextColor="#aaa"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#aaa"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            placeholderTextColor="#aaa"
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-          />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          keyboardType="email-address"
+          placeholderTextColor="#888"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          secureTextEntry
+          placeholderTextColor="#888"
+          value={password}
+          onChangeText={setPassword}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Confirm Password"
+          secureTextEntry
+          placeholderTextColor="#888"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
 
-          {/* Terms */}
-          <Text style={styles.terms}>
-            By signing up you agree to our <Text style={styles.link}>Terms and Conditions</Text> and <Text style={styles.link}>Privacy Policy</Text>
-          </Text>
+        <TouchableOpacity
+          style={[styles.button, !isFormFilled && styles.buttonDisabled]}
+          onPress={handleSignUp}
+          disabled={!isFormFilled || loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Sign Up</Text>
+          )}
+        </TouchableOpacity>
 
-          {/* Continue Button */}
-          <TouchableOpacity
-            style={[styles.button, !isFormFilled && styles.buttonDisabled]}
-            onPress={handleSignUp}
-            disabled={!isFormFilled || loading}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue →</Text>}
-          </TouchableOpacity>
-
-          {/* ✅ Explore Cycle Tracking Button */}
-          <TouchableOpacity
-            style={styles.exploreButton}
-            onPress={() => navigation.navigate('BasicInfo')}
-          >
-            <Text style={styles.exploreText}>Explore Cycle Tracking →</Text>
-          </TouchableOpacity>
-
-          {/* Login Link */}
-          <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.linkText}>Already have an account? Log in →</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.loginLink}>Already have an account? Log In</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -115,30 +124,36 @@ const SignUpScreen = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5E6D3' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20 },
-  content: { paddingVertical: 40 },
-  title: { fontSize: 32, fontWeight: 'bold', color: '#000', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#555', marginBottom: 30, textAlign: 'center' },
-  input: { backgroundColor: '#F2DFCF', padding: 15, borderRadius: 30, marginBottom: 15, fontSize: 16, color: '#000' },
-  terms: { fontSize: 12, color: '#444', marginVertical: 10, textAlign: 'center' },
-  link: { color: '#000', fontWeight: '600' },
-  button: { backgroundColor: '#000', paddingVertical: 15, borderRadius: 30, alignItems: 'center', marginTop: 10 },
-  buttonDisabled: { backgroundColor: '#999' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  linkButton: { marginTop: 15, alignItems: 'center' },
-  linkText: { fontSize: 14, color: '#000' },
-
-  /* ✅ Explore Button Styles */
-  exploreButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#000',
+  innerContainer: { padding: 20, justifyContent: 'center', flexGrow: 1 },
+  title: { fontSize: 24, fontWeight: '600', marginBottom: 30, textAlign: 'center' },
+  input: {
+    backgroundColor: '#F2DFCF',
+    padding: 15,
+    borderRadius: 30,
+    marginBottom: 20,
+    fontSize: 16,
+    color: '#000',
+  },
+  button: {
+    backgroundColor: '#000',
     paddingVertical: 15,
     borderRadius: 30,
     alignItems: 'center',
-    marginTop: 15,
   },
-  exploreText: { color: '#000', fontSize: 16, fontWeight: '600' }
+  buttonDisabled: {
+    backgroundColor: '#999',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  loginLink: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: '#333',
+    textDecorationLine: 'underline',
+  },
 })
 
 export default SignUpScreen
