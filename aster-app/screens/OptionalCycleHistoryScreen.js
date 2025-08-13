@@ -1,74 +1,90 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform, Alert } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { supabase } from '../lib/supabase';
-import { useNavigation } from '@react-navigation/native';
+// screens/OptionalCycleHistoryScreen.js
+import React, { useState } from 'react'
+import {
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  Modal, Platform, Alert
+} from 'react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
+import { supabase } from '../lib/supabase'
+import { useNavigation } from '@react-navigation/native'
 
 export default function OptionalCycleHistoryScreen() {
   const navigation = useNavigation()
 
+  // keep dates in state as Date objects; format to YYYY-MM-DD only when saving
   const [cycles, setCycles] = useState([
     { start: null, end: null },
     { start: null, end: null },
     { start: null, end: null },
-    { start: null, end: null }
+    { start: null, end: null },
   ])
 
-  const [showPicker, setShowPicker] = useState({ index: null, field: null })
+  // which cell is being edited
+  const [activePicker, setActivePicker] = useState({ index: null, field: null }) // 'start' | 'end'
+  // use one modal + spinner for BOTH platforms to keep iOS look
+  const [pickerVisible, setPickerVisible] = useState(false)
+  const [tempDate, setTempDate] = useState(new Date('2020-01-01'))
 
-  const handleNativeChange = (event, selectedDate) => {
-    if (event.type === 'dismissed' || !selectedDate) {
-      setShowPicker({ index: null, field: null })
+  const openPicker = (index, field) => {
+    const current = cycles[index][field]
+    // seed the spinner with current value or a sensible fallback
+    setTempDate(current instanceof Date ? current : new Date('2020-01-01'))
+    setActivePicker({ index, field })
+    setPickerVisible(true)
+  }
+
+  // spinner updates temp only; commit on Done for both platforms
+  const handleSpinnerChange = (_, selectedDate) => {
+    if (selectedDate) setTempDate(selectedDate)
+  }
+  const confirmPicker = () => {
+    const { index, field } = activePicker
+    const updated = [...cycles]
+    updated[index][field] = tempDate
+    setCycles(updated)
+    setPickerVisible(false)
+    setActivePicker({ index: null, field: null })
+  }
+  const cancelPicker = () => {
+    setPickerVisible(false)
+    setActivePicker({ index: null, field: null })
+  }
+
+  const fmtDisplay = (d) => (d instanceof Date ? d.toDateString() : 'Select date')
+  const toYMD = (d) => d.toISOString().split('T')[0]
+
+  const handleContinue = async () => {
+    const filled = cycles.filter(c => c.start instanceof Date && c.end instanceof Date)
+    if (filled.length === 0) {
+      navigation.navigate('ReminderSetup')
       return
     }
-    const date = selectedDate.toISOString().split('T')[0]
-    const updated = [...cycles]
-    updated[showPicker.index][showPicker.field] = date
-    setCycles(updated)
-    setShowPicker({ index: null, field: null })
-  }
 
-  const handleWebDate = (date) => {
-    const updated = [...cycles]
-    updated[showPicker.index][showPicker.field] = date
-    setCycles(updated)
-    setShowPicker({ index: null, field: null })
-  }
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw userError || new Error('Not signed in')
 
-const handleContinue = async () => {
-  const filled = cycles.filter(c => c.start && c.end)
-  if (filled.length === 0) {
-    navigation.navigate('ReminderSetup')
-    return
-  }
+      const entries = filled.map(cycle => ({
+        user_id: user.id,
+        start_date: toYMD(cycle.start),
+        end_date: toYMD(cycle.end),
+        flow_level: null,
+        symptoms: [],
+        notes: ''
+      }))
 
-  try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError) throw userError
-
-    const entries = filled.map(cycle => ({
-      user_id: user.id,
-      start_date: cycle.start,
-      end_date: cycle.end,
-      flow_level: null,
-      symptoms: [],
-      notes: ''
-    }))
-
-    const { error: insertError } = await supabase.from('periods').insert(entries)
-
-    if (insertError) {
-      console.log('❌ Insert error:', insertError)
-      Alert.alert('Failed to save history')
-    } else {
-      navigation.navigate('ReminderSetup')
+      const { error: insertError } = await supabase.from('periods').insert(entries)
+      if (insertError) {
+        console.log('❌ Insert error:', insertError)
+        Alert.alert('Failed to save history')
+      } else {
+        navigation.navigate('ReminderSetup')
+      }
+    } catch (err) {
+      console.log('❌ Unexpected error:', err)
+      Alert.alert('Something went wrong. Try again.')
     }
-  } catch (err) {
-    console.log('❌ Unexpected error:', err)
-    Alert.alert('Something went wrong. Try again.')
   }
-}
-
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -83,52 +99,46 @@ const handleContinue = async () => {
 
           <TouchableOpacity
             style={styles.dateBox}
-            onPress={() => setShowPicker({ index, field: 'start' })}
+            onPress={() => openPicker(index, 'start')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.dateText}>{cycle.start || 'Start Date'}</Text>
+            <Text style={styles.dateText}>{fmtDisplay(cycle.start)}</Text>
           </TouchableOpacity>
 
           <Text style={styles.toText}>to</Text>
 
           <TouchableOpacity
             style={styles.dateBox}
-            onPress={() => setShowPicker({ index, field: 'end' })}
+            onPress={() => openPicker(index, 'end')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.dateText}>{cycle.end || 'End Date'}</Text>
+            <Text style={styles.dateText}>{fmtDisplay(cycle.end)}</Text>
           </TouchableOpacity>
         </View>
       ))}
 
-      {Platform.OS !== 'web' && showPicker.index !== null && (
-      <DateTimePicker
-        value={new Date()}
-        mode="date"
-        display={Platform.OS === 'ios' ? 'spinner' : 'calendar'}
-        onChange={handleNativeChange}
-        minimumDate={new Date(1900, 0, 1)}
-        maximumDate={new Date(2100, 11, 31)}
-      />
-
-      )}
-
-      {Platform.OS === 'web' && showPicker.index !== null && (
-        <Modal transparent={true} animationType="fade" visible>
+      {/* One iOS-style modal for BOTH platforms */}
+      {pickerVisible && (
+        <Modal transparent animationType="fade" visible>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <input
-                type="date"
-                onChange={(e) => handleWebDate(e.target.value)}
-                style={{
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #ccc',
-                  fontSize: 16
-                }}
-                autoFocus
+            <View style={styles.modalBox}>
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display="spinner"            // force spinner to keep iOS feel
+                maximumDate={new Date()}      // allow up to today (fixes Sept–Dec and future issues)
+                minimumDate={new Date(1900, 0, 1)}
+                onChange={handleSpinnerChange}
+                themeVariant="light"
               />
-              <TouchableOpacity style={styles.closeButton} onPress={() => setShowPicker({ index: null, field: null })}>
-                <Text style={styles.closeText}>Cancel</Text>
-              </TouchableOpacity>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={cancelPicker}>
+                  <Text style={styles.modalBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={confirmPicker}>
+                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>Done</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
@@ -149,8 +159,10 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, backgroundColor: '#F5E6D3', padding: 20, alignItems: 'center' },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 20 },
+
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, width: '100%', justifyContent: 'center' },
-  cycleLabel: { fontSize: 14, width: 70 },
+  cycleLabel: { fontSize: 14, width: 90, textAlign: 'right', marginRight: 8 },
+
   dateBox: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -158,16 +170,22 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     paddingVertical: 10,
     paddingHorizontal: 12,
-    width: 110,
+    width: 130,
     alignItems: 'center'
   },
   dateText: { fontSize: 14, color: '#333' },
-  toText: { fontSize: 14, marginHorizontal: 4 },
+  toText: { fontSize: 14, marginHorizontal: 6 },
+
   continueButton: { backgroundColor: '#000', paddingVertical: 12, width: '90%', borderRadius: 25, alignItems: 'center', marginTop: 20 },
   continueText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   skipText: { marginTop: 15, fontSize: 14, color: '#555', textDecorationLine: 'underline' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 10, alignItems: 'center' },
-  closeButton: { marginTop: 10, padding: 8 },
-  closeText: { color: '#000', fontWeight: '600' }
+
+  // iOS-style modal (matches Basic)
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' },
+  modalBox: { width: '85%', maxHeight: '70%', backgroundColor: '#fff', borderRadius: 14, padding: 14 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
+  modalBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
+  modalCancel: { backgroundColor: '#eee', marginRight: 8 },
+  modalConfirm: { backgroundColor: '#000' },
+  modalBtnText: { color: '#000', fontWeight: '600' },
 })
