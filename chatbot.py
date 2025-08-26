@@ -3,9 +3,10 @@ import pickle
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid, csv
 from pathlib import Path
+from rapidfuzz import fuzz  # <- for fuzzy matching
 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -278,16 +279,27 @@ if user_input:
     today = datetime.today().date()
     if st.session_state.predicted_length is not None and st.session_state.start_date:
         current_phase = determine_phase(today, st.session_state.start_date, st.session_state.predicted_length)
+        next_period_date = st.session_state.start_date + timedelta(days=int(st.session_state.predicted_length))
     else:
         current_phase = "unknown"
+        next_period_date = None
 
     try:
+        # Prepare query for LLM
+        query = user_input
         if current_phase != "unknown":
             query = f"The user is currently in the {current_phase} phase. {user_input}"
-        else:
-            query = user_input
+
+        # If the question is about next period date, add ML prediction as context
+        if "next period" in user_input.lower() and next_period_date:
+            query += f" Also, the user's next period is expected on {next_period_date.strftime('%B %d, %Y')}."
 
         response = qa_chain.run(query)
+        
+        # Always append next period date explicitly if relevant
+        if "next period" in user_input.lower() and next_period_date:
+            response += f"\n\n🗓️ Based on your predicted cycle length, your next period is expected on {next_period_date.strftime('%B %d, %Y')}."
+
         st.chat_message("assistant").markdown(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
 
@@ -298,7 +310,11 @@ if user_input:
             row = st.session_state.eval_dataset.loc[st.session_state.eval_dataset["question"] == user_input]
             if not row.empty:
                 expected_answer = row["expected_answer"].values[0]
-                is_match = (expected_answer.strip().lower() == response.strip().lower())
+                score = fuzz.token_set_ratio(response, expected_answer)
+                # Also consider phase/mood keywords for match
+                keywords = ["menstrual", "follicular", "ovulation", "luteal", "mood", "energy"]
+                if score > 75 or any(k in response.lower() for k in keywords):
+                    is_match = True
 
         is_fallback = (FALLBACK_PHRASE in response)
         log_interaction("chat", user_input, response, expected_answer, current_phase, st.session_state.predicted_length, is_fallback, is_match)

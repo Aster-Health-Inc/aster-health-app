@@ -15,14 +15,14 @@ dependencies:
   - ipywidgets
   - ipykernel
   - openpyxl
-  - pip
   - faiss-cpu
- - pip:
-    - kaggle
-    - streamlit
-    - langchain
-    - langchain-community  
-    - langchain-openai
-    - openai
-    - python-dotenv
-    - pypdf
+  - pip
+  - pip:
+      - kaggle
+      - streamlit
+      - langchain
+      - langchain-community
+      - langchain-openai
+      - openai
+      - python-dotenv
+      - pypdf
