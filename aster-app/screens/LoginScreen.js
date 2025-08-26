@@ -17,80 +17,60 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields')
-      return
-    }
+  const isFormFilled = email.trim() && password.trim()
 
+  const handleLogin = async () => {
+    if (!isFormFilled) return
     setLoading(true)
-    
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password,
       })
-
-      if (error) {
-        Alert.alert('Login Error', error.message)
-      }
-    } catch (error) {
-      Alert.alert('Error', `An unexpected error occurred: ${error.message || error}`)
-      console.error('Login error:', error)
+      if (error) Alert.alert('Login Error', error.message)
+    } catch (err) {
+      Alert.alert('Error', err.message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={styles.content}>
-        <Text style={styles.title}>Welcome to Aster</Text>
-        <Text style={styles.subtitle}>Track your health journey</Text>
+        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.subtitle}>Welcome back, continue your journey</Text>
 
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Email address"
+          placeholderTextColor="#aaa"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#aaa"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]} 
+        {/* Sign In Button */}
+        <TouchableOpacity
+          style={[styles.button, !isFormFilled && styles.buttonDisabled]}
           onPress={handleLogin}
-          disabled={loading}
+          disabled={!isFormFilled || loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Sign In</Text>
-          )}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue →</Text>}
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.linkButton}
-          onPress={() => navigation.navigate('SignUp')}
-        >
-          <Text style={styles.linkText}>
-            Don't have an account? Sign Up
-          </Text>
+        {/* Sign Up Link */}
+        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('SignUp')}>
+          <Text style={styles.linkText}>Don’t have an account? Sign Up</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -98,63 +78,16 @@ const LoginScreen = ({ navigation }) => {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8,
-    color: '#e91e63',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 40,
-    color: '#666',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#e91e63',
-    paddingVertical: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  linkButton: {
-    alignItems: 'center',
-  },
-  linkText: {
-    color: '#e91e63',
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: '#F5E6D3', justifyContent: 'center' },
+  content: { padding: 20 },
+  title: { fontSize: 32, fontWeight: 'bold', color: '#000', marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 16, color: '#555', marginBottom: 30, textAlign: 'center' },
+  input: { backgroundColor: '#F2DFCF', padding: 15, borderRadius: 30, marginBottom: 15, fontSize: 16, color: '#000' },
+  button: { backgroundColor: '#000', paddingVertical: 15, borderRadius: 30, alignItems: 'center', marginTop: 10 },
+  buttonDisabled: { backgroundColor: '#999' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  linkButton: { marginTop: 15, alignItems: 'center' },
+  linkText: { fontSize: 14, color: '#000' }
 })
 
 export default LoginScreen
