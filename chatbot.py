@@ -4,6 +4,8 @@ import pandas as pd
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+import uuid, csv
+from pathlib import Path
 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -12,6 +14,19 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 from langchain.chat_models import ChatOpenAI
+
+# ------------------------------
+# Logging setup
+# ------------------------------
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "interactions.csv"
+AGG_FILE = LOG_DIR / "daily_metrics.csv"
+FALLBACK_PHRASE = "I'm not sure based on the available context."
+
+# CSV for evaluation dataset
+if "eval_dataset" not in st.session_state:
+    st.session_state.eval_dataset = None
 
 load_dotenv()
 
@@ -92,10 +107,78 @@ def determine_phase(today, start_date, cycle_length):
     else:
         return "post-cycle or irregular"
 
-qa_chain = create_qa_chain()
+# ------------------------------
+# Logging functions
+# ------------------------------
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
+def _ensure_log_header():
+    if not LOG_FILE.exists():
+        with open(LOG_FILE, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "timestamp_iso",
+                "session_id",
+                "event_type",        # "chat" or "conversion" or "eval"
+                "user_input",
+                "assistant_response",
+                "expected_answer",
+                "phase",
+                "predicted_length",
+                "is_fallback",       # 0/1
+                "is_match"           # 0/1
+            ])
+
+def log_interaction(event_type, user_input, assistant_response, expected_answer, phase, predicted_length, is_fallback, is_match):
+    _ensure_log_header()
+    with open(LOG_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            datetime.now().isoformat(),
+            st.session_state.session_id,
+            event_type,
+            user_input or "",
+            assistant_response or "",
+            expected_answer or "",
+            phase or "",
+            f"{predicted_length:.2f}" if isinstance(predicted_length, (int, float)) else "",
+            int(bool(is_fallback)),
+            int(bool(is_match))
+        ])
+
+def write_daily_aggregates():
+    if not LOG_FILE.exists():
+        return
+    df = pd.read_csv(LOG_FILE)
+    if df.empty:
+        return
+    df["date"] = pd.to_datetime(df["timestamp_iso"]).dt.date
+    g = df.groupby("date").agg(
+        total_interactions=("event_type", "count"),
+        fallbacks=("is_fallback", "sum"),
+        matches=("is_match", "sum"),
+        conversions=("event_type", lambda s: (s=="conversion").sum())
+    ).reset_index()
+    g["fallback_rate"] = (g["fallbacks"] / g["total_interactions"]).round(3)
+    g["accuracy"] = (g["matches"] / g["total_interactions"]).round(3)
+    g["conversion_rate"] = (g["conversions"] / g["total_interactions"]).round(3)
+    g.to_csv(AGG_FILE, index=False)
+
+# ------------------------------
+# Streamlit UI
+# ------------------------------
+qa_chain = create_qa_chain()
 st.set_page_config(page_title="Cycle Chatbot", page_icon="🩸")
 st.title("🩸 Menstrual Health Chatbot")
+
+# Upload evaluation dataset
+st.sidebar.subheader("📂 Upload Evaluation Dataset")
+eval_file = st.sidebar.file_uploader("Upload CSV with columns: question,expected_answer", type=["csv"])
+if eval_file:
+    st.session_state.eval_dataset = pd.read_csv(eval_file)
+    st.sidebar.success("Evaluation dataset loaded ✅")
+    st.sidebar.write(st.session_state.eval_dataset.head())
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -111,7 +194,9 @@ for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# User chat input for LLM questions
+# ------------------------------
+# Chat input
+# ------------------------------
 user_input = st.chat_input("Ask me anything about your cycle, mood, or health...")
 
 ### User Inputs Form
@@ -141,7 +226,7 @@ with st.form("user_inputs_form"):
 
     submitted = st.form_submit_button("Predict Cycle Length")
 
-# Handle form submit: prediction only
+# Handle form submit
 if submitted:
     total_menses_score = menses_day1 + menses_day2 + menses_day3 + menses_day4
     luteal_phase = length_of_cycle - estimated_ovulation
@@ -180,13 +265,12 @@ if submitted:
     st.session_state.predicted_length = predicted_length
 
     st.chat_message("assistant").markdown(f"🗓️ **Predicted Cycle Length:** `{predicted_length:.1f}` days")
-    st.session_state.chat_history.append({"role": "user", "content": "Submitted menstrual health data."})
-    st.session_state.chat_history.append({
-        "role": "assistant",
-        "content": f"🗓️ Based on your inputs, your predicted cycle length is **{predicted_length:.1f} days**."
-    })
+    st.session_state.chat_history.append({"role": "assistant", "content": f"🗓️ Based on your inputs, your predicted cycle length is **{predicted_length:.1f} days**."})
 
-# Handle user chat input — LLM answers here
+    log_interaction("conversion", "Submitted menstrual health data", f"Predicted {predicted_length:.1f} days", "", "", predicted_length, False, False)
+    write_daily_aggregates()
+
+# Handle user chat input
 if user_input:
     st.chat_message("user").markdown(user_input)
     st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -206,8 +290,30 @@ if user_input:
         response = qa_chain.run(query)
         st.chat_message("assistant").markdown(response)
         st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+        # ---- Logging with evaluation dataset if available ----
+        expected_answer = ""
+        is_match = False
+        if st.session_state.eval_dataset is not None:
+            row = st.session_state.eval_dataset.loc[st.session_state.eval_dataset["question"] == user_input]
+            if not row.empty:
+                expected_answer = row["expected_answer"].values[0]
+                is_match = (expected_answer.strip().lower() == response.strip().lower())
+
+        is_fallback = (FALLBACK_PHRASE in response)
+        log_interaction("chat", user_input, response, expected_answer, current_phase, st.session_state.predicted_length, is_fallback, is_match)
+        write_daily_aggregates()
+
     except Exception as e:
         err_msg = "⚠️ Sorry, I ran into an error while answering that."
         st.chat_message("assistant").markdown(err_msg)
         st.session_state.chat_history.append({"role": "assistant", "content": err_msg})
         st.error(e)
+
+# ------------------------------
+# Show metrics summary
+# ------------------------------
+st.sidebar.subheader("📊 Metrics Summary")
+if AGG_FILE.exists():
+    agg_df = pd.read_csv(AGG_FILE)
+    st.sidebar.dataframe(agg_df.tail(7))
