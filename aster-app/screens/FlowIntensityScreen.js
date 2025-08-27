@@ -97,7 +97,7 @@ export default function FlowIntensityScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 24,
-    backgroundColor: '#fdf6f3',
+    backgroundColor: '#FFFFFF',
   },
   title: {
     fontSize: 24,

@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   phaseCard: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   hormonalInsight: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   predictionCard: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',

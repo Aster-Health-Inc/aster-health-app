@@ -34,6 +34,11 @@ export default function OnboardingRouterScreen() {
           return navigation.reset({ index: 0, routes: [{ name: 'CycleDetails' }] })
         }
 
+        // Check if onboarding is already completed
+        if (profile.onboarding_completed) {
+          return navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+        }
+
         return navigation.reset({ index: 0, routes: [{ name: 'CarouselWalkthrough' }] })
 
       } catch (err) {
@@ -57,6 +62,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
   },
 })

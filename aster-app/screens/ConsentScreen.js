@@ -68,7 +68,7 @@ const ConsentScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 20 },
   title: { fontSize: 28, fontWeight: '600', marginBottom: 30, color: '#000' },
 
   // ✅ Apple Button (Border + Icon + Text)

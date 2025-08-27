@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: 8,
   },
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   selectedContainer: {
     marginTop: 20,
     padding: 16,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
   },
   selectedTitle: {

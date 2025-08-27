@@ -32,7 +32,6 @@ export default function OptionalCycleHistoryScreen() {
     setActivePicker({ index, field })
     setPickerVisible(true)
   }
-
   // spinner updates temp only; commit on Done for both platforms
   const handleSpinnerChange = (_, selectedDate) => {
     if (selectedDate) setTempDate(selectedDate)
@@ -156,7 +155,7 @@ export default function OptionalCycleHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#F5E6D3', padding: 20, alignItems: 'center' },
+  container: { flexGrow: 1, backgroundColor: '#FFFFFF', padding: 20, alignItems: 'center' },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 20 },
 

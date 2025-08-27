@@ -13,12 +13,12 @@ export default function ReminderSetupScreen() {
       if (status !== 'granted') {
         Alert.alert('Permission denied', 'You can enable notifications later in settings.')
       } else {
-        Alert.alert('Notifications enabled!', 'We’ll send you helpful reminders.')
+        Alert.alert('Notifications enabled!', 'We\'ll send you helpful reminders.')
       }
 
       navigation.reset({
         index: 0,
-        routes: [{ name: 'ReminderScreen' }],
+        routes: [{ name: 'Reminder' }],
       })
     } catch (error) {
       console.log('Notification permission error:', error)
@@ -53,7 +53,7 @@ export default function ReminderSetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fdf6f3',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     padding: 24,
   },

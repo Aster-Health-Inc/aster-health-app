@@ -4,9 +4,13 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 const WelcomeScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
-      {/* Placeholder Logo */}
-      <View style={styles.logoBox} />
-      <Text style={styles.appName}>Aster</Text>
+      {/* Logo */}
+      <Image 
+        source={require('../assets/aster-logo.png')} 
+        style={styles.logo} 
+        resizeMode="contain"
+      />
+      <Text style={styles.appName}></Text>
 
       {/* ✅ "Let's Get Started" Button */}
       <TouchableOpacity
@@ -33,8 +37,8 @@ const WelcomeScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3', justifyContent: 'center', alignItems: 'center' },
-  logoBox: { width: 100, height: 100, backgroundColor: '#ddd', borderRadius: 12, marginBottom: 20 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  logo: { width: 120, height: 120, marginBottom: 20 },
   appName: { fontSize: 32, fontFamily: 'cursive', color: '#000', marginBottom: 50 },
 
   // ✅ New Button Styles

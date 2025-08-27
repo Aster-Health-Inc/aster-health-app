@@ -1,5 +1,24 @@
 # Aster Women's Health App
 
+App Start
+    ↓
+Check Session
+    ↓
+┌─────────────────┐    ┌─────────────────────┐
+│   No Session    │    │   Has Session       │
+│                 │    │                     │
+│ Welcome Screen  │    │ OnboardingRouter    │
+│                 │    │                     │
+│ Login/SignUp    │    │ ↓                   │
+└─────────────────┘    │ Check Profile       │
+                       │ ↓                   │
+                       │ Route to:           │
+                       │ • BasicInfo         │
+                       │ • CycleDetails      │
+                       │ • CarouselWalkthrough│
+                       │ • Home              │
+                       └─────────────────────┘
+
 A comprehensive women's health tracking app built with React Native (Expo) and Supabase, focusing on period tracking and health monitoring.
 
 ## 🌟 Features

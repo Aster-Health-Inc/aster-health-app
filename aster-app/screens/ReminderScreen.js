@@ -67,7 +67,7 @@ export default function ReminderScreen() {
       }
 
       console.log('✅ Reminder saved')
-      navigation.navigate('CarouselWalkthrough')
+      navigation.navigate('HealthAppAccess')
     } catch (err) {
       console.log('❌ Unexpected error:', err)
       Alert.alert('Unexpected issue occurred.')
@@ -151,7 +151,7 @@ export default function ReminderScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAF4EF', paddingHorizontal: 20, paddingTop: 40, alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 40, alignItems: 'center' },
 
   title: { fontSize: 24, fontWeight: '700', textAlign: 'center', marginBottom: 6, color: '#000' },
   subtitle: { fontSize: 14, color: '#5B5B5B', textAlign: 'center', marginBottom: 24 },

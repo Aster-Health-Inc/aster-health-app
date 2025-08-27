@@ -359,7 +359,7 @@ export default function BasicInfoScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAF4EF', padding: 24, justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: '#FFFFFF', padding: 24, justifyContent: 'center' },
   header: { fontSize: 28, fontWeight: '700', marginBottom: 32, color: '#000' },
 
   inputGroup: { marginBottom: 20 },

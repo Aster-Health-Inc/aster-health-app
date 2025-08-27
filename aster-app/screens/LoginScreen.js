@@ -44,7 +44,7 @@ const LoginScreen = ({ navigation }) => {
         <TextInput
           style={styles.input}
           placeholder="Email address"
-          placeholderTextColor="#aaa"
+          placeholderTextColor="#000000ff"
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -53,7 +53,7 @@ const LoginScreen = ({ navigation }) => {
         <TextInput
           style={styles.input}
           placeholder="Password"
-          placeholderTextColor="#aaa"
+          placeholderTextColor="#000000ff"
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -65,7 +65,7 @@ const LoginScreen = ({ navigation }) => {
           onPress={handleLogin}
           disabled={!isFormFilled || loading}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue →</Text>}
+          {loading ? <ActivityIndicator color="#000000ff" /> : <Text style={styles.buttonText}>Continue →</Text>}
         </TouchableOpacity>
 
         {/* Sign Up Link */}
@@ -78,11 +78,11 @@ const LoginScreen = ({ navigation }) => {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3', justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center' },
   content: { padding: 20 },
   title: { fontSize: 32, fontWeight: 'bold', color: '#000', marginBottom: 8, textAlign: 'center' },
   subtitle: { fontSize: 16, color: '#555', marginBottom: 30, textAlign: 'center' },
-  input: { backgroundColor: '#F2DFCF', padding: 15, borderRadius: 30, marginBottom: 15, fontSize: 16, color: '#000' },
+  input: { backgroundColor: '#ada1a14a', padding: 15, borderRadius: 30, marginBottom: 15, fontSize: 16, color: '#000' },
   button: { backgroundColor: '#000', paddingVertical: 15, borderRadius: 30, alignItems: 'center', marginTop: 10 },
   buttonDisabled: { backgroundColor: '#999' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

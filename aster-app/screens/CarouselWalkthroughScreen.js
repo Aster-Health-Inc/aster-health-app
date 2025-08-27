@@ -54,7 +54,7 @@ const CarouselWalkthroughScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  container: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 20 },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 20 },
   imageBox: { width: '90%', height: 200, backgroundColor: '#c5d6c2', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 40 },
   imageText: { fontSize: 16, textAlign: 'center', color: '#333' },

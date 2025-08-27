@@ -98,7 +98,7 @@ const CycleDetailsScreen = ({ navigation }) => {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3', padding: 20, justifyContent: 'center' },
+  container: { flex: 1, backgroundColor: '#FFFFFF', padding: 20, justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '600', textAlign: 'center', marginBottom: 30 },
   input: {
     backgroundColor: '#F2DFCF',

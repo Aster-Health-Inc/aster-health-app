@@ -18,6 +18,20 @@ import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen'
 import ReminderScreen from './screens/ReminderScreen'
 import CarouselWalkthroughScreen from './screens/CarouselWalkthroughScreen'
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen'
+import HealthAppAccessScreen from './screens/HealthAppAccessScreen'
+import HomeScreen from './screens/HomeScreen'
+
+// Food-related screens
+import MealLogHomeScreen from './screens/MealLogHomeScreen'
+import MealLogScreen from './screens/MealLogScreen'
+import CameraScreen from './screens/CameraScreen'
+import PhotoConfirmationScreen from './screens/PhotoConfirmationScreen'
+import NutritionSummaryScreen from './screens/NutritionSummaryScreen'
+import AddFoodScreen from './screens/AddFoodScreen'
+import TimeAmountScreen from './screens/TimeAmountScreen'
+import EditGoalsScreen from './screens/EditGoalsScreen'
+import FoodLogScreen from './screens/FoodLogScreen'
+import TestScreen from './screens/TestScreen'
 
 const Stack = createStackNavigator()
 
@@ -44,22 +58,43 @@ export default function App() {
     )
   }
 
+  console.log('App render - Session:', session, 'User:', session?.user);
+
   return (
     <NavigationContainer>
       <StatusBar style="auto" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator 
+        screenOptions={{ headerShown: false }}
+        onStateChange={(state) => {
+          console.log('Navigation state changed:', state?.routes?.map(r => r.name));
+        }}
+      >
         {!session || !session.user ? (
           <>
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Consent" component={ConsentScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
+            {/* Temporarily add food screens for testing */}
+            <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+            <Stack.Screen name="MealLog" component={MealLogScreen} />
+            <Stack.Screen name="Camera" component={CameraScreen} />
+            <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+            <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+            <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+            <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+            
+            {/* Test screen with simple name */}
+            <Stack.Screen name="Test" component={TestScreen} />
           </>
         ) : null}
 
         {session && session.user && (
           <>
             <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+            <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
             <Stack.Screen name="SurveyPrompt" component={SurveyPromptScreen} />
@@ -67,7 +102,22 @@ export default function App() {
             <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
             <Stack.Screen name="Reminder" component={ReminderScreen} />
+            <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
             <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
+            
+            {/* Food-related screens */}
+            <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+            <Stack.Screen name="MealLog" component={MealLogScreen} />
+            <Stack.Screen name="Camera" component={CameraScreen} />
+            <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+            <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+            <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+            <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+            
+            {/* Test screen with simple name */}
+            <Stack.Screen name="Test" component={TestScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -80,6 +130,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
   },
 })

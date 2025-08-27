@@ -123,7 +123,7 @@ const SignUpScreen = ({ navigation }) => {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5E6D3' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   innerContainer: { padding: 20, justifyContent: 'center', flexGrow: 1 },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 30, textAlign: 'center' },
   input: {
