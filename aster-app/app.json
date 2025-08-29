@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "y",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app needs access to camera to take photos for nutrition analysis."
       }
     },
     "android": {
@@ -24,8 +25,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "CAMERA"
+      ]
     },
+    "plugins": [],
     "web": {
       "favicon": "./assets/favicon.png"
     },

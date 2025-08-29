@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, SafeAreaView, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 
-// Temporarily comment out meallogger for testing
-// import {
-//   upsertMealLog,
-//   upsertWaterLog,
-//   upsertDailyCalorie,
-//   fetchUserDailyLogs,
-// } from '../utils/meallogger';
+import {
+  upsertMealLog,
+  upsertWaterLog,
+  upsertDailyCalorie,
+  fetchUserDailyLogs,
+} from '../utils/meallogger';
+import { supabase } from '../lib/supabase';
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MACROS = [
@@ -31,8 +31,8 @@ const prettyDate = (d) => {
 };
 
 export default function MealLogHomeScreen() {
-  const USER_ID = 'demo-user-id-123';
   const navigation = useNavigation();
+  const route = useRoute();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
@@ -44,44 +44,163 @@ export default function MealLogHomeScreen() {
   const [waterModalVisible, setWaterModalVisible] = useState(false);
   const [waterUnit, setWaterUnit] = useState('oz');
   const [waterDraft, setWaterDraft] = useState('');
+  const [waterEditMode, setWaterEditMode] = useState('add'); // 'add' or 'edit'
 
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [calorieGoal, setCalorieGoal] = useState(1400);
   const [goalDraft, setGoalDraft] = useState('');
+  
+  const [waterGoal, setWaterGoal] = useState(128);
+  const [waterGoalModalVisible, setWaterGoalModalVisible] = useState(false);
+  const [waterGoalDraft, setWaterGoalDraft] = useState('');
+  
+  const [dailyData, setDailyData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Handle refresh when navigating back from food logging
+  useEffect(() => {
+    if (route.params?.refreshData) {
+      console.log('Force refreshing data due to navigation params...');
+      // Clear the params to prevent repeated refreshes
+      navigation.setParams({ refreshData: undefined, timestamp: undefined });
+      
+      // Force reload data
+      const forceReload = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const dateStr = formatDateKey(selectedDate);
+          console.log('Force reloading data for:', dateStr);
+          
+          const data = await fetchUserDailyLogs(user.id, dateStr);
+          console.log('Force reload result:', data);
+          
+          setDailyData(data);
+          setWaterOz(data.water || 0);
+
+          // Update meal inputs with real data
+          const mealsByType = {};
+          MEALS.forEach((mealType) => {
+            const mealData = data.meals.find(m => m.meal_type === mealType);
+            mealsByType[mealType] = {
+              calories: mealData?.calories || 0,
+              carbs: mealData?.carbs || 0,
+              protein: mealData?.protein || 0,
+              fat: mealData?.fat || 0,
+            };
+          });
+          setMealInputs(mealsByType);
+        } catch (error) {
+          console.error('Error force reloading data:', error);
+        }
+      };
+      
+      forceReload();
+    }
+  }, [route.params?.refreshData, route.params?.timestamp]);
 
   useEffect(() => {
-    const load = async () => {
+    const loadData = async () => {
+      setLoading(true);
       try {
-        // Temporarily use mock data since meallogger is commented out
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log('No user found');
+          return;
+        }
+
+        const dateStr = formatDateKey(selectedDate);
+        console.log('Loading data for:', dateStr, 'User:', user.id);
+        
+        const data = await fetchUserDailyLogs(user.id, dateStr);
+        console.log('Fetched daily data:', data);
+        
+        setDailyData(data);
+        setWaterOz(data.water || 0);
+
+        // Update meal inputs with real data
+        const mealsByType = {};
+        MEALS.forEach((mealType) => {
+          const mealData = data.meals.find(m => m.meal_type === mealType);
+          mealsByType[mealType] = {
+            calories: mealData?.calories || 0,
+            carbs: mealData?.carbs || 0,
+            protein: mealData?.protein || 0,
+            fat: mealData?.fat || 0,
+          };
+        });
+        setMealInputs(mealsByType);
+
+      } catch (error) {
+        console.error('Error loading daily data:', error);
+        // Initialize with empty data on error
         const blank = {};
-        MEALS.forEach((name) => (blank[name] = { calories: '', carbs: '', protein: '', fat: '' }));
+        MEALS.forEach((name) => (blank[name] = { calories: 0, carbs: 0, protein: 0, fat: 0 }));
         setMealInputs(blank);
         setWaterOz(0);
-      } catch (e) {
-        const blank = {};
-        MEALS.forEach((name) => (blank[name] = { calories: '', carbs: '', protein: '', fat: '' }));
-        setMealInputs(blank);
-        setWaterOz(0);
+      } finally {
+        setLoading(false);
       }
     };
-    load();
+
+    loadData();
   }, [selectedDate]);
 
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadDataOnFocus = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+
+          const dateStr = formatDateKey(selectedDate);
+          const data = await fetchUserDailyLogs(user.id, dateStr);
+          setDailyData(data);
+          setWaterOz(data.water || 0);
+
+          // Update meal inputs with real data
+          const mealsByType = {};
+          MEALS.forEach((mealType) => {
+            const mealData = data.meals.find(m => m.meal_type === mealType);
+            mealsByType[mealType] = {
+              calories: mealData?.calories || 0,
+              carbs: mealData?.carbs || 0,
+              protein: mealData?.protein || 0,
+              fat: mealData?.fat || 0,
+            };
+          });
+          setMealInputs(mealsByType);
+        } catch (error) {
+          console.error('Error refreshing data:', error);
+        }
+      };
+      
+      loadDataOnFocus();
+    }, [selectedDate])
+  );
+
   const totalCalories = useMemo(() => {
-    return MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.calories) || 0), 0);
-  }, [mealInputs]);
+    // Use daily totals if available, otherwise calculate from meals
+    return dailyData?.dailyTotals?.total_calories || 
+           MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.calories) || 0), 0);
+  }, [mealInputs, dailyData]);
 
   const totalProtein = useMemo(() => {
-    return MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.protein) || 0), 0);
-  }, [mealInputs]);
+    return dailyData?.dailyTotals?.total_protein || 
+           MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.protein) || 0), 0);
+  }, [mealInputs, dailyData]);
 
   const totalCarbs = useMemo(() => {
-    return MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.carbs) || 0), 0);
-  }, [mealInputs]);
+    return dailyData?.dailyTotals?.total_carbs || 
+           MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.carbs) || 0), 0);
+  }, [mealInputs, dailyData]);
 
   const totalFat = useMemo(() => {
-    return MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.fat) || 0), 0);
-  }, [mealInputs]);
+    return dailyData?.dailyTotals?.total_fat || 
+           MEALS.reduce((sum, key) => sum + (parseFloat(mealInputs[key]?.fat) || 0), 0);
+  }, [mealInputs, dailyData]);
 
   const macroTotals = {
     carbs: totalCarbs,
@@ -116,8 +235,26 @@ export default function MealLogHomeScreen() {
 
   const saveMeal = async (meal) => {
     try {
-      // Temporarily just close the meal editor since meallogger is commented out
-      console.log('Saving meal:', meal, mealInputs[meal]);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const dateStr = formatDateKey(selectedDate);
+      const mealData = mealInputs[meal];
+      
+      await upsertMealLog({
+        user_id: user.id,
+        date: dateStr,
+        meal_type: meal,
+        calories: parseFloat(mealData.calories) || 0,
+        carbs: parseFloat(mealData.carbs) || 0,
+        protein: parseFloat(mealData.protein) || 0,
+        fat: parseFloat(mealData.fat) || 0,
+      });
+
+      // Reload data to refresh UI
+      const updatedData = await fetchUserDailyLogs(user.id, dateStr);
+      setDailyData(updatedData);
+      
       setOpenMeal(null);
     } catch (e) {
       console.error('Error saving meal:', e);
@@ -135,21 +272,68 @@ export default function MealLogHomeScreen() {
     setGoalModalVisible(false);
   };
 
-  const openWaterEdit = () => {
-    setWaterDraft(waterDisplayValue);
+  const openWaterGoalEdit = () => {
+    setWaterGoalDraft(String(waterGoal));
+    setWaterGoalModalVisible(true);
+  };
+
+  const saveWaterGoal = () => {
+    const n = parseFloat(waterGoalDraft);
+    if (!isNaN(n) && n > 0) setWaterGoal(n);
+    setWaterGoalModalVisible(false);
+  };
+
+  const openWaterEdit = (mode = 'add') => {
+    if (mode === 'edit') {
+      // Edit mode: show current total
+      setWaterDraft(waterDisplayValue);
+      setWaterEditMode('edit');
+    } else {
+      // Add mode: empty field for new amount
+      setWaterDraft('');
+      setWaterEditMode('add');
+    }
     setWaterModalVisible(true);
   };
 
   const saveWater = async () => {
-    let amount = parseFloat(waterDraft) || 0;
-    if (waterUnit === 'L') amount = amount * LITER_TO_OZ;
-    setWaterOz(amount);
-    setWaterModalVisible(false);
     try {
-      // Temporarily just log since meallogger is commented out
-      console.log('Saving water:', amount);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let amount = parseFloat(waterDraft) || 0;
+      if (waterUnit === 'L') amount = amount * LITER_TO_OZ;
+      
+      const dateStr = formatDateKey(selectedDate);
+      
+      console.log('Saving water data:', {
+        user_id: user.id,
+        date: dateStr,
+        water_intake_oz: amount
+      });
+
+      // Use the proper utility function with fixed RLS policies
+      await upsertWaterLog({
+        user_id: user.id,
+        date: dateStr,
+        water_intake: amount,
+        mode: waterEditMode
+      });
+
+      console.log('Water logged successfully');
+
+      setWaterOz(amount);
+      setWaterModalVisible(false);
+      
+      // Refresh the data to show updated water intake
+      const updatedData = await fetchUserDailyLogs(user.id, dateStr);
+      setDailyData(updatedData);
+      setWaterOz(updatedData.water || amount);
+      
     } catch (e) {
       console.error('Error saving water:', e);
+      // Show user-friendly error message
+      Alert.alert('Error', 'Failed to save water intake. Please try again.');
     }
   };
 
@@ -259,13 +443,17 @@ export default function MealLogHomeScreen() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Water</Text>
             <View style={styles.waterContainer}>
-              <View style={styles.waterCircle}>
+              <TouchableOpacity style={styles.waterCircle} onPress={() => openWaterEdit('edit')}>
                 <Text style={styles.waterAmount}>{Math.round(waterOz)}</Text>
                 <Text style={styles.waterUnit}>Ounces</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.waterInfo}>
-                <Text style={styles.waterGoal}>Goal 128 fl oz</Text>
-                <Text style={styles.waterLast}>Last Log 4 hours</Text>
+                <TouchableOpacity onPress={openWaterGoalEdit}>
+                  <Text style={styles.waterGoal}>Goal {waterGoal} fl oz</Text>
+                </TouchableOpacity>
+                <Text style={styles.waterLast}>
+                  {waterOz > 0 ? `${Math.round((waterOz/waterGoal)*100)}% of goal` : 'No water logged today'}
+                </Text>
               </View>
             </View>
             <TouchableOpacity style={styles.logWaterButton} onPress={handleLogWater}>
@@ -281,7 +469,7 @@ export default function MealLogHomeScreen() {
 
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem}>
+          <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
             <Ionicons name="home" size={22} color="#999" />
             <Text style={styles.navTextInactive}>Home</Text>
           </TouchableOpacity>
@@ -307,17 +495,70 @@ export default function MealLogHomeScreen() {
       <Modal visible={waterModalVisible} animationType="slide" transparent>
         <View style={styles.modalWrap}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Log Water Intake</Text>
+            <Text style={styles.modalTitle}>
+              {waterEditMode === 'edit' ? 'Edit Total Water Intake' : 'Add Water Intake'}
+            </Text>
+            
+            {waterEditMode === 'edit' && (
+              <Text style={styles.modalSubtext}>
+                Current total: {Math.round(waterOz)} oz
+              </Text>
+            )}
+            
+            {/* Mode Switcher */}
+            <View style={styles.unitSwitch}>
+              <Pressable
+                style={[styles.unitChip, waterEditMode === 'add' && styles.unitChipActive]}
+                onPress={() => {
+                  setWaterEditMode('add');
+                  setWaterDraft('');
+                }}
+              >
+                <Text style={[styles.unitChipText, waterEditMode === 'add' && styles.unitChipTextActive]}>Add More</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.unitChip, waterEditMode === 'edit' && styles.unitChipActive]}
+                onPress={() => {
+                  setWaterEditMode('edit');
+                  setWaterDraft(waterDisplayValue);
+                }}
+              >
+                <Text style={[styles.unitChipText, waterEditMode === 'edit' && styles.unitChipTextActive]}>Edit Total</Text>
+              </Pressable>
+            </View>
+            
+            {/* Unit Switcher */}
+            <View style={styles.unitSwitch}>
+              <Pressable
+                style={[styles.unitChip, waterUnit === 'oz' && styles.unitChipActive]}
+                onPress={() => setWaterUnit('oz')}
+              >
+                <Text style={[styles.unitChipText, waterUnit === 'oz' && styles.unitChipTextActive]}>oz</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.unitChip, waterUnit === 'L' && styles.unitChipActive]}
+                onPress={() => setWaterUnit('L')}
+              >
+                <Text style={[styles.unitChipText, waterUnit === 'L' && styles.unitChipTextActive]}>L</Text>
+              </Pressable>
+            </View>
+            
             <TextInput
               style={styles.modalInput}
               keyboardType="numeric"
-              placeholder="Enter amount"
+              placeholder={
+                waterEditMode === 'edit' 
+                  ? `Set total amount in ${waterUnit}` 
+                  : `Add amount in ${waterUnit}`
+              }
               value={waterDraft}
               onChangeText={setWaterDraft}
             />
             <View style={styles.modalActions}>
               <Pressable style={styles.saveBtn} onPress={saveWater}>
-                <Text style={styles.saveBtnText}>Save</Text>
+                <Text style={styles.saveBtnText}>
+                  {waterEditMode === 'edit' ? 'Update Total' : 'Add Water'}
+                </Text>
               </Pressable>
               <Pressable style={styles.cancelBtn} onPress={() => setWaterModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -344,6 +585,31 @@ export default function MealLogHomeScreen() {
                 <Text style={styles.saveBtnText}>Save</Text>
               </Pressable>
               <Pressable style={styles.cancelBtn} onPress={() => setGoalModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Water Goal Modal */}
+      <Modal visible={waterGoalModalVisible} animationType="slide" transparent>
+        <View style={styles.modalWrap}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Set Daily Water Goal</Text>
+            <TextInput
+              style={styles.modalInput}
+              keyboardType="numeric"
+              placeholder="e.g., 128"
+              value={waterGoalDraft}
+              onChangeText={setWaterGoalDraft}
+            />
+            <Text style={styles.modalSubtext}>Goal in fluid ounces (fl oz)</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.saveBtn} onPress={saveWaterGoal}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </Pressable>
+              <Pressable style={styles.cancelBtn} onPress={() => setWaterGoalModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
             </View>
@@ -583,7 +849,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginBottom: 6,
   },
+  modalSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end' },
+  saveBtn: {
+    backgroundColor: '#0a84ff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  cancelBtn: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  cancelBtnText: {
+    color: '#333',
+    fontWeight: '600',
+  },
 
   unitSwitch: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   unitChip: {

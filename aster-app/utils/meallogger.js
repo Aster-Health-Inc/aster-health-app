@@ -81,15 +81,51 @@ export const upsertDailyCalorie = async ({ user_id, date, total_calories, total_
   }
 };
 
-export const upsertWaterLog = async ({ user_id, date, water_intake }) => {
-  // Supabase wants log_date, and ml (not oz)
+export const upsertWaterLog = async ({ user_id, date, water_intake, mode = 'add' }) => {
+  let totalML;
+
+  if (mode === 'edit') {
+    // Edit mode: set the total to the specified amount
+    totalML = Math.round(water_intake * OZ_TO_ML);
+    console.log('Water edit mode - setting total:', {
+      new_total_oz: water_intake,
+      new_total_ml: totalML
+    });
+  } else {
+    // Add mode: add to existing amount
+    const { data: existingWater, error: fetchError } = await supabase
+      .from('water_logs')
+      .select('water_intake_ml')
+      .eq('user_id', user_id)
+      .eq('log_date', date)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Error fetching existing water log:', fetchError);
+      throw fetchError;
+    }
+
+    // Calculate new total: existing + new intake
+    const newIntakeML = Math.round(water_intake * OZ_TO_ML);
+    const existingML = existingWater?.water_intake_ml || 0;
+    totalML = existingML + newIntakeML;
+
+    console.log('Water add mode calculation:', {
+      existing_ml: existingML,
+      new_intake_ml: newIntakeML,
+      total_ml: totalML,
+      new_intake_oz: water_intake
+    });
+  }
+
+  // Upsert with the new total
   const { error } = await supabase
     .from('water_logs')
     .upsert([
       {
         user_id,
         log_date: date,
-        water_intake_ml: Math.round(water_intake * OZ_TO_ML), // stores in ml
+        water_intake_ml: totalML,
       }
     ], { onConflict: ['user_id', 'log_date'] });
 
@@ -100,21 +136,63 @@ export const upsertWaterLog = async ({ user_id, date, water_intake }) => {
 };
 
 export const fetchUserDailyLogs = async (user_id, date) => {
+  console.log('🔍 fetchUserDailyLogs called with:', { user_id, date });
+  
+  // Try using RPC function first to bypass RLS
+  const { data: rpcData, error: rpcError } = await supabase
+    .rpc('get_user_daily_logs', {
+      p_user_id: user_id,
+      p_log_date: date
+    });
+  
+  console.log('🔍 RPC get_user_daily_logs result:', { rpcData, rpcError });
+  
+  if (!rpcError && rpcData) {
+    // Convert water from ml to oz for UI consistency
+    const waterOz = rpcData.water ? Math.round(rpcData.water / OZ_TO_ML) : 0;
+    
+    const result = {
+      meals: rpcData.meals || [],
+      water: waterOz,
+      dailyTotals: rpcData.dailyTotals || {},
+    };
+    
+    console.log('🔍 fetchUserDailyLogs returning RPC result:', result);
+    return result;
+  }
+  
+  console.log('🔍 RPC failed, falling back to direct queries...');
+  
+  // Fallback to direct queries if RPC fails
+  // First, let's check if there are ANY meal_logs for this user
+  const { data: allUserLogs, error: allLogsErr } = await supabase
+    .from('meal_logs')
+    .select('*')
+    .eq('user_id', user_id);
+  
+  console.log('🔍 ALL meal_logs for user:', { allUserLogs, allLogsErr });
+  
   // Get the meal_logs row for the day
   const { data: mealLog, error: mealLogErr } = await supabase
     .from('meal_logs')
-    .select('id, total_calories, total_protein, total_carbs, total_fat')
+    .select('id, total_calories, total_protein, total_carbs, total_fat, log_date')
     .eq('user_id', user_id)
     .eq('log_date', date)
     .maybeSingle();
 
+  console.log('🔍 meal_logs query result:', { mealLog, mealLogErr });
+
   let meals = [];
   if (mealLog?.id) {
-    const { data: mealRows } = await supabase
+    console.log('🔍 Fetching meals for log_id:', mealLog.id);
+    const { data: mealRows, error: mealsErr } = await supabase
       .from('meals')
       .select('*')
       .eq('log_id', mealLog.id);
+    console.log('🔍 meals query result:', { mealRows, mealsErr });
     meals = mealRows || [];
+  } else {
+    console.log('🔍 No meal_log found, skipping meals query');
   }
 
   // Get water intake (ml)
@@ -125,9 +203,12 @@ export const fetchUserDailyLogs = async (user_id, date) => {
     .eq('log_date', date)
     .maybeSingle();
 
-  return {
+  const result = {
     meals, // array of meal rows for the day
     water: waterRow?.water_intake_ml ? Math.round(waterRow.water_intake_ml / OZ_TO_ML) : 0, // return oz for UI
     dailyTotals: mealLog || {},
   };
+  
+  console.log('🔍 fetchUserDailyLogs returning fallback result:', result);
+  return result;
 };

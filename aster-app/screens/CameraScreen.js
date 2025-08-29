@@ -8,10 +8,12 @@ import {
   Image,
   Platform,
   Modal,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 const CameraScreen = () => {
   const navigation = useNavigation();
@@ -38,30 +40,72 @@ const CameraScreen = () => {
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
+    try {
+      console.log('Requesting camera permissions...');
+      
+      // Request camera permissions
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      console.log('Camera permission result:', permissionResult);
+      
+      if (permissionResult.status !== 'granted') {
+        alert('Camera permission is required to take photos');
+        return;
+      }
 
-    if (!result.cancelled && result.assets?.length > 0) {
-      const uri = result.assets[0].uri;
-      setImage(uri);
-      navigation.navigate('PhotoConfirmation', { image: uri });
+      console.log('Launching camera...');
+      
+      // Add timeout for camera launch
+      const cameraPromise = ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.8,
+        base64: true,
+        exif: false, // Reduce data size
+      });
+      
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Camera timeout - try gallery instead')), 10000)
+      );
+      
+      const result = await Promise.race([cameraPromise, timeoutPromise]);
+      console.log('Camera result:', result);
+
+      if (!result.canceled && result.assets?.length > 0) {
+        const uri = result.assets[0].uri;
+        const base64 = result.assets[0].base64;
+        console.log('Photo taken successfully, navigating...');
+        setImage(uri);
+        navigation.navigate('PhotoConfirmation', { image: uri, base64: base64 });
+      } else if (result.canceled) {
+        console.log('Camera was canceled');
+      } else {
+        console.log('No image assets found');
+        alert('No photo was captured');
+      }
+    } catch (error) {
+      console.error('Camera error details:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error message:', error.message);
+      
+      // Offer gallery as fallback
+      const useGallery = confirm(`Camera failed: ${error.message}\n\nWould you like to select from gallery instead?`);
+      if (useGallery) {
+        pickFromGallery();
+      }
     }
   };
 
   const pickFromGallery = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.8,
+      base64: true,
     });
 
-    if (!result.cancelled && result.assets?.length > 0) {
+    if (!result.canceled && result.assets?.length > 0) {
       const uri = result.assets[0].uri;
+      const base64 = result.assets[0].base64;
       setImage(uri);
-      navigation.navigate('PhotoConfirmation', { image: uri });
+      navigation.navigate('PhotoConfirmation', { image: uri, base64: base64 });
     }
   };
 
@@ -69,8 +113,15 @@ const CameraScreen = () => {
     const file = e.target.files[0];
     if (file) {
       const uri = URL.createObjectURL(file);
-      setImage(uri);
-      navigation.navigate('PhotoConfirmation', { image: uri });
+      
+      // Convert file to base64 for web
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result.replace('data:', '').replace(/^.+,/, '');
+        setImage(uri);
+        navigation.navigate('PhotoConfirmation', { image: uri, base64: base64 });
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -79,7 +130,19 @@ const CameraScreen = () => {
     if (mode === 'Manual') {
       navigation.navigate('AddFoodScreen', { mealType });
     } else {
-      // Camera mode - take photo
+      // Camera mode - take photo or select from gallery
+      showPhotoOptions();
+    }
+  };
+
+  const showPhotoOptions = () => {
+    // Show options for camera or gallery
+    if (Platform.OS === 'ios') {
+      // On iOS, show action sheet
+      const options = ['Camera', 'Photo Library', 'Cancel'];
+      // For now, just try gallery first since camera might not work on simulator
+      pickFromGallery();
+    } else {
       takePhoto();
     }
   };
@@ -87,6 +150,8 @@ const CameraScreen = () => {
   const handleAddButton = () => {
     setShowMealSelector(true);
   };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -126,38 +191,40 @@ const CameraScreen = () => {
           </View>
         ) : (
           <View style={styles.manualView}>
+            <Ionicons name="restaurant-outline" size={80} color="#ccc" style={styles.manualIcon} />
             <Text style={styles.manualText}>Manual Food Entry</Text>
             <Text style={styles.manualSubtext}>Enter food details manually</Text>
+            <TouchableOpacity 
+              style={styles.addFoodButton} 
+              onPress={() => setShowMealSelector(true)}
+            >
+              <Ionicons name="add-circle" size={24} color="#FF6B9D" />
+              <Text style={styles.addFoodButtonText}>Add Food</Text>
+            </TouchableOpacity>
           </View>
         )}
+      </View>
 
-        {/* Camera Controls */}
-        <View style={styles.cameraControls}>
-          <View style={styles.modeIndicators}>
-            <View style={styles.modeDot}>
-              <Text style={styles.modeDotText}>1</Text>
-            </View>
-            <View style={styles.modeDot}>
-              <Text style={styles.modeDotText}>2</Text>
-            </View>
-            <View style={styles.modeDot}>
-              <Text style={styles.modeDotText}>5</Text>
-            </View>
-          </View>
-          
-          <TouchableOpacity style={styles.shutterButton} onPress={handleAddButton}>
-            <View style={styles.shutterInner} />
+      {/* Camera Controls */}
+      <View style={styles.cameraControls}>
+        {mode === 'Camera' ? (
+          <>
+            <TouchableOpacity style={styles.shutterButton} onPress={takePhoto}>
+              <View style={styles.shutterInner} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.galleryButton} onPress={pickFromGallery}>
+              <Text style={styles.galleryButtonText}>📷 Gallery</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity 
+            style={styles.manualAddButton} 
+            onPress={() => setShowMealSelector(true)}
+          >
+            <Text style={styles.manualAddButtonText}>Add Food Manually</Text>
           </TouchableOpacity>
-          
-          <View style={styles.modeLabels}>
-            <Text style={[styles.modeLabel, mode === 'Camera' && styles.activeModeLabel]}>
-              Camera
-            </Text>
-            <Text style={[styles.modeLabel, mode === 'Manual' && styles.activeModeLabel]}>
-              Manual
-            </Text>
-          </View>
-        </View>
+        )}
       </View>
 
       {/* Hidden file input for web */}
@@ -204,6 +271,7 @@ const CameraScreen = () => {
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 };
@@ -276,6 +344,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderRadius: 20,
   },
+  manualIcon: {
+    marginBottom: 20,
+  },
   manualText: {
     fontSize: 24,
     fontWeight: '600',
@@ -285,6 +356,39 @@ const styles = StyleSheet.create({
   manualSubtext: {
     fontSize: 16,
     color: '#666',
+    marginBottom: 30,
+  },
+  addFoodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addFoodButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF6B9D',
+    marginLeft: 8,
+  },
+  manualAddButton: {
+    backgroundColor: '#FF6B9D',
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 20,
+    marginBottom: 50,
+  },
+  manualAddButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   cameraControls: {
     alignItems: 'center',
@@ -320,7 +424,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 8,
-    marginBottom: 20,
+    marginBottom: 50,
   },
   shutterInner: {
     width: 60,
@@ -328,18 +432,19 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: '#f0f0f0',
   },
-  modeLabels: {
-    flexDirection: 'row',
-    gap: 20,
+  galleryButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 10,
+    marginBottom: 50,
   },
-  modeLabel: {
+  galleryButtonText: {
+    color: 'white',
     fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
-  },
-  activeModeLabel: {
-    color: '#333',
     fontWeight: '600',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -380,4 +485,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
   },
+
 });

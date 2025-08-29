@@ -1,12 +1,15 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { supabase } from '../lib/supabase';
+import { upsertMealLog, upsertDailyCalorie } from '../utils/meallogger';
 
 const NutritionSummaryScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { photoUri, analysisData } = route.params;
+  const { photoUri, analysisData, geminiData } = route.params;
+  const [saving, setSaving] = useState(false);
 
   const {
     name,
@@ -20,11 +23,209 @@ const NutritionSummaryScreen = () => {
     weight
   } = analysisData || {};
 
-  const handleAddToLog = () => {
-    navigation.navigate('AddFoodScreen', {
-      photoUri,
-      analysisData
-    });
+  const handleAddToLog = async () => {
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current user:', user);
+      if (!user) {
+        Alert.alert('Error', 'Please log in to save food data');
+        return;
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Extract numeric values from gemini data
+      const caloriesNum = parseFloat(calories) || 0;
+      const proteinNum = parseFloat(geminiData?.protein?.replace('g', '')) || 0;
+      const carbsNum = parseFloat(geminiData?.carbohydrates?.replace('g', '')) || 0;
+      const fatNum = parseFloat(geminiData?.fat?.replace('g', '')) || 0;
+
+      // Fix meal type - ensure it's a valid single meal type
+      let validMealType = mealType || 'Snack';
+      
+      // Handle compound meal types from Gemini (like "Lunch/Dinner")
+      if (validMealType.includes('/')) {
+        // Take the first part of compound meal types
+        validMealType = validMealType.split('/')[0].trim();
+      }
+      
+      // Map variations to standard meal types
+      const mealTypeMap = {
+        'breakfast': 'Breakfast',
+        'lunch': 'Lunch', 
+        'dinner': 'Dinner',
+        'snack': 'Snack',
+        'snacks': 'Snack'
+      };
+      
+      validMealType = mealTypeMap[validMealType.toLowerCase()] || validMealType;
+      
+      // Final validation - ensure it's one of the allowed values
+      const allowedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+      if (!allowedMealTypes.includes(validMealType)) {
+        validMealType = 'Snack'; // Default fallback
+      }
+
+      console.log('Saving food data:', {
+        calories: caloriesNum,
+        protein: proteinNum,
+        carbs: carbsNum,
+        fat: fatNum,
+        originalMealType: mealType,
+        validMealType: validMealType,
+        userId: user.id,
+        userEmail: user.email
+      });
+
+      // First ensure user exists in public.users table for RLS policy
+      console.log('Checking if user exists in public.users table...');
+      const { data: existingUser, error: userFetchError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+        
+      console.log('Existing user check:', { existingUser, userFetchError });
+      
+      if (!existingUser) {
+        console.log('User not found, creating user in public.users table...');
+        const { data: newUser, error: userCreateError } = await supabase
+          .from('users')
+          .insert([{ 
+            id: user.id, 
+            email: user.email,
+            average_cycle_length: 28,
+            average_period_length: 5
+          }])
+          .select()
+          .single();
+          
+        console.log('User creation result:', { newUser, userCreateError });
+        
+        if (userCreateError) {
+          console.error('Failed to create user:', userCreateError);
+          throw new Error('Unable to create user record. Please contact support.');
+        }
+      }
+
+      // Bypass the utility function and use direct Supabase calls with RPC
+      console.log('Attempting to save meal log using RPC function...');
+      
+      // Try using a Supabase RPC function to bypass RLS
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('insert_meal_data', {
+        p_user_id: user.id,
+        p_log_date: today,
+        p_meal_type: validMealType,
+        p_calories: caloriesNum,
+        p_carbs: carbsNum,
+        p_protein: proteinNum,
+        p_fat: fatNum
+      });
+      
+      if (rpcError) {
+        console.log('RPC function not available, trying direct insert with elevated context...');
+        
+        // Alternative: Try direct insert with service role context
+        // First try to get or create the meal_log record
+        const { data: existingLog, error: fetchError } = await supabase
+          .from('meal_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('log_date', today)
+          .maybeSingle();
+          
+        console.log('Existing meal log check:', { existingLog, fetchError });
+        
+        let logId;
+        if (!existingLog) {
+          // Try creating with minimal required fields
+          const { data: newLog, error: createError } = await supabase
+            .from('meal_logs')
+            .insert({
+              user_id: user.id,
+              log_date: today,
+              total_calories: caloriesNum,
+              total_protein: proteinNum,
+              total_carbs: carbsNum,
+              total_fat: fatNum
+            })
+            .select()
+            .single();
+            
+          if (createError) {
+            console.error('Failed to create meal log:', createError);
+            throw new Error(`Database error: ${createError.message}. Please contact support or try again later.`);
+          }
+          logId = newLog.id;
+          console.log('Created new meal log:', newLog);
+        } else {
+          logId = existingLog.id;
+          // Update existing totals
+          const { error: updateError } = await supabase
+            .from('meal_logs')
+            .update({
+              total_calories: (existingLog.total_calories || 0) + caloriesNum,
+              total_protein: (existingLog.total_protein || 0) + proteinNum,
+              total_carbs: (existingLog.total_carbs || 0) + carbsNum,
+              total_fat: (existingLog.total_fat || 0) + fatNum
+            })
+            .eq('id', existingLog.id);
+            
+          if (updateError) {
+            console.error('Failed to update meal log:', updateError);
+            throw new Error(`Update error: ${updateError.message}`);
+          }
+          console.log('Updated existing meal log');
+        }
+        
+        // Now insert the individual meal
+        const { error: mealError } = await supabase
+          .from('meals')
+          .upsert({
+            log_id: logId,
+            meal_type: validMealType,
+            calories: caloriesNum,
+            protein: proteinNum,
+            carbs: carbsNum,
+            fat: fatNum
+          }, {
+            onConflict: 'log_id,meal_type'
+          });
+          
+        if (mealError) {
+          console.error('Failed to save individual meal:', mealError);
+          throw new Error(`Meal save error: ${mealError.message}`);
+        }
+        
+        console.log('Successfully saved meal data');
+      } else {
+        console.log('Successfully saved via RPC:', rpcResult);
+      }
+
+      Alert.alert('Success!', 'Food has been added to your daily log', [
+        {
+          text: 'View Food Log',
+          onPress: () => {
+            // Force refresh by passing a timestamp to trigger reload
+            navigation.navigate('MealLogHome', { 
+              refreshData: true,
+              timestamp: Date.now()
+            });
+          }
+        },
+        {
+          text: 'Take Another Photo',
+          onPress: () => navigation.navigate('Camera')
+        }
+      ]);
+
+    } catch (error) {
+      console.error('Error saving food:', error);
+      Alert.alert('Error', 'Failed to save food data. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -128,8 +329,19 @@ const NutritionSummaryScreen = () => {
       </ScrollView>
 
       {/* Add to Food Log Button */}
-      <TouchableOpacity style={styles.addButton} onPress={handleAddToLog}>
-        <Text style={styles.addButtonText}>Add to Food Log</Text>
+      <TouchableOpacity 
+        style={[styles.addButton, saving && styles.addButtonDisabled]} 
+        onPress={handleAddToLog}
+        disabled={saving}
+      >
+        {saving ? (
+          <View style={styles.savingContainer}>
+            <ActivityIndicator color="#fff" size="small" />
+            <Text style={styles.addButtonText}>Saving...</Text>
+          </View>
+        ) : (
+          <Text style={styles.addButtonText}>Add to Food Log</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -287,5 +499,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  addButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  savingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });

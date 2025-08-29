@@ -1,45 +1,58 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { analyzeFood } from '../services/geminiService';
 
 const PhotoConfirmationScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { image } = route.params;
+  const { image, base64 } = route.params;
+  const [analyzing, setAnalyzing] = useState(false);
 
-  const handleAnalyzePhoto = () => {
-    // Mock analysis data for demo
-    const mockAnalysisData = {
-      name: 'Grilled Salmon Bowl',
-      description: 'Lightly grilled salmon with quinoa, roasted vegetables, and a lemon and herb dressing.',
-      calories: 550,
-      macros: {
-        protein: '32g',
-        carbs: '32g',
-        fats: '32g'
-      },
-      ingredients: [
-        { name: 'Atlantic Salmon 150g', quantity: '150g' },
-        { name: 'Quinoa 150g', quantity: '150g' },
-        { name: 'Broccoli 150g', quantity: '150g' },
-        { name: 'Asparagus 150g', quantity: '150g' },
-        { name: 'Lemon and Herb Sauce 150g', quantity: '150g' }
-      ],
-      micronutrients: [
-        { name: 'Vitamin D', value: '0.05 mg' },
-        { name: 'Omega-3', value: '0.05 mg' },
-        { name: 'Iron', value: '0.05 mg' }
-      ],
-      servingSize: '1 serving',
-      mealType: 'Dinner',
-      weight: '350 g'
-    };
+  const handleAnalyzePhoto = async () => {
+    if (!base64) {
+      Alert.alert('Error', 'Image data not available for analysis');
+      return;
+    }
 
-    navigation.navigate('NutritionSummary', {
-      photoUri: image,
-      analysisData: mockAnalysisData
-    });
+    setAnalyzing(true);
+    try {
+      const nutritionData = await analyzeFood(base64);
+      
+      // Convert Gemini response to match existing NutritionSummaryScreen format
+      const analysisData = {
+        name: nutritionData.food_name,
+        description: nutritionData.description,
+        calories: nutritionData.calories,
+        macros: {
+          protein: nutritionData.protein,
+          carbs: nutritionData.carbohydrates,
+          fats: nutritionData.fat
+        },
+        ingredients: nutritionData.ingredients.map(ing => ({
+          name: ing.name,
+          quantity: ing.amount
+        })),
+        micronutrients: Object.entries(nutritionData.micronutrients).map(([key, value]) => ({
+          name: key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: value
+        })),
+        servingSize: nutritionData.serving_info.servings,
+        mealType: nutritionData.serving_info.type,
+        weight: nutritionData.serving_info.weight
+      };
+
+      navigation.navigate('NutritionSummary', {
+        photoUri: image,
+        analysisData: analysisData,
+        geminiData: nutritionData // Keep original format for database saving
+      });
+    } catch (error) {
+      Alert.alert('Analysis Failed', error.message);
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
   const handleRetake = () => {
@@ -76,8 +89,19 @@ const PhotoConfirmationScreen = () => {
       </ScrollView>
 
       {/* Analyze Button */}
-      <TouchableOpacity style={styles.analyzeButton} onPress={handleAnalyzePhoto}>
-        <Text style={styles.analyzeButtonText}>Analyze This Photo</Text>
+      <TouchableOpacity 
+        style={[styles.analyzeButton, analyzing && styles.analyzeButtonDisabled]} 
+        onPress={handleAnalyzePhoto}
+        disabled={analyzing}
+      >
+        {analyzing ? (
+          <View style={styles.analyzingContainer}>
+            <ActivityIndicator color="#fff" size="small" />
+            <Text style={styles.analyzeButtonText}>Analyzing...</Text>
+          </View>
+        ) : (
+          <Text style={styles.analyzeButtonText}>Analyze This Photo</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -162,5 +186,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  analyzeButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  analyzingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
