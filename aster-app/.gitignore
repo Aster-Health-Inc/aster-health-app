@@ -5,6 +5,7 @@ node_modules/
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
@@ -17,6 +18,11 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+
+# iOS
+ios/Pods/
+ios/build/
+ios/DerivedData/
 
 # Metro
 .metro-health-check*
