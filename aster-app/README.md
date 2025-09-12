@@ -1,4 +1,76 @@
 # Aster Women's Health App
+steps if you have an iphone:
+1 - Clone the github repo and open it on VS Code.
+2 - open terminal and navigate to aster-app. (i.e. the path in the ternimal should be : ".....\aster-health-app\aster-app> "
+3 - run 'npm install' (also make sure you have expo installed if not also run npm install expo)
+4 - then once all dependencies are installed, throw a command of 'npx expo start'.
+5- it will start a developer build QR , so while being in terminal, press 's',  which will switch to expo go mode and give a new QR code in your terminal.
+6- make sure you have expo go app installed on  your Iphone and have created an expo account.
+7- While your phone and PC being on the same WIFI network, scan the QR which will direct you to a webpage and whenever it prompts, select expo go mode and it will start a build of aster in the expo go app, just like in the beginning of the video: https://discord.com/channels/1378220416828571800/1378220417533087944/1410865080198893642
+App Start
+
+
+
+steps for macincloud:
+Make code changes in aster-app/.
+
+Quick test on your physical iPhone:
+
+npx expo start --tunnel
+
+
+Scan QR with Expo Go app.
+
+⚠️ HealthKit will not work in Expo Go.
+
+Commit + push to GitHub (main or feature branch):
+
+git add -A
+git commit -m "your message"
+git push origin main
+
+2. On MacInCloud (iOS build & simulator)
+
+Log in via Remote Desktop → open Terminal
+Navigate into the app folder:
+
+cd ~/Projects/aster-health-app/aster-app
+
+
+Use Node 18
+
+export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"
+nvm use 18
+node -v    # should be v18.x
+
+
+Pull latest code
+
+git pull origin main
+npm install   # always after pulling changes
+
+
+Run in simulator
+
+Tab 1 (Metro):
+
+npm run start:ios
+
+
+Tab 2 (Simulator boot + install + open):
+
+npm run ios-sim
+
+3. If you changed native code (pods / entitlements)
+
+Do this once after pulling:
+
+cd ios
+rm -rf Pods Podfile.lock
+pod install --repo-update
+cd ..
+npm run ios-sim
+
 
 App Start
     ↓
