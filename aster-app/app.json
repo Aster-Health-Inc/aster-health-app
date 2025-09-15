@@ -1,5 +1,6 @@
 {
   "expo": {
+    "sdkVersion": "54.0.0",
     "name": "aster-app",
     "slug": "aster-app",
     "version": "1.0.0",
@@ -15,7 +16,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "y",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app needs access to camera to take photos for nutrition analysis."
@@ -32,8 +32,7 @@
       ]
     },
     "plugins": [
-      "@react-native-firebase/app",
-      "@react-native-firebase/crashlytics"
+      "expo-font"
     ],
     "web": {
       "favicon": "./assets/favicon.png"
