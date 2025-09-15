@@ -4,7 +4,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Image, Switch, Platform, Alert
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
-import { requestHealthPermissions } from '../lib/healthkit'
+import { requestHealthPermissions } from '../lib/healthkit' 
 
 export default function HealthAccessScreen() {
   const navigation = useNavigation()
