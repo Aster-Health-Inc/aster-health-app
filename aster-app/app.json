@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "y",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app needs access to camera to take photos for nutrition analysis."
@@ -30,7 +31,10 @@
         "CAMERA"
       ]
     },
-    "plugins": [],
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },
