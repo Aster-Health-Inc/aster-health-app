@@ -28,8 +28,10 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
+        "CAMERA",
         "CAMERA"
-      ]
+      ],
+      "package": "com.y"
     },
     "plugins": [
       "expo-font"

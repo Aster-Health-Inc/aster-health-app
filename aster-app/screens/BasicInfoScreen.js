@@ -20,7 +20,7 @@ import { log, warn, error } from '../utils/CrashLogger';
 
 log('User pressed button', { id: 42 });
 warn('Slow API response');
-error('Login failed', err);
+error('Login failed');
 export default function BasicInfoScreen() {
   const navigation = useNavigation()
 
