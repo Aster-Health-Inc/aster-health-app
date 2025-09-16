@@ -2,7 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 const MealLogScreen = () => {
   const navigation = useNavigation();
 

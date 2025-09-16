@@ -59,7 +59,16 @@ export default function App() {
   }
 
   console.log('App render - Session:', session, 'User:', session?.user);
+    
+  useEffect(() => {
+    initGlobalErrorHandler();
+  }, []);
 
+  // Example usage
+  log('App mounted');
+  error('This is a test error log');
+
+  
   return (
     <NavigationContainer>
       <StatusBar style="auto" />

@@ -2,7 +2,11 @@ import React, { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 export default function FlowIntensityScreen() {
   const navigation = useNavigation()
   const typicalDays = 6

@@ -11,7 +11,11 @@ import {
   Platform
 } from 'react-native'
 import { supabase } from '../lib/supabase'
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

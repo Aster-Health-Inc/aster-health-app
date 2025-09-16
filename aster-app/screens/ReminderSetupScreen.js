@@ -3,7 +3,11 @@ import React from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { useNavigation } from '@react-navigation/native'
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 export default function ReminderSetupScreen() {
   const navigation = useNavigation()
 

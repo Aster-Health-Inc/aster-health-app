@@ -5,7 +5,11 @@ import {
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { requestHealthPermissions } from '../lib/healthkit' 
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 export default function HealthAccessScreen() {
   const navigation = useNavigation()
 

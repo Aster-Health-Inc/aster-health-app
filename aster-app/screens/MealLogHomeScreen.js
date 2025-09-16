@@ -4,7 +4,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 import {
   upsertMealLog,
   upsertWaterLog,

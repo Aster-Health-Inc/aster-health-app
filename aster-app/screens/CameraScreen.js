@@ -14,6 +14,11 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { log, warn, error } from '../utils/CrashLogger';
+
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 
 const CameraScreen = () => {
   const navigation = useNavigation();

@@ -12,7 +12,11 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
+import { log, warn, error } from '../utils/CrashLogger';
 
+log('User pressed button', { id: 42 });
+warn('Slow API response');
+error('Login failed', err);
 const HomeScreen = ({ navigation: navigationProp }) => {
   const navigation = useNavigation();
   
