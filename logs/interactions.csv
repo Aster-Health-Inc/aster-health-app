@@ -42,3 +42,69 @@ timestamp_iso,session_id,event_type,user_input,assistant_response,expected_answe
 2025-08-25T20:37:37.150144,60eee75d-e371-434a-84df-62cebc6504e7,chat,What is my expected mood today?,"Based on the context provided, you are currently in the follicular phase, where most women experience improved moods and increased energy. Therefore, your expected mood today may be more positive and energetic.",,follicular,33.23,0,0
 2025-08-25T20:37:50.391492,60eee75d-e371-434a-84df-62cebc6504e7,chat,can I be sad today?,"Based on the information provided in the context, it appears that women in the follicular phase generally experience improved moods and increased energy as estrogen levels rise. While there may be variations in individual experiences, it is less likely for sadness to be a prominent symptom during this phase.",,follicular,33.23,0,0
 2025-08-25T20:38:05.699477,60eee75d-e371-434a-84df-62cebc6504e7,chat,Why am i feeling sad today?,I'm not sure based on the available context.,,follicular,33.23,1,0
+2025-09-16T18:05:36.930614,27adbfd2-771b-458f-81c8-17e627554878,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T18:05:46.793515,27adbfd2-771b-458f-81c8-17e627554878,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T18:18:39.788717,37c4f721-2fb2-4473-aa93-c96b972a8d87,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.86,0,0
+2025-09-16T18:18:49.453887,37c4f721-2fb2-4473-aa93-c96b972a8d87,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.86,0,0
+2025-09-16T18:23:48.506947,7bf6f05d-b913-4f27-b847-1ce4862d61e3,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T18:23:53.519575,7bf6f05d-b913-4f27-b847-1ce4862d61e3,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.86,0,0
+2025-09-16T18:23:58.374234,7bf6f05d-b913-4f27-b847-1ce4862d61e3,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.86,0,0
+2025-09-16T18:28:08.616136,97c786d2-3899-45f9-a526-d3955a0ec949,chat,hey,"I'm sorry, I'm having trouble processing your question right now. Please try rephrasing it.",,unknown,,0,0
+2025-09-16T18:29:13.005022,97be54db-6075-4376-8819-e906de760629,chat,hey,"Based on the provided text,  women experience physical discomfort (dysmenorrhea, breast tenderness, joint pain) around menstruation, which can be associated with increased psychological distress, irritability, and decreased self-esteem.  Increased interpersonal conflicts and reduced social engagement premenstrually and during menstruation may contribute to depression and isolation.  Negative affect is linked with increased impulsivity, substance use, and nonsuicidal self-injury.  Studies show exacerbations of psychiatric symptoms across the menstrual cycle.  A mid-luteal increase in anhedonic depression, but not anxious apprehension or arousal, may be affected by the menstrual cycle.",,unknown,,0,0
+2025-09-16T18:30:22.990042,97be54db-6075-4376-8819-e906de760629,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T18:30:41.677320,97be54db-6075-4376-8819-e906de760629,chat,am I bleeding too much?,I'm not sure based on the available context.,,menstrual,42.92,1,0
+2025-09-16T18:31:24.173257,97be54db-6075-4376-8819-e906de760629,chat,how is my health?,I'm not sure based on the available context.,,menstrual,42.92,1,0
+2025-09-16T18:34:19.087883,db250af4-f576-4f16-ac50-6e5d166f0238,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T18:34:25.642909,db250af4-f576-4f16-ac50-6e5d166f0238,chat,heyy,"During the menstrual phase, it is common to experience fatigue and moodiness due to low hormone levels. It is important to be aware of these symptoms and take care of yourself during this time. If you have any concerns about your menstrual health or experience severe symptoms, it is recommended to speak to a healthcare provider such as a reproductive endocrinologist.",,menstrual,42.92,0,0
+2025-09-16T18:34:43.759115,db250af4-f576-4f16-ac50-6e5d166f0238,chat,how is my health?,"Based on the available context, you may be experiencing mood swings, irritability, and sadness during the luteal phase of your menstrual cycle. It is important to manage these symptoms effectively. If you have concerns about your hormonal health or menstrual cycles, consider speaking to a healthcare provider such as a reproductive endocrinologist.",,menstrual,42.92,0,0
+2025-09-16T18:35:19.080046,db250af4-f576-4f16-ac50-6e5d166f0238,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T18:35:33.990440,db250af4-f576-4f16-ac50-6e5d166f0238,chat,am I bleeding too much,"Based on the available context, it is normal to experience physical and emotional symptoms during the luteal phase of the menstrual cycle, which includes mood swings, breast changes, and appetite changes. If you are concerned about bleeding too much, it is recommended to speak to a healthcare provider such as a reproductive endocrinologist for further evaluation and guidance.",,menstrual,33.23,0,0
+2025-09-16T18:39:25.132018,db250af4-f576-4f16-ac50-6e5d166f0238,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T18:47:17.833654,6f74055a-228e-47ed-b200-546f48742866,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T18:47:30.757274,6f74055a-228e-47ed-b200-546f48742866,chat,why am I bleeding too much ?,"If you are experiencing heavy bleeding during your menstrual phase, it could be due to various factors such as underlying health issues like endometriosis, hormonal disorders like PCOS, or extreme stress. It is important to speak to a healthcare provider, like a reproductive endocrinologist, to determine the exact cause and receive appropriate treatment.",,menstrual,33.23,0,0
+2025-09-16T18:50:46.590217,0ae51214-6746-4fc4-ad64-6fb29fc2c179,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T18:51:03.963566,0ae51214-6746-4fc4-ad64-6fb29fc2c179,chat,why am I bleeding so much?,I'm not sure based on the available context.,,menstrual,33.23,1,0
+2025-09-16T18:54:02.586489,62e3b777-0bf1-4b75-9793-829c65833f2e,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T18:54:13.731861,62e3b777-0bf1-4b75-9793-829c65833f2e,chat,why am I bleeding so much?,"If you are bleeding heavily during your menstrual phase, it could be due to various factors such as hormonal imbalances, underlying health conditions like endometriosis, extreme stress, or even a hormonal disorder like PCOS. It is important to speak to a healthcare provider, such as a reproductive endocrinologist, to discuss your concerns and explore possible causes for the heavy bleeding.",,menstrual,33.23,0,0
+2025-09-16T19:00:56.395768,69f94cf2-abfa-42fc-8471-63e3ad1fda81,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-16T19:01:23.041118,69f94cf2-abfa-42fc-8471-63e3ad1fda81,chat,why am I bleeding so much,I'm not sure based on the available context.,,menstrual,33.23,1,0
+2025-09-16T19:04:09.310754,56d617b5-937a-4dfc-b1b3-fc9ed538aa6e,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-16T19:04:25.068667,56d617b5-937a-4dfc-b1b3-fc9ed538aa6e,chat,why am I bleeding soo much,I'm not sure based on the available context.,,menstrual,42.92,1,0
+2025-09-16T19:19:06.169454,56d617b5-937a-4dfc-b1b3-fc9ed538aa6e,chat,hey,I'm not sure based on the available context.,,menstrual,42.92,1,0
+2025-09-17T13:11:00.958239,774e71f1-f8df-4785-9a9e-1409786bef6d,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.86,0,0
+2025-09-17T13:11:11.741303,774e71f1-f8df-4785-9a9e-1409786bef6d,chat,why am I bleeding too much?,I'm not sure based on the available context.,,menstrual,42.86,1,0
+2025-09-17T13:16:23.271515,aa782f4d-bb14-4c3c-b5e6-d20c47ff938c,conversion,Submitted menstrual health data,Predicted 33.2 days,,,33.23,0,0
+2025-09-17T13:16:33.812813,aa782f4d-bb14-4c3c-b5e6-d20c47ff938c,chat,why am I bleeding so much,I'm not sure based on the available context.,,follicular,33.23,1,0
+2025-09-17T13:19:26.773013,e06dd682-e001-4446-8592-76626c6f95d0,conversion,Submitted menstrual health data,Predicted 42.9 days,,,42.92,0,0
+2025-09-17T13:19:42.335770,e06dd682-e001-4446-8592-76626c6f95d0,chat,why am I bleeding so much,"It's completely understandable to feel concerned about experiencing heavier bleeding during your menstrual phase. While menstruation varies for each individual, excessive bleeding—known as menorrhagia—can sometimes occur due to several factors. Here are a few possible reasons for your heavy bleeding:
+
+1. **Hormonal Imbalances**: Fluctuations in hormones, particularly estrogen and progesterone, can lead to heavier periods. Conditions like polycystic ovary syndrome (PCOS) or thyroid disorders can also disrupt hormonal balance.
+
+2. **Uterine Conditions**: Conditions such as fibroids (noncancerous growths in the uterus) or endometriosis (where tissue similar to the uterine lining grows outside the uterus) can cause increased bleeding.
+
+3. **Stress and Lifestyle Factors**: High-stress levels, significant weight changes, or certain medications can influence your menstrual flow. 
+
+4. **Age and Menstrual Changes**: If you're approaching perimenopause (the transition phase before menopause), it’s common to experience changes in your menstrual cycle, including heavier bleeding.
+
+5. **Other Health Issues**: Certain medical conditions, like bleeding disorders or pelvic inflammatory disease, can also contribute to heavy bleeding.
+
+If your heavy bleeding is accompanied by severe pain, fatigue, or lasts longer than normal, it’s important to reach out to a healthcare provider. They can evaluate your symptoms, potentially perform tests, and help identify any underlying issues that may be causing your heavy bleeding.
+
+Remember, you are not alone in this, and seeking support is a brave step towards better understanding your health. Please take care of yourself, and don’t hesitate to reach out for professional advice.",,menstrual,42.92,0,0
+2025-09-17T13:20:05.880485,e06dd682-e001-4446-8592-76626c6f95d0,chat,what should I do ,"During the menstrual phase, it's important to prioritize self-care and listen to your body's needs. Here are some suggestions to help you navigate this time:
+
+1. **Manage Discomfort**: If you experience cramps or discomfort, consider using heat therapy (like a heating pad) or taking over-the-counter pain relief if it's suitable for you. Gentle stretching or light exercise can also help alleviate tension.
+
+2. **Stay Hydrated**: Drink plenty of water to help reduce bloating and maintain hydration. Herbal teas, especially those like chamomile or ginger, can be soothing.
+
+3. **Nutrition**: Focus on a balanced diet rich in whole foods, including fruits, vegetables, whole grains, and lean proteins. Foods high in magnesium (like nuts and leafy greens) can help ease cramps, while iron-rich foods (like beans and spinach) can help replenish lost nutrients.
+
+4. **Rest and Relaxation**: Listen to your body and allow yourself to rest if you feel fatigued. Engage in calming activities such as reading, meditating, or practicing gentle yoga to help reduce stress.
+
+5. **Mood Support**: Hormonal fluctuations can affect mood. Connecting with friends or loved ones for support, journaling your feelings, or engaging in creative activities can be beneficial.
+
+6. **Track Your Cycle**: Keeping a record of your symptoms can help you understand your patterns better and prepare for future cycles. This information can be valuable if you decide to consult a healthcare provider.
+
+7. **Consult a Healthcare Professional**: If you experience severe pain, excessive bleeding, or any other concerning symptoms, it's important to reach out to a healthcare provider for personalized advice and support.
+
+Remember, it's completely normal to experience a range of symptoms during your menstrual phase, and taking care of yourself is key. If you have any specific concerns or questions, don't hesitate to seek professional guidance. You're not alone in this, and there are resources available to help you manage your menstrual health.",,menstrual,42.92,0,0
