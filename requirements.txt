@@ -14,7 +14,9 @@ kaggle
 streamlit
 langchain
 langchain-community
-langchain-openai
 openai
+langchain-openai
 python-dotenv
 pypdf
+supabase
+rapidfuzz

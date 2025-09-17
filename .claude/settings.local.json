@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm start)",
+      "Bash(npx expo start:*)",
+      "Bash(curl:*)",
+      "Bash(node:*)",
+      "Bash(npm run-script:*)",
+      "Read(//Users/nikhil/Desktop/**)",
+      "Bash(python:*)",
+      "Read(//var/folders/kl/bsk1vb193ts6br3n1kmljv600000gn/T/TemporaryItems/NSIRD_screencaptureui_45ppsC/**)",
+      "Bash(pip install:*)",
+      "Bash(pkill:*)",
+      "Bash(streamlit run:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

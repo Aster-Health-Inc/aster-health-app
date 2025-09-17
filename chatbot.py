@@ -1,4 +1,8 @@
 import streamlit as st
+
+# Must be the very first Streamlit command
+st.set_page_config(page_title="Cycle Chatbot", page_icon="🩸")
+
 import pickle
 import pandas as pd
 import os
@@ -7,14 +11,17 @@ from datetime import datetime, timedelta
 import uuid, csv
 from pathlib import Path
 from rapidfuzz import fuzz  # <- for fuzzy matching
+import tempfile
+import requests
+from supabase import create_client, Client
 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain.chat_models import ChatOpenAI
 
 # ------------------------------
 # Logging setup
@@ -31,47 +38,187 @@ if "eval_dataset" not in st.session_state:
 
 load_dotenv()
 
+# Initialize Supabase client
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_ANON_KEY")
+
+# Only initialize Supabase if credentials are available
+supabase = None
+if url and key:
+    try:
+        supabase: Client = create_client(url, key)
+    except Exception as e:
+        st.error(f"Failed to initialize Supabase client: {e}")
+else:
+    if not url:
+        st.error("SUPABASE_URL environment variable is required")
+    if not key:
+        st.error("SUPABASE_ANON_KEY environment variable is required")
+
+def download_file_from_supabase(bucket_name: str, file_path: str):
+    """Download a file from Supabase storage bucket"""
+    if not supabase:
+        st.error("Supabase client not initialized")
+        return None
+    try:
+        response = supabase.storage.from_(bucket_name).download(file_path)
+        return response
+    except Exception as e:
+        st.error(f"Error downloading file {file_path} from bucket {bucket_name}: {e}")
+        return None
+
+def download_text_file(bucket_name: str, file_path: str):
+    """Download and read text file content from Supabase storage"""
+    try:
+        file_data = download_file_from_supabase(bucket_name, file_path)
+        if file_data:
+            return file_data.decode('utf-8')
+        return None
+    except Exception as e:
+        st.error(f"Error reading text file {file_path}: {e}")
+        return None
+
+def list_files_in_bucket(bucket_name: str, folder_path: str = ''):
+    """List all files in a storage bucket folder"""
+    if not supabase:
+        st.error("Supabase client not initialized")
+        return []
+    try:
+        response = supabase.storage.from_(bucket_name).list(folder_path)
+        return response
+    except Exception as e:
+        st.error(f"Error listing files in bucket {bucket_name}/{folder_path}: {e}")
+        return []
+
 @st.cache_resource
 def load_model():
-    return pickle.load(open("cycle-prediction/models/random_forest_cycle_predictor.pkl", "rb"))
+    """Download and load model from Supabase using direct HTTP URL"""
+    model_url = "https://iinbwdrzmmcwajbmuynh.supabase.co/storage/v1/object/public/chatbot-assets/models/random_forest_cycle_predictor.pkl"
+
+    try:
+        response = requests.get(model_url)
+        if response.status_code == 200:
+            # Create a temporary file for the model
+            temp_file = tempfile.NamedTemporaryFile(suffix='.pkl', delete=False)
+            temp_file.write(response.content)
+            temp_file.close()
+
+            # Load the model from the temporary file
+            with open(temp_file.name, 'rb') as f:
+                model = pickle.load(f)
+
+            # Clean up the temporary file
+            os.unlink(temp_file.name)
+
+            # Model loaded successfully
+            return model
+        else:
+            st.warning(f"⚠️ Model not found in Supabase (HTTP {response.status_code}). Cycle prediction will be disabled.")
+            return None
+    except Exception as e:
+        st.warning(f"⚠️ Error loading model from Supabase: {e}. Cycle prediction will be disabled.")
+        return None
 
 model = load_model()
 
-def load_documents_from_directory(directory):
+def load_documents_from_supabase():
+    """Download context documents from Supabase using direct HTTP URLs"""
     docs = []
-    for file in os.listdir(directory):
-        file_path = os.path.join(directory, file)
-        if file.endswith(".pdf"):
-            loader = PyPDFLoader(file_path)
-        elif file.endswith(".txt"):
-            loader = TextLoader(file_path)
-        else:
-            continue
-        docs.extend(loader.load())
-    return docs
+    temp_files = []
+
+    # Direct URLs for known files
+    base_url = "https://iinbwdrzmmcwajbmuynh.supabase.co/storage/v1/object/public/chatbot-assets"
+
+    files_to_download = [
+        ('context_documents/mood_and_hormones.txt', 'txt'),
+        ('context_documents/physical_effects.txt', 'txt'),
+        ('context_documents/Mood_Swing_during_Menstruation.pdf', 'pdf'),
+        ('context_documents/Psychiatric_Symptoms_Across_the_Menstrual_Cycle_in_Adult_Women.pdf', 'pdf'),
+        ('context_documents/window_of_vulnerability.pdf', 'pdf')
+    ]
+
+    try:
+        for file_path, file_type in files_to_download:
+            url = f"{base_url}/{file_path}"
+
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    if file_type == 'txt':
+                        # Create temporary text file
+                        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8')
+                        temp_file.write(response.text)
+                        temp_file.close()
+                        temp_files.append(temp_file.name)
+
+                        loader = TextLoader(temp_file.name)
+                        docs.extend(loader.load())
+
+                    elif file_type == 'pdf':
+                        # Create temporary PDF file
+                        temp_file = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+                        temp_file.write(response.content)
+                        temp_file.close()
+                        temp_files.append(temp_file.name)
+
+                        loader = PyPDFLoader(temp_file.name)
+                        docs.extend(loader.load())
+
+                    # Downloaded successfully
+                else:
+                    st.warning(f"⚠️ Could not download {file_path} (HTTP {response.status_code})")
+
+            except Exception as e:
+                st.warning(f"⚠️ Error downloading {file_path}: {e}")
+                continue
+
+        # Clean up temporary files
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except Exception as e:
+                st.warning(f"Error cleaning up temp file {temp_file}: {e}")
+
+        return docs
+
+    except Exception as e:
+        st.error(f"Error loading documents from Supabase: {e}")
+        return []
 
 @st.cache_resource(show_spinner=True)
 def create_qa_chain():
-    documents = load_documents_from_directory(
-        "/Users/adwaitmahajan/Desktop/Aster Health/aster-health-app/mood-prediction/context_documents"
-    )
+    documents = load_documents_from_supabase()
+
+    if not documents:
+        st.error("❌ No documents loaded from Supabase")
+        return create_fallback_qa_chain()
+
+    st.success(f"✅ Loaded {len(documents)} documents from Supabase")
+
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(documents)
 
-    embeddings = OpenAIEmbeddings()
+    if not chunks:
+        st.error("❌ No text chunks created from documents.")
+        return None
+
+    st.success(f"✅ Created {len(chunks)} text chunks")
+
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vector_store = FAISS.from_documents(chunks, embeddings)
 
+    st.success("✅ Vector store created successfully")
+
     prompt_template = """
-You are a compassionate assistant trained on menstrual and hormonal health documents.
+You are a compassionate assistant specializing in menstrual and hormonal health.
 
-{question}
+Question: {question}
 
-Use ONLY the context below to answer their question.
-If the answer is not in the context, reply with:
-"I'm not sure based on the available context."
-
-Context:
+Relevant Context:
 {context}
+
+Based on the context provided and your knowledge of menstrual health, provide a helpful, empathetic response. If you need more specific information, suggest consulting a healthcare provider.
 
 Helpful Answer:
 """
@@ -81,17 +228,46 @@ Helpful Answer:
         template=prompt_template,
     )
 
-    llm = ChatOpenAI(model='gpt-3.5-turbo', temperature=0.6)
+    llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.6)
+
+    retriever = vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 6}  # Retrieve more context
+    )
 
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
-        retriever=vector_store.as_retriever(),
+        retriever=retriever,
         chain_type="stuff",
         chain_type_kwargs={"prompt": prompt},
-        return_source_documents=False
+        return_source_documents=True  # Enable for debugging
     )
 
     return qa_chain
+
+def create_fallback_qa_chain():
+    """Create a basic QA chain without vector store for fallback mode"""
+    prompt_template = """
+You are a compassionate assistant trained on menstrual and hormonal health.
+
+{question}
+
+Based on general knowledge about menstrual health, provide a helpful response.
+If you're not certain about medical advice, recommend consulting a healthcare provider.
+
+Helpful Answer:
+"""
+
+    prompt = PromptTemplate(
+        input_variables=["question"],
+        template=prompt_template,
+    )
+
+    llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.6)
+
+    # Simple chain without retrieval
+    from langchain.chains import LLMChain
+    return LLMChain(llm=llm, prompt=prompt)
 
 def determine_phase(today, start_date, cycle_length):
     days_since = (today - start_date).days
@@ -170,8 +346,16 @@ def write_daily_aggregates():
 # Streamlit UI
 # ------------------------------
 qa_chain = create_qa_chain()
-st.set_page_config(page_title="Cycle Chatbot", page_icon="🩸")
+if not qa_chain:
+    st.error("Failed to initialize QA chain. Please check your Supabase storage setup.")
+    st.stop()
 st.title("🩸 Menstrual Health Chatbot")
+
+# Add cache clear button in sidebar
+with st.sidebar:
+    if st.button("🔄 Clear Cache & Reload"):
+        st.cache_resource.clear()
+        st.rerun()
 
 # Upload evaluation dataset
 st.sidebar.subheader("📂 Upload Evaluation Dataset")
@@ -262,7 +446,11 @@ if submitted:
         'TotalMensesScore', 'IntercourseInFertileWindow', 'UnusualBleeding'
     ])
 
-    predicted_length = model.predict(input_features)[0]
+    if model is not None:
+        predicted_length = model.predict(input_features)[0]
+    else:
+        st.error("⚠️ Cycle prediction model not available. Please upload the model to Supabase.")
+        predicted_length = length_of_cycle  # Use calculated cycle length as fallback
     st.session_state.predicted_length = predicted_length
 
     st.chat_message("assistant").markdown(f"🗓️ **Predicted Cycle Length:** `{predicted_length:.1f}` days")
@@ -294,7 +482,17 @@ if user_input:
         if "next period" in user_input.lower() and next_period_date:
             query += f" Also, the user's next period is expected on {next_period_date.strftime('%B %d, %Y')}."
 
-        response = qa_chain.run(query)
+        # RetrievalQA chains typically use "query" as the input key
+        try:
+            result = qa_chain.invoke({"query": query})
+            response = result.get("result", result.get("answer", str(result)))
+
+            # Debug: show sources if available
+            if "source_documents" in result and result["source_documents"]:
+                st.write(f"📚 Found {len(result['source_documents'])} relevant sources")
+        except Exception as e:
+            st.error(f"Error processing query: {str(e)}")
+            response = "I'm sorry, I'm having trouble processing your question right now. Please try rephrasing it."
         
         # Always append next period date explicitly if relevant
         if "next period" in user_input.lower() and next_period_date:
