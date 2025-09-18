@@ -9,17 +9,16 @@ import {
   StatusBar,
   RefreshControl 
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
-import { log, warn, error } from '../utils/CrashLogger';
+import FloatingChatButton from "../components/FloatingChatButton";
+import ChatBotModal from "../components/ChatBotModal";
 
-log('User pressed button', { id: 42 });
-warn('Slow API response');
-error('Login failed');
 const HomeScreen = ({ navigation: navigationProp }) => {
   const navigation = useNavigation();
-  
+  const [chatOpen, setChatOpen] = useState(false);
+
   const [currentMonth, setCurrentMonth] = useState('');
   const [currentDay, setCurrentDay] = useState(0);
   const [cycleData, setCycleData] = useState(null);
@@ -33,8 +32,6 @@ const HomeScreen = ({ navigation: navigationProp }) => {
     setCurrentMonth(today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
     setCurrentDay(today.getDate());
   }, []);
-
-
 
   const loadCycleData = async () => {
     try {
@@ -97,8 +94,6 @@ const HomeScreen = ({ navigation: navigationProp }) => {
       setLoading(false);
     }
   };
-
-
 
   // Generate calendar data based on real cycle information
   const generateCalendarDays = () => {
@@ -285,8 +280,6 @@ const HomeScreen = ({ navigation: navigationProp }) => {
           </View>
         </View>
 
-
-
         {/* Show message if no cycle data available */}
         {!loading && !cycleData && (
           <View style={styles.noDataCard}>
@@ -368,6 +361,10 @@ const HomeScreen = ({ navigation: navigationProp }) => {
         </View>
       </ScrollView>
 
+      {/* Floating AI chat */}
+      <FloatingChatButton onPress={() => setChatOpen(true)} />
+      <ChatBotModal visible={chatOpen} onClose={() => setChatOpen(false)} />
+
       {/* Bottom Navigation */}
       <View style={styles.bottomNavigation}>
         <TouchableOpacity style={[styles.navItem, styles.activeNavItem]}>
@@ -390,9 +387,7 @@ const HomeScreen = ({ navigation: navigationProp }) => {
           <Text style={styles.navIcon}>🍽️</Text>
           <Text style={styles.navText}>Food</Text>
         </TouchableOpacity>
-        
 
-        
         <TouchableOpacity style={styles.navItem}>
           <Text style={styles.navIcon}>➕</Text>
           <Text style={styles.navText}>Lumi</Text>
@@ -693,8 +688,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
-
-
 
   // No Data Card
   noDataCard: {

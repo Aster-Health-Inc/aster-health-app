@@ -6,6 +6,7 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import { requestHealthPermissions } from '../lib/healthkit' 
 import { log, warn, error } from '../utils/CrashLogger';
+import { useFeatureFlags } from "../lib/FeatureFlag";
 
 log('User pressed button', { id: 42 });
 warn('Slow API response');

@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from './lib/supabase';
+import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
@@ -91,6 +92,7 @@ export default function App() {
   console.log('App render - Session:', session, 'User:', session?.user);
 
   return (
+    <FeatureFlagsProvider>
     <NavigationContainer>
       <StatusBar style="auto" />
       <Stack.Navigator
@@ -149,6 +151,7 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    </FeatureFlagsProvider>
   );
 }
 
