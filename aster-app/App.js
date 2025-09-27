@@ -22,6 +22,7 @@ import CarouselWalkthroughScreen from './screens/CarouselWalkthroughScreen';
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
 import HealthAppAccessScreen from './screens/HealthAppAccessScreen';
 import HomeScreen from './screens/HomeScreen';
+import WorkoutScreen from './screens/WorkoutScreen';
 
 // Food-related screens
 import MealLogHomeScreen from './screens/MealLogHomeScreen';
@@ -134,6 +135,8 @@ export default function App() {
             <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
             <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
+            <Stack.Screen name="Workout" component={WorkoutScreen} />
+
 
             {/* Food-related */}
             <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />

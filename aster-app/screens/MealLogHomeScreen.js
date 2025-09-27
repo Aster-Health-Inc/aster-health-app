@@ -140,6 +140,14 @@ export default function MealLogHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* 🔹 Added Floating Pink AI Button */}
+      <TouchableOpacity
+        style={styles.aiBtn}
+        onPress={() => navigation.navigate('MealLogScreen')}
+      >
+        <Text style={styles.aiBtnText}>Generate Recipes with AI</Text>
+      </TouchableOpacity>
+
       <ScrollView contentContainerStyle={{ paddingBottom: 130 }}>
         {/* Calories Card */}
         <View style={styles.card}>
@@ -184,7 +192,7 @@ export default function MealLogHomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Macros Card (unchanged) */}
+        {/* Macros Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Macros</Text>
           <View style={styles.macrosContainer}>
@@ -217,7 +225,7 @@ export default function MealLogHomeScreen() {
           </View>
         </View>
 
-        {/* Water Card → Figma layout (Goal | Circle | Last log) */}
+        {/* Water Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Water</Text>
 
@@ -234,7 +242,7 @@ export default function MealLogHomeScreen() {
               <Text style={styles.waterUnit}>oz</Text>
             </TouchableOpacity>
 
-            {/* Right: Last log (using what we have today; no timestamp stored) */}
+            {/* Right: Last log */}
             <View style={[styles.waterSide, { alignItems: 'flex-end' }]}>
               <Text style={styles.waterSideLabel}>Last log</Text>
               <Text style={styles.waterLastValue}>
@@ -326,6 +334,28 @@ function CalorieRing({ percent, total, goal }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
 
+  /* 🔹 New AI Button Styles */
+  aiBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 16,
+    backgroundColor: 'pink',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    zIndex: 1000,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
+  },
+  aiBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#000',
+  },
+
   card: {
     marginHorizontal: 14,
     marginTop: 16,
@@ -337,8 +367,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardTitle: { fontSize: 18, fontWeight: '700', color: '#111', marginBottom: 8 },
-
-  /* Calories cluster */
   calorieCardWrapper: {
     alignSelf: 'center',
     width: 300,
@@ -362,8 +390,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
   },
-
-  /* Buttons */
   logFoodButton: {
     alignSelf: 'center',
     backgroundColor: '#ededed',
@@ -373,8 +399,6 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
   logFoodButtonText: { fontWeight: '600', color: '#111' },
-
-  /* Macros */
   macrosContainer: { marginTop: 14 },
   macroRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   macroLabel: { width: 60, fontSize: 13, color: '#555', fontWeight: '600' },
@@ -389,8 +413,6 @@ const styles = StyleSheet.create({
   macroBar: { height: 8, borderRadius: 5 },
   macroValue: { fontSize: 13, color: '#222', width: 36, textAlign: 'right', fontWeight: '700' },
   macroGoal: { fontSize: 12, color: '#888', width: 33, marginLeft: 2 },
-
-  /* Water — Figma layout */
   waterRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,13 +420,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
   },
-  waterSide: {
-    flex: 1,
-  },
+  waterSide: { flex: 1 },
   waterSideLabel: { color: '#8797a8', fontSize: 12, marginBottom: 2 },
   waterGoalStrong: { fontSize: 14, color: '#4d7ea8', fontWeight: '700' },
   waterLastValue: { fontSize: 14, color: '#333', fontWeight: '600' },
-
   waterCircle: {
     width: 90, height: 90, borderRadius: 45,
     backgroundColor: '#e5f5ff',
@@ -412,7 +431,6 @@ const styles = StyleSheet.create({
   },
   waterAmount: { fontSize: 22, fontWeight: '800', color: '#0077b6', marginBottom: -2 },
   waterUnit: { fontSize: 14, color: '#199ad8', fontWeight: '600' },
-
   logWaterButton: {
     alignSelf: 'center',
     backgroundColor: '#ededed',
@@ -422,8 +440,6 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
   logWaterButtonText: { fontWeight: '600', color: '#111' },
-
-  /* Bottom nav */
   bottomNav: {
     flexDirection: 'row',
     alignItems: 'center',
