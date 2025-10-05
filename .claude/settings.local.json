@@ -15,7 +15,8 @@
       "Bash(streamlit run:*)",
       "Bash(rm:*)",
       "Bash(ngrok:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npx supabase db dump:*)"
     ],
     "deny": [],
     "ask": []

@@ -13,6 +13,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
+import Markdown from 'react-native-markdown-display';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService';
@@ -22,15 +23,18 @@ export default function ChatbotModal({ visible, onClose }) {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [userContext, setUserContext] = useState(null);
-  const [messages, setMessages] = useState([
-    { id: "sys-hello", role: "assistant", text: "Hi! I'm loading your health data to provide personalized assistance..." },
-  ]);
+  const [messages, setMessages] = useState([]);
+  const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const listRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 0);
-      loadUserData();
+      if (!hasShownWelcome) {
+        // Only load and show welcome on first open
+        setMessages([{ id: "sys-hello", role: "assistant", text: "Hey! Getting your health data ready... ✨" }]);
+        loadUserData();
+      }
     }
   }, [visible]);
 
@@ -61,6 +65,8 @@ export default function ChatbotModal({ visible, onClose }) {
           text: welcomeMessage
         }]);
 
+        setHasShownWelcome(true); // Mark welcome as shown
+
         console.log('User context loaded:', result.data);
       } else {
         throw new Error(result.error || 'Failed to load user data');
@@ -87,28 +93,21 @@ export default function ChatbotModal({ visible, onClose }) {
    * Generate personalized welcome message based on user data
    */
   const generateWelcomeMessage = (data) => {
-    const { latestPeriod, analytics, userProfile } = data;
+    const { latestPeriod, userProfile } = data;
 
-    let welcome = "Hi";
+    let welcome = "Hey";
     if (userProfile?.name) {
       welcome += ` ${userProfile.name}`;
     }
-    welcome += "! 🌸\n\n";
-
-    welcome += "I have your health data ready:\n";
+    welcome += "! 👋\n\n";
 
     if (latestPeriod) {
-      welcome += `• Latest period: ${latestPeriod.start_date}`;
-      if (latestPeriod.end_date) {
-        welcome += ` to ${latestPeriod.end_date}`;
-      }
-      welcome += "\n";
+      const daysSince = Math.floor((new Date() - new Date(latestPeriod.start_date)) / (1000 * 60 * 60 * 24));
+      welcome += `Your last period was ${daysSince} days ago.\n\n`;
     }
 
-    welcome += `• Health tracking: ${analytics.total_interactions} total interactions\n`;
-    welcome += `• Data accuracy: ${analytics.accuracy}%\n\n`;
-
-    welcome += "I can help with period tracking, health insights, nutrition advice, and answer questions about your cycle. What would you like to know?";
+    welcome += "Ask me anything about your health, cycle, or nutrition! 💬\n\n";
+    welcome += "⚠️ Note: I'm an AI assistant, not a medical professional. For medical concerns, please consult a healthcare provider.";
 
     return welcome;
   };
@@ -123,19 +122,10 @@ export default function ChatbotModal({ visible, onClose }) {
     setSending(true);
 
     try {
-      // Prepare context for chatbot
-      const contextString = userContext ?
-        ChatbotDataService.formatDataForChatbot(userContext) :
-        "No user data available.";
-
-      // Create enhanced prompt with user context
-      const enhancedPrompt = `${contextString}\n\nUser Query: ${text}\n\nPlease provide a helpful response based on the user's health data and query.`;
-
-      // Call real chatbot API (with ngrok public URL)
+      // Call Gemini AI chatbot (it will format the context internally)
       const result = await ChatbotAPIService.sendMessage(
         text,
-        userContext,
-        'https://7306ee798ee5.ngrok-free.app/api/chat'
+        userContext
       );
 
       const reply = {
@@ -148,7 +138,6 @@ export default function ChatbotModal({ visible, onClose }) {
       // Log the interaction for analytics
       console.log('Chatbot interaction:', {
         query: text,
-        context: contextString,
         response: result.response,
         success: result.success,
         apiError: result.error || null
@@ -221,9 +210,15 @@ export default function ChatbotModal({ visible, onClose }) {
     return (
       <View style={[styles.bubbleRow, isUser ? styles.rightRow : styles.leftRow]}>
         <View style={[styles.bubble, isUser ? styles.userBubble : styles.botBubble]}>
-          <Text style={[styles.bubbleText, isUser ? styles.userText : styles.botText]}>
-            {item.text}
-          </Text>
+          {isUser ? (
+            <Text style={[styles.bubbleText, styles.userText]}>
+              {item.text}
+            </Text>
+          ) : (
+            <Markdown style={markdownStyles}>
+              {item.text}
+            </Markdown>
+          )}
         </View>
       </View>
     );
@@ -291,26 +286,27 @@ export default function ChatbotModal({ visible, onClose }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0f0f10" },
+  container: { flex: 1, backgroundColor: "#F4F5F7" },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#2a2a2c",
+    borderBottomColor: "#E0E0E0",
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
-  title: { color: "white", fontSize: 18, fontWeight: "700", flex: 1 },
-  closeBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: "#1f1f22" },
-  closeText: { color: "white", fontWeight: "600" },
+  title: { color: "#111111", fontSize: 18, fontWeight: "700", flex: 1 },
+  closeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#F4F5F7" },
+  closeText: { color: "#111111", fontWeight: "600" },
 
   bubbleRow: { marginVertical: 6, flexDirection: "row" },
   leftRow: { justifyContent: "flex-start" },
   rightRow: { justifyContent: "flex-end" },
   bubble: { maxWidth: "78%", padding: 12, borderRadius: 16 },
-  botBubble: { backgroundColor: "#1c1c1e", borderTopLeftRadius: 4 },
-  userBubble: { backgroundColor: "#4A90E2", borderTopRightRadius: 4 },
-  botText: { color: "#eaeaea" },
+  botBubble: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 4, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  userBubble: { backgroundColor: "#2F7D78", borderTopRightRadius: 4 },
+  botText: { color: "#111111" },
   userText: { color: "white" },
   bubbleText: { fontSize: 15, lineHeight: 20 },
 
@@ -319,25 +315,27 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     padding: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#2a2a2c",
-    backgroundColor: "#141416",
+    borderTopColor: "#E0E0E0",
+    backgroundColor: "#FFFFFF",
     gap: 8,
   },
   input: {
     flex: 1,
     minHeight: 42,
     maxHeight: 120,
-    color: "white",
+    color: "#111111",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#1a1b1e",
+    backgroundColor: "#F4F5F7",
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
   },
   sendBtn: {
     height: 42,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: "#4A90E2",
+    backgroundColor: "#2F7D78",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -350,12 +348,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#2a2a2c",
-    backgroundColor: "#141416",
+    borderTopColor: "#E0E0E0",
+    backgroundColor: "#FFFFFF",
   },
   loadingText: {
-    color: "#9a9a9a",
+    color: "#8C8C8C",
     marginLeft: 8,
     fontSize: 14,
   },
 });
+
+const markdownStyles = {
+  body: {
+    color: '#111111',
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  strong: {
+    fontWeight: '700',
+    color: '#2F7D78',
+  },
+  bullet_list: {
+    marginVertical: 4,
+  },
+  list_item: {
+    flexDirection: 'row',
+    marginVertical: 2,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 4,
+  },
+};

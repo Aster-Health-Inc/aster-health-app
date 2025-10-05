@@ -1,70 +1,119 @@
 // services/chatbotAPIService.js
 /**
- * Service for integrating with external chatbot API
- * Replace the mock responses in ChatBotModal with calls to this service
+ * Service for integrating with Gemini AI chatbot
+ * Uses Google's Gemini API for health assistant responses
  */
+
+import Constants from 'expo-constants';
 
 export class ChatbotAPIService {
 
   /**
-   * Send message to your external chatbot service
+   * Send message to Gemini AI
    * @param {string} message - User's message
    * @param {Object} userContext - User's health data context
-   * @param {string} apiUrl - Your chatbot API endpoint
-   * @returns {Promise<string>} Chatbot response
+   * @returns {Promise<Object>} Chatbot response
    */
-  static async sendMessage(message, userContext, apiUrl = null) {
-    // Use environment variable or fallback to localhost
-    const CHATBOT_API_URL = apiUrl ||
-      process.env.EXPO_PUBLIC_CHATBOT_API_URL ||
-      'http://localhost:8502/api/chat'; // Your Streamlit chatbot API
+  static async sendMessage(message, userContext) {
+    const GEMINI_API_KEY = Constants.expoConfig?.extra?.GOOGLE_GEMINI_API_KEY ||
+                            process.env.GOOGLE_GEMINI_API_KEY ||
+                            'AIzaSyA74k2BfdJY5n_q_30T1w6_k1hQ0-EPtPk';
+
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
 
     try {
       // Prepare the context string for the chatbot
       const contextString = this.formatContextForAPI(userContext);
 
+      // Create system prompt for health assistant
+      const systemPrompt = `You are Aster Assistant, a friendly and empathetic women's health companion.
+
+RESPONSE STYLE:
+- Keep responses SHORT (3-4 sentences max)
+- Start with a warm greeting like "Great question!" or "Sure!"
+- Answer the question directly first
+- Use **bold** for important numbers and key information (e.g., **550 calories**, **30g protein**)
+- Use bullet points (•) when listing multiple items
+- End with ONE helpful follow-up question or suggestion
+- Use emojis sparingly (max 1-2 per message)
+- Be conversational and friendly, not clinical
+
+FORMATTING EXAMPLES:
+User: "When was my last period?"
+Response: "Great question! Your last period started on **August 1st**. That was **65 days ago**. Would you like to know when your next period is expected?"
+
+User: "How many calories did I eat today?"
+Response: "You've logged **550 calories** today! That's pretty low. Here are your macros:
+• **Protein:** 30g
+• **Carbs:** 40g
+• **Fat:** 30g
+
+Want some meal suggestions to boost your intake? 💪"
+
+User: "Suggest healthy snacks"
+Response: "Sure! Here are some high-protein snacks:
+• Greek yogurt with berries **(15g protein)**
+• Handful of almonds **(6g protein)**
+• Protein shake **(20-25g protein)**
+
+Would you like me to help you log any of these?"
+
+GUIDELINES:
+- Always use the user's actual health data from the context below
+- Format numbers and important facts in **bold**
+- Use bullet points for lists
+- Keep it conversational and supportive
+
+${contextString}`;
+
+      const fullPrompt = `${systemPrompt}\n\nUser Query: ${message}\n\nProvide a short, friendly response with a helpful follow-up:`;
+
       const payload = {
-        message: message,
-        context: contextString,
-        user_data: {
-          start_date: userContext?.latestPeriod?.start_date || null,
-          total_interactions: userContext?.analytics?.total_interactions || 0,
-          fallbacks: userContext?.analytics?.fallbacks || 0,
-          matches: userContext?.analytics?.matches || 0,
-          conversions: userContext?.analytics?.conversions || 0,
-          fallback_rate: userContext?.analytics?.fallback_rate || 0,
-          accuracy: userContext?.analytics?.accuracy || 0,
-          conversion_rate: userContext?.analytics?.conversion_rate || 0
-        },
-        timestamp: new Date().toISOString()
+        contents: [{
+          parts: [{
+            text: fullPrompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        }
       };
 
-      console.log('Sending to chatbot API:', payload);
+      console.log('Sending to Gemini API...');
 
-      const response = await fetch(CHATBOT_API_URL, {
+      const response = await fetch(GEMINI_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
         body: JSON.stringify(payload),
-        timeout: 30000 // 30 second timeout
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Gemini API error: ${errorData.error?.message || response.statusText}`);
       }
 
       const data = await response.json();
 
+      // Extract response from Gemini's response structure
+      const geminiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text ||
+                            'I apologize, but I couldn\'t generate a response. Please try again.';
+
       return {
         success: true,
-        response: data.response || data.message || 'No response from chatbot',
-        metadata: data.metadata || {}
+        response: geminiResponse,
+        metadata: {
+          model: 'gemini-2.0-flash-exp',
+          timestamp: new Date().toISOString()
+        }
       };
 
     } catch (error) {
-      console.error('Chatbot API error:', error);
+      console.error('Gemini API error:', error);
 
       return {
         success: false,
@@ -82,7 +131,7 @@ export class ChatbotAPIService {
       return "No user health data available.";
     }
 
-    const { latestPeriod, analytics, userProfile, recentMeals } = userContext;
+    const { latestPeriod, todayNutrition, userProfile, recentMeals } = userContext;
 
     let context = "USER HEALTH CONTEXT:\n";
 
@@ -100,15 +149,20 @@ export class ChatbotAPIService {
       }
     }
 
-    // Analytics metrics
-    context += `\nHEALTH TRACKING ANALYTICS:\n`;
-    context += `Total Interactions: ${analytics.total_interactions}\n`;
-    context += `Successful Matches: ${analytics.matches}\n`;
-    context += `Fallbacks: ${analytics.fallbacks}\n`;
-    context += `Conversions: ${analytics.conversions}\n`;
-    context += `Accuracy Rate: ${analytics.accuracy}%\n`;
-    context += `Conversion Rate: ${analytics.conversion_rate}%\n`;
-    context += `Fallback Rate: ${analytics.fallback_rate}%\n`;
+    // Today's nutrition data
+    if (todayNutrition && todayNutrition.hasData) {
+      context += `\nTODAY'S NUTRITION:\n`;
+      context += `Calories: ${todayNutrition.calories} kcal\n`;
+      context += `Protein: ${todayNutrition.protein}g\n`;
+      context += `Carbs: ${todayNutrition.carbs}g\n`;
+      context += `Fat: ${todayNutrition.fat}g\n`;
+      if (todayNutrition.water > 0) {
+        context += `Water: ${todayNutrition.water} oz\n`;
+      }
+    } else {
+      context += `\nTODAY'S NUTRITION:\n`;
+      context += `No meals logged today yet.\n`;
+    }
 
     // User profile
     if (userProfile) {
@@ -121,11 +175,17 @@ export class ChatbotAPIService {
       }
     }
 
-    // Recent nutrition data
+    // Recent nutrition data (weekly average)
     if (recentMeals && recentMeals.length > 0) {
-      context += `\nRECENT NUTRITION (Last 7 days):\n`;
+      context += `\nRECENT NUTRITION (Last 7 days average):\n`;
       const avgCalories = recentMeals.reduce((sum, meal) => sum + (meal.total_calories || 0), 0) / recentMeals.length;
-      context += `Average Daily Calories: ${Math.round(avgCalories)}\n`;
+      const avgProtein = recentMeals.reduce((sum, meal) => sum + (meal.total_protein || 0), 0) / recentMeals.length;
+      const avgCarbs = recentMeals.reduce((sum, meal) => sum + (meal.total_carbs || 0), 0) / recentMeals.length;
+      const avgFat = recentMeals.reduce((sum, meal) => sum + (meal.total_fat || 0), 0) / recentMeals.length;
+      context += `Average Daily Calories: ${Math.round(avgCalories)} kcal\n`;
+      context += `Average Daily Protein: ${Math.round(avgProtein)}g\n`;
+      context += `Average Daily Carbs: ${Math.round(avgCarbs)}g\n`;
+      context += `Average Daily Fat: ${Math.round(avgFat)}g\n`;
     }
 
     context += `\nData Last Updated: ${userContext.lastUpdated}\n`;

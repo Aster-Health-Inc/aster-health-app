@@ -40,10 +40,16 @@ export class ChatbotDataService {
         meals: mealLogsResult
       });
 
+      // Get today's nutrition data using RPC function
+      const todayNutrition = await this.getTodayNutrition(userId);
+
       const chatbotData = {
         // Period information
         latestPeriod: periodsResult.latest,
         periodHistory: periodsResult.history,
+
+        // Today's nutrition
+        todayNutrition: todayNutrition,
 
         // Calculated metrics (replacing manual input)
         analytics: {
@@ -178,6 +184,75 @@ export class ChatbotDataService {
 
     if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" errors
     return profile || null;
+  }
+
+  /**
+   * Get today's nutrition data (calories, protein, carbs, fat)
+   * Uses the RPC function to get accurate meal totals
+   */
+  static async getTodayNutrition(userId) {
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+      console.log('Fetching today nutrition for user:', userId, 'date:', today);
+
+      // Use the same RPC function that MealLogHomeScreen uses
+      const { data, error } = await supabase.rpc('get_user_daily_logs', {
+        p_user_id: userId,
+        p_log_date: today,
+      });
+
+      console.log('RPC result:', { data, error });
+
+      if (error) {
+        console.error('Error fetching today nutrition:', error);
+        return {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          water: 0,
+          hasData: false
+        };
+      }
+
+      if (!data) {
+        console.log('No data returned from RPC');
+        return {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          water: 0,
+          hasData: false
+        };
+      }
+
+      // Extract from dailyTotals nested object
+      const dailyTotals = data.dailyTotals || {};
+
+      const nutrition = {
+        calories: dailyTotals.total_calories || 0,
+        protein: dailyTotals.total_protein || 0,
+        carbs: dailyTotals.total_carbs || 0,
+        fat: dailyTotals.total_fat || 0,
+        water: data.water || 0,
+        hasData: (dailyTotals.total_calories || 0) > 0
+      };
+
+      console.log('Today nutrition:', nutrition);
+      return nutrition;
+    } catch (err) {
+      console.error('Exception in getTodayNutrition:', err);
+      return {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        water: 0,
+        hasData: false
+      };
+    }
   }
 
   /**
