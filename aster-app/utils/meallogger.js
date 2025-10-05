@@ -148,15 +148,14 @@ export const fetchUserDailyLogs = async (user_id, date) => {
   console.log('🔍 RPC get_user_daily_logs result:', { rpcData, rpcError });
   
   if (!rpcError && rpcData) {
-    // Convert water from ml to oz for UI consistency
-    const waterOz = rpcData.water ? Math.round(rpcData.water / OZ_TO_ML) : 0;
-    
+    // Water is already in oz from the database
     const result = {
       meals: rpcData.meals || [],
-      water: waterOz,
+      mealItems: rpcData.mealItems || [],
+      water: rpcData.water || 0,
       dailyTotals: rpcData.dailyTotals || {},
     };
-    
+
     console.log('🔍 fetchUserDailyLogs returning RPC result:', result);
     return result;
   }
@@ -195,20 +194,20 @@ export const fetchUserDailyLogs = async (user_id, date) => {
     console.log('🔍 No meal_log found, skipping meals query');
   }
 
-  // Get water intake (ml)
+  // Get water intake (oz)
   const { data: waterRow } = await supabase
     .from('water_logs')
-    .select('water_intake_ml')
+    .select('amount_oz')
     .eq('user_id', user_id)
     .eq('log_date', date)
     .maybeSingle();
 
   const result = {
     meals, // array of meal rows for the day
-    water: waterRow?.water_intake_ml ? Math.round(waterRow.water_intake_ml / OZ_TO_ML) : 0, // return oz for UI
+    water: waterRow?.amount_oz || 0, // already in oz
     dailyTotals: mealLog || {},
   };
-  
+
   console.log('🔍 fetchUserDailyLogs returning fallback result:', result);
   return result;
 };

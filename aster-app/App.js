@@ -34,6 +34,7 @@ import AddFoodScreen from './screens/AddFoodScreen';
 import TimeAmountScreen from './screens/TimeAmountScreen';
 import EditGoalsScreen from './screens/EditGoalsScreen';
 import FoodLogScreen from './screens/FoodLogScreen';
+import DeleteMealsScreen from './screens/DeleteMealsScreen';
 
 // Storage test component
 
@@ -146,6 +147,7 @@ export default function App() {
             <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
             <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
             <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+            <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
            {/* <Stack.Screen name="Test" component={TestScreen} />
             <Stack.Screen name="StorageTest" component={StorageTest} /> */}
           </>

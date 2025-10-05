@@ -11,7 +11,7 @@ error('Login failed');
 const PhotoConfirmationScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { image, base64 } = route.params;
+  const { image, base64, selectedDate } = route.params;
   const [analyzing, setAnalyzing] = useState(false);
 
   const handleAnalyzePhoto = async () => {
@@ -50,7 +50,8 @@ const PhotoConfirmationScreen = () => {
       navigation.navigate('NutritionSummary', {
         photoUri: image,
         analysisData: analysisData,
-        geminiData: nutritionData // Keep original format for database saving
+        geminiData: nutritionData, // Keep original format for database saving
+        selectedDate: selectedDate || new Date()
       });
     } catch (error) {
       Alert.alert('Analysis Failed', error.message);

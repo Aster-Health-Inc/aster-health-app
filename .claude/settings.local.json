@@ -14,7 +14,8 @@
       "Bash(pkill:*)",
       "Bash(streamlit run:*)",
       "Bash(rm:*)",
-      "Bash(ngrok:*)"
+      "Bash(ngrok:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

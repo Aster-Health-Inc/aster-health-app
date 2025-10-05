@@ -26,7 +26,7 @@ error('Login failed');
 const AddFoodScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
-  const { mealType, photoUri, analysisData } = route.params || {};
+  const { mealType, photoUri, analysisData, selectedDate } = route.params || {};
 
   const [foodName, setFoodName] = useState('');
   const [weight, setWeight] = useState('');
@@ -57,7 +57,9 @@ const AddFoodScreen = () => {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const logDate = selectedDate
+        ? new Date(selectedDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
       
       // Extract numeric values
       const caloriesNum = parseFloat(calories) || 0;
@@ -112,7 +114,7 @@ const AddFoodScreen = () => {
       
       const { data: rpcResult, error: rpcError } = await supabase.rpc('insert_meal_data', {
         p_user_id: user.id,
-        p_log_date: today,
+        p_log_date: logDate,
         p_meal_type: mealType,
         p_calories: caloriesNum,
         p_carbs: carbsNum,
@@ -128,7 +130,7 @@ const AddFoodScreen = () => {
           .from('meal_logs')
           .select('*')
           .eq('user_id', user.id)
-          .eq('log_date', today)
+          .eq('log_date', logDate)
           .maybeSingle();
           
         console.log('Existing meal log check:', { existingLog, fetchError });
@@ -140,7 +142,7 @@ const AddFoodScreen = () => {
             .from('meal_logs')
             .insert({
               user_id: user.id,
-              log_date: today,
+              log_date: logDate,
               total_calories: caloriesNum,
               total_protein: proteinNum,
               total_carbs: carbsNum,

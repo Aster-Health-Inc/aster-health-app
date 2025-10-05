@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, SafeAreaView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { 
+import {
   upsertMealLog,
   upsertWaterLog,
   fetchUserDailyLogs,
 } from '../utils/meallogger';
 import { supabase } from '../lib/supabase';
+import { getUserNutritionGoals } from '../utils/nutritionCalculator';
+import DynamicCalorieCard from '../components/DynamicCalorieCard';
+import MacroCard from '../components/MacroCard';
+import WeekCalendar from '../components/WeekCalendar';
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MACROS = [
@@ -17,8 +21,6 @@ const MACROS = [
   { key: 'protein', label: 'Protein', color: '#3ad29f' },
   { key: 'fat', label: 'Fat', color: '#be8afd' },
 ];
-const MACROS_GOAL = { carbs: 120, protein: 120, fat: 120 };
-
 const LITER_TO_OZ = 33.814;
 const formatDateKey = (d) => new Date(d).toISOString().slice(0, 10);
 const prettyDate = (d) => {
@@ -49,6 +51,73 @@ export default function MealLogHomeScreen() {
   const [waterGoalDraft, setWaterGoalDraft] = useState('');
 
   const [dailyData, setDailyData] = useState(null);
+  const [streak, setStreak] = useState(0);
+  const [nutritionGoals, setNutritionGoals] = useState({
+    calories: 2000,
+    protein: 150,
+    carbs: 200,
+    fat: 67,
+    water: 64
+  });
+
+  // Calculate streak
+  const calculateStreak = async (userId) => {
+    try {
+      const today = new Date();
+      let currentStreak = 0;
+      let checkDate = new Date(today);
+
+      // Check backwards from today
+      for (let i = 0; i < 365; i++) { // Max check 365 days
+        const dateStr = formatDateKey(checkDate);
+
+        const { data, error } = await supabase
+          .from('meal_logs')
+          .select('total_calories')
+          .eq('user_id', userId)
+          .eq('log_date', dateStr)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching streak data:', error);
+          break;
+        }
+
+        // If there's data and calories > 0, increment streak
+        if (data && data.total_calories > 0) {
+          currentStreak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          // Streak broken
+          break;
+        }
+      }
+
+      setStreak(currentStreak);
+    } catch (err) {
+      console.error('Error calculating streak:', err);
+      setStreak(0);
+    }
+  };
+
+  // Load nutrition goals when component mounts
+  useEffect(() => {
+    const loadNutritionGoals = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        console.log('Loading nutrition goals for user:', user.id);
+        const goals = await getUserNutritionGoals(supabase, user.id);
+        console.log('Calculated nutrition goals:', goals);
+        setNutritionGoals(goals);
+        setWaterGoal(goals.water);
+      } catch (err) {
+        console.error('Error loading nutrition goals:', err);
+      }
+    };
+    loadNutritionGoals();
+  }, []);
 
   // Load daily data
   useEffect(() => {
@@ -72,6 +141,11 @@ export default function MealLogHomeScreen() {
           };
         });
         setMealInputs(mealsByType);
+
+        // Calculate streak only once when component mounts or user changes
+        if (selectedDate.toDateString() === new Date().toDateString()) {
+          calculateStreak(user.id);
+        }
       } catch (err) {
         console.error('Error loading daily data:', err);
       }
@@ -136,153 +210,477 @@ export default function MealLogHomeScreen() {
   };
 
   const handleLogFood = () => navigation.navigate('MealLog');
-  const handleLogWater = () => setWaterModalVisible(true);
+  const handleLogWater = (mode = 'add') => {
+    setWaterEditMode(mode);
+    if (mode === 'edit') {
+      setWaterDraft(waterOz.toString());
+    } else {
+      setWaterDraft('');
+    }
+    setWaterModalVisible(true);
+  };
+
+  const saveWater = async () => {
+    const val = parseFloat(waterDraft);
+    if (isNaN(val) || val <= 0) {
+      Alert.alert('Invalid input', 'Please enter a positive number');
+      return;
+    }
+    let ozToSave = waterUnit === 'oz' ? val : val * LITER_TO_OZ;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !user.id) {
+        Alert.alert('Error', 'User not authenticated');
+        return;
+      }
+
+      const dateStr = formatDateKey(selectedDate);
+
+      // Get existing water for this date - try both column names
+      const { data: existingWater } = await supabase
+        .from('water_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('log_date', dateStr)
+        .maybeSingle();
+
+      console.log('Existing water log:', existingWater);
+
+      let newTotal;
+      if (waterEditMode === 'edit') {
+        // Edit mode: replace the total with new value
+        newTotal = ozToSave;
+      } else {
+        // Add mode: add to existing
+        const currentAmount = existingWater?.amount_oz || existingWater?.water_intake_ml || 0;
+        newTotal = currentAmount + ozToSave;
+      }
+
+      // Round to whole number since DB expects integer
+      newTotal = Math.round(newTotal);
+
+      // Upsert water log - try the column that exists
+      const upsertData = {
+        user_id: user.id,
+        log_date: dateStr,
+      };
+
+      // Try amount_oz first, fallback to water_intake_ml
+      if ('amount_oz' in (existingWater || {})) {
+        upsertData.amount_oz = newTotal;
+      } else {
+        upsertData.water_intake_ml = newTotal;
+      }
+
+      console.log('Upserting water data:', upsertData);
+
+      const { error } = await supabase
+        .from('water_logs')
+        .upsert([upsertData], { onConflict: ['user_id', 'log_date'] });
+
+      if (error) {
+        console.error('Error saving water:', error);
+        Alert.alert('Error', 'Failed to save water log');
+        return;
+      }
+
+      setWaterOz(newTotal);
+      setWaterModalVisible(false);
+
+      // Refresh data
+      const data = await fetchUserDailyLogs(user.id, dateStr);
+      setWaterOz(data.water || 0);
+    } catch (err) {
+      console.error('Error saving water:', err);
+      Alert.alert('Error', 'Failed to save water log');
+    }
+  };
+
+  const saveWaterGoal = () => {
+    const n = parseFloat(waterGoalDraft);
+    if (!isNaN(n) && n > 0) setWaterGoal(n);
+    setWaterGoalModalVisible(false);
+  };
+
+  const deleteMeal = async (mealItemId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !user.id) {
+        Alert.alert('Error', 'User not authenticated');
+        return;
+      }
+
+      // Show confirmation
+      Alert.alert(
+        'Delete Meal',
+        'Are you sure you want to delete this meal?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              // Delete the meal item
+              const { error: deleteError } = await supabase
+                .from('meal_items')
+                .delete()
+                .eq('id', mealItemId);
+
+              if (deleteError) {
+                console.error('Error deleting meal:', deleteError);
+                Alert.alert('Error', 'Failed to delete meal');
+                return;
+              }
+
+              // Recalculate totals for the day
+              const dateStr = formatDateKey(selectedDate);
+
+              // Get all remaining meal items for this date
+              const { data: remainingItems } = await supabase
+                .from('meal_items')
+                .select('calories, protein, carbs, fat')
+                .eq('user_id', user.id)
+                .eq('log_date', dateStr);
+
+              // Calculate new totals
+              const totals = (remainingItems || []).reduce((acc, item) => ({
+                calories: acc.calories + (item.calories || 0),
+                protein: acc.protein + (parseFloat(item.protein) || 0),
+                carbs: acc.carbs + (parseFloat(item.carbs) || 0),
+                fat: acc.fat + (parseFloat(item.fat) || 0),
+              }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+              // Update meal_logs with new totals
+              const { error: updateError } = await supabase
+                .from('meal_logs')
+                .upsert([{
+                  user_id: user.id,
+                  log_date: dateStr,
+                  total_calories: totals.calories,
+                  total_protein: totals.protein,
+                  total_carbs: totals.carbs,
+                  total_fat: totals.fat,
+                }], { onConflict: ['user_id', 'log_date'] });
+
+              if (updateError) {
+                console.error('Error updating totals:', updateError);
+              }
+
+              // Refresh data
+              refreshData();
+            }
+          }
+        ]
+      );
+    } catch (err) {
+      console.error('Error deleting meal:', err);
+      Alert.alert('Error', 'Failed to delete meal');
+    }
+  };
+
+  // Calculate recent meals
+  const recentMeals = dailyData?.mealItems?.slice(0, 3).map(item => ({
+    id: item.id,
+    name: item.name || 'Unknown Food',
+    time: new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    calories: item.calories || 0,
+    protein: item.protein || 0,
+    carbs: item.carbs || 0,
+    fat: item.fat || 0,
+  })) || [];
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 🔹 Added Floating Pink AI Button */}
-      <TouchableOpacity
-        style={styles.aiBtn}
-        onPress={() => navigation.navigate('MealLogScreen')}
-      >
-        <Text style={styles.aiBtnText}>Generate Recipes with AI</Text>
-      </TouchableOpacity>
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 130 }}>
-        {/* Calories Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Calories</Text>
-
-          <View style={styles.calorieCardWrapper}>
-            <CalorieRing
-              percent={Math.min(1, totalCalories / calorieGoal)}
-              total={totalCalories}
-              goal={calorieGoal}
-            />
-
-            {/* Four corner-aligned meal labels */}
-            <View style={[styles.mealTag, styles.mealTopLeft]}>
-              <MaterialIcons name="wb-sunny" size={16} color="#f4c542" />
-              <Text style={styles.mealSummaryText}>
-                Breakfast {mealInputs.Breakfast?.calories || 0} cals
-              </Text>
-            </View>
-            <View style={[styles.mealTag, styles.mealTopRight]}>
-              <MaterialIcons name="wb-sunny" size={16} color="#ff8c42" />
-              <Text style={styles.mealSummaryText}>
-                Lunch {mealInputs.Lunch?.calories || 0} cals
-              </Text>
-            </View>
-            <View style={[styles.mealTag, styles.mealBottomLeft]}>
-              <MaterialIcons name="nightlight" size={16} color="#3b5998" />
-              <Text style={styles.mealSummaryText}>
-                Dinner {mealInputs.Dinner?.calories || 0} cals
-              </Text>
-            </View>
-            <View style={[styles.mealTag, styles.mealBottomRight]}>
-              <MaterialIcons name="nightlight" size={16} color="#9b59b6" />
-              <Text style={styles.mealSummaryText}>
-                Snacks {mealInputs.Snack?.calories || 0} cals
-              </Text>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.appIcon}>✨</Text>
+            <Text style={styles.appName}>Calories</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('DeleteMeals')}
+              style={styles.deleteIconButton}
+            >
+              <Ionicons name="trash-outline" size={24} color="#111111" />
+            </TouchableOpacity>
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakEmoji}>🔥</Text>
+              <Text style={styles.streakNumber}>{streak}</Text>
             </View>
           </View>
-
-          <TouchableOpacity style={styles.logFoodButton} onPress={handleLogFood}>
-            <Text style={styles.logFoodButtonText}>+ Log Food</Text>
-          </TouchableOpacity>
         </View>
 
-        {/* Macros Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Macros</Text>
-          <View style={styles.macrosContainer}>
-            {MACROS.map(macro => (
-              <View key={macro.key} style={styles.macroRow}>
-                <Text style={styles.macroLabel}>{macro.label}</Text>
-                <View style={styles.macroBarContainer}>
-                  <View
-                    style={[
-                      styles.macroBar,
-                      {
-                        backgroundColor: macro.color,
-                        width: `${Math.min(
-                          100,
-                          Math.round(
-                            (dailyData?.dailyTotals?.[`total_${macro.key}`] || 0) /
-                              MACROS_GOAL[macro.key] * 100
-                          )
-                        )}%`,
-                      }
-                    ]}
-                  />
-                </View>
-                <Text style={styles.macroValue}>
-                  {Math.round(dailyData?.dailyTotals?.[`total_${macro.key}`] || 0)}g
-                </Text>
-                <Text style={styles.macroGoal}>{MACROS_GOAL[macro.key]}g</Text>
-              </View>
-            ))}
-          </View>
+        {/* Week Calendar */}
+        <WeekCalendar
+          selectedDate={selectedDate}
+          onDateSelect={(date) => {
+            setSelectedDate(date);
+          }}
+        />
+
+        {/* Dynamic Calorie Card */}
+        <DynamicCalorieCard
+          caloriesConsumed={totalCalories}
+          caloriesGoal={nutritionGoals.calories}
+          toggleInterval={3000}
+        />
+
+        {/* Macro Cards Row */}
+        <View style={styles.macroRow}>
+          <MacroCard
+            type="Protein"
+            consumed={Math.round(totalProtein)}
+            goal={nutritionGoals.protein}
+            emoji="🍗"
+            color="#ff6b6b"
+          />
+          <MacroCard
+            type="Carbs"
+            consumed={Math.round(totalCarbs)}
+            goal={nutritionGoals.carbs}
+            emoji="🌾"
+            color="#ffa94d"
+          />
+          <MacroCard
+            type="Fat"
+            consumed={Math.round(totalFat)}
+            goal={nutritionGoals.fat}
+            emoji="🧈"
+            color="#4dabf7"
+          />
+        </View>
+
+        {/* Page Indicator */}
+        <View style={styles.pageIndicator}>
+          <View style={[styles.dot, styles.activeDot]} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
         </View>
 
         {/* Water Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Water</Text>
-
-          <View style={styles.waterRow}>
-            {/* Left: Goal */}
-            <TouchableOpacity onPress={() => setWaterGoalModalVisible(true)} style={styles.waterSide}>
-              <Text style={styles.waterSideLabel}>Goal</Text>
-              <Text style={styles.waterGoalStrong}>{waterGoal} fl oz</Text>
+        <View style={styles.waterCard}>
+          <View style={styles.waterHeader}>
+            <Text style={styles.waterTitle}>💧 Water Intake</Text>
+            <TouchableOpacity onPress={() => {
+              setWaterGoalDraft(waterGoal.toString());
+              setWaterGoalModalVisible(true);
+            }}>
+              <Text style={styles.waterGoalText}>Goal: {waterGoal} oz</Text>
             </TouchableOpacity>
-
-            {/* Center: Circle */}
-            <TouchableOpacity style={styles.waterCircle} onPress={handleLogWater}>
-              <Text style={styles.waterAmount}>{Math.round(waterOz)}</Text>
-              <Text style={styles.waterUnit}>oz</Text>
-            </TouchableOpacity>
-
-            {/* Right: Last log */}
-            <View style={[styles.waterSide, { alignItems: 'flex-end' }]}>
-              <Text style={styles.waterSideLabel}>Last log</Text>
-              <Text style={styles.waterLastValue}>
-                {waterOz > 0 ? `${Math.round(waterOz)} oz` : '—'}
-              </Text>
-            </View>
           </View>
 
-          <TouchableOpacity style={styles.logWaterButton} onPress={handleLogWater}>
-            <Text style={styles.logWaterButtonText}>+ Log Water</Text>
-          </TouchableOpacity>
+          <View style={styles.waterContent}>
+            <TouchableOpacity
+              style={styles.waterCircleButton}
+              onPress={() => handleLogWater('edit')}
+              onLongPress={() => handleLogWater('edit')}
+            >
+              <Text style={styles.waterAmount}>{Math.round(waterOz)}</Text>
+              <Text style={styles.waterUnit}>oz</Text>
+              <View style={styles.waterProgressRing}>
+                <Svg width={120} height={120}>
+                  <Circle
+                    cx={60}
+                    cy={60}
+                    r={50}
+                    stroke="#EFEFEF"
+                    strokeWidth={8}
+                    fill="none"
+                  />
+                  <Circle
+                    cx={60}
+                    cy={60}
+                    r={50}
+                    stroke="#4dabf7"
+                    strokeWidth={8}
+                    fill="none"
+                    strokeDasharray={2 * Math.PI * 50}
+                    strokeDashoffset={2 * Math.PI * 50 * (1 - Math.min(1, waterOz / waterGoal))}
+                    strokeLinecap="round"
+                    transform="rotate(-90 60 60)"
+                  />
+                </Svg>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.waterButtonRow}>
+            <TouchableOpacity style={styles.logWaterButton} onPress={() => handleLogWater('add')}>
+              <Text style={styles.logWaterButtonText}>+ Add Water</Text>
+            </TouchableOpacity>
+            {waterOz > 0 && (
+              <TouchableOpacity style={styles.editWaterButton} onPress={() => handleLogWater('edit')}>
+                <Text style={styles.editWaterButtonText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
+
+        {/* Recently Uploaded Section */}
+        {recentMeals.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.sectionTitle}>Recently uploaded</Text>
+
+            {recentMeals.map((meal, index) => (
+              <View key={index} style={styles.mealCard}>
+                <View style={styles.mealHeader}>
+                  <View style={styles.mealHeaderLeft}>
+                    <Text style={styles.mealName}>{meal.name}</Text>
+                    <Text style={styles.mealTime}>{meal.time}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => deleteMeal(meal.id)}
+                    style={styles.deleteButton}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.mealDetails}>
+                  <View style={styles.calorieRow}>
+                    <Text style={styles.fireEmoji}>🔥</Text>
+                    <Text style={styles.calorieText}>{meal.calories} calories</Text>
+                  </View>
+
+                  <View style={styles.macroRowInline}>
+                    <View style={styles.macroItem}>
+                      <Text style={styles.macroEmoji}>🍗</Text>
+                      <Text style={styles.macroText}>{meal.protein}g</Text>
+                    </View>
+                    <View style={styles.macroItem}>
+                      <Text style={styles.macroEmoji}>🌾</Text>
+                      <Text style={styles.macroText}>{meal.carbs}g</Text>
+                    </View>
+                    <View style={styles.macroItem}>
+                      <Text style={styles.macroEmoji}>🧈</Text>
+                      <Text style={styles.macroText}>{meal.fat}g</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Bottom spacing for FAB */}
+        <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('Home')}>
-          <Ionicons name="home" size={22} color="#999" />
-          <Text style={styles.navTextInactive}>Home</Text>
-        </TouchableOpacity>
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('Camera', { selectedDate: selectedDate })}
+      >
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="restaurant" size={22} color="#0a84ff" />
-          <Text style={styles.navText}>Food</Text>
-        </TouchableOpacity>
+      {/* Water Logging Modal */}
+      <Modal
+        visible={waterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWaterModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setWaterModalVisible(false)}>
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>
+                {waterEditMode === 'edit' ? 'Edit Water Amount' : 'Add Water'}
+              </Text>
 
-        <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('Camera')}>
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
+              <View style={styles.unitToggle}>
+                <TouchableOpacity
+                  style={[styles.unitButton, waterUnit === 'oz' && styles.unitButtonActive]}
+                  onPress={() => setWaterUnit('oz')}
+                >
+                  <Text style={[styles.unitButtonText, waterUnit === 'oz' && styles.unitButtonTextActive]}>oz</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.unitButton, waterUnit === 'L' && styles.unitButtonActive]}
+                  onPress={() => setWaterUnit('L')}
+                >
+                  <Text style={[styles.unitButtonText, waterUnit === 'L' && styles.unitButtonTextActive]}>L</Text>
+                </TouchableOpacity>
+              </View>
 
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="barbell" size={22} color="#999" />
-          <Text style={styles.navTextInactive}>Workout</Text>
-        </TouchableOpacity>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={`Enter amount in ${waterUnit}`}
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+                value={waterDraft}
+                onChangeText={setWaterDraft}
+                autoFocus
+              />
 
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="stats-chart" size={22} color="#999" />
-          <Text style={styles.navTextInactive}>Analysis</Text>
-        </TouchableOpacity>
-      </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setWaterModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSave]}
+                  onPress={saveWater}
+                >
+                  <Text style={styles.modalButtonTextSave}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Water Goal Modal */}
+      <Modal
+        visible={waterGoalModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWaterGoalModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setWaterGoalModalVisible(false)}>
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>Set Water Goal</Text>
+
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter goal in oz"
+                placeholderTextColor="#666"
+                keyboardType="numeric"
+                value={waterGoalDraft}
+                onChangeText={setWaterGoalDraft}
+                autoFocus
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setWaterGoalModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonTextCancel}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSave]}
+                  onPress={saveWaterGoal}
+                >
+                  <Text style={styles.modalButtonTextSave}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -332,137 +730,357 @@ function CalorieRing({ percent, total, goal }) {
 
 /* --- Styles --- */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-
-  /* 🔹 New AI Button Styles */
-  aiBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 30,
-    right: 16,
-    backgroundColor: 'pink',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    zIndex: 1000,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-  },
-  aiBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#000',
-  },
-
-  card: {
-    marginHorizontal: 14,
-    marginTop: 16,
-    borderRadius: 17,
-    padding: 17,
-    backgroundColor: '#f9fbfc',
-    borderWidth: 1,
-    borderColor: '#e6eef9',
-    marginBottom: 16,
-  },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: '#111', marginBottom: 8 },
-  calorieCardWrapper: {
-    alignSelf: 'center',
-    width: 300,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    marginVertical: 10,
-  },
-  mealTag: {
-    position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mealTopLeft: { top: 0, left: 0 },
-  mealTopRight: { top: 0, right: 0 },
-  mealBottomLeft: { bottom: 0, left: 0 },
-  mealBottomRight: { bottom: 0, right: 0 },
-  mealSummaryText: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 4,
-  },
-  logFoodButton: {
-    alignSelf: 'center',
-    backgroundColor: '#ededed',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 999,
-    marginTop: 13,
-  },
-  logFoodButtonText: { fontWeight: '600', color: '#111' },
-  macrosContainer: { marginTop: 14 },
-  macroRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  macroLabel: { width: 60, fontSize: 13, color: '#555', fontWeight: '600' },
-  macroBarContainer: {
-    height: 8,
-    borderRadius: 5,
-    backgroundColor: '#e8ebf0',
+  container: {
     flex: 1,
-    marginHorizontal: 8,
-    overflow: 'hidden',
+    backgroundColor: '#F4F5F7',
   },
-  macroBar: { height: 8, borderRadius: 5 },
-  macroValue: { fontSize: 13, color: '#222', width: 36, textAlign: 'right', fontWeight: '700' },
-  macroGoal: { fontSize: 12, color: '#888', width: 33, marginLeft: 2 },
-  waterRow: {
+  scrollView: {
+    flex: 1,
+  },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
-  waterSide: { flex: 1 },
-  waterSideLabel: { color: '#8797a8', fontSize: 12, marginBottom: 2 },
-  waterGoalStrong: { fontSize: 14, color: '#4d7ea8', fontWeight: '700' },
-  waterLastValue: { fontSize: 14, color: '#333', fontWeight: '600' },
-  waterCircle: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: '#e5f5ff',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  waterAmount: { fontSize: 22, fontWeight: '800', color: '#0077b6', marginBottom: -2 },
-  waterUnit: { fontSize: 14, color: '#199ad8', fontWeight: '600' },
-  logWaterButton: {
-    alignSelf: 'center',
-    backgroundColor: '#ededed',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 999,
-    marginTop: 13,
-  },
-  logWaterButtonText: { fontWeight: '600', color: '#111' },
-  bottomNav: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e6eef9',
-    height: 63,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingBottom: Platform.OS === 'ios' ? 14 : 0,
+    gap: 8,
   },
-  navItem: { alignItems: 'center', flex: 1 },
-  navText: { color: '#0a84ff', fontSize: 13, fontWeight: '700', marginTop: 2 },
-  navTextInactive: { color: '#888', fontSize: 13, fontWeight: '600', marginTop: 2 },
-  addBtn: {
-    width: 48, height: 48, backgroundColor: '#0a84ff',
-    borderRadius: 24, alignItems: 'center', justifyContent: 'center',
-    marginTop: -28, shadowColor: '#007aff', shadowOpacity: 0.15,
-    shadowRadius: 10, shadowOffset: { width: 0, height: 2 },
-    borderWidth: 3, borderColor: '#fff',
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteIconButton: {
+    padding: 4,
+  },
+  appIcon: {
+    fontSize: 32,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#111111',
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  streakEmoji: {
+    fontSize: 16,
+  },
+  streakNumber: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111111',
+  },
+  macroRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    marginTop: 12,
+  },
+  pageIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    marginBottom: 32,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#D1D5DB',
+  },
+  activeDot: {
+    backgroundColor: '#111111',
+  },
+  recentSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 16,
+  },
+  mealCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  mealHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  mealHeaderLeft: {
+    flex: 1,
+  },
+  deleteButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  mealName: {
+    fontSize: 15,
+    color: '#111111',
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 8,
+  },
+  mealTime: {
+    fontSize: 14,
+    color: '#8C8C8C',
+  },
+  mealDetails: {
+    gap: 8,
+  },
+  calorieRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fireEmoji: {
+    fontSize: 18,
+  },
+  calorieText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111111',
+  },
+  macroRowInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  macroItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 16,
+  },
+  macroEmoji: {
+    fontSize: 14,
+  },
+  macroText: {
+    fontSize: 14,
+    color: '#8C8C8C',
+  },
+  bottomSpacer: {
+    height: 100,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 40,
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabText: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#000000',
+  },
+  // Water Card Styles
+  waterCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  waterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  waterTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111111',
+  },
+  waterGoalText: {
+    fontSize: 14,
+    color: '#4dabf7',
+    fontWeight: '600',
+  },
+  waterContent: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  waterCircleButton: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  waterProgressRing: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  waterAmount: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#4dabf7',
+    marginBottom: 0,
+    zIndex: 1,
+  },
+  waterUnit: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontWeight: '600',
+    zIndex: 1,
+  },
+  waterButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 12,
+  },
+  logWaterButton: {
+    backgroundColor: '#F1F2F4',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+  },
+  logWaterButtonText: {
+    color: '#111111',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  editWaterButton: {
+    backgroundColor: '#4dabf7',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+  },
+  editWaterButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  unitToggle: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    backgroundColor: '#F1F2F4',
+    borderRadius: 12,
+    padding: 4,
+  },
+  unitButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  unitButtonActive: {
+    backgroundColor: '#4dabf7',
+  },
+  unitButtonText: {
+    color: '#8C8C8C',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  unitButtonTextActive: {
+    color: '#ffffff',
+  },
+  modalInput: {
+    backgroundColor: '#F1F2F4',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#111111',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: '#F1F2F4',
+  },
+  modalButtonSave: {
+    backgroundColor: '#4dabf7',
+  },
+  modalButtonTextCancel: {
+    color: '#111111',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonTextSave: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

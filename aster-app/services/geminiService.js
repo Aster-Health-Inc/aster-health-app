@@ -1,8 +1,14 @@
-const GEMINI_API_KEY = 'AIzaSyDCXJpIYnPYiftAYxNfyWg_nMq5B7QGNQU'; // Replace with your actual API key
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+import Constants from 'expo-constants';
+
+const GEMINI_API_KEY = Constants.expoConfig?.extra?.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || 'AIzaSyA74k2BfdJY5n_q_30T1w6_k1hQ0-EPtPk';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
 
 export async function analyzeFood(base64Image) {
   try {
+    console.log('Starting food analysis...');
+    console.log('API Key (first 10 chars):', GEMINI_API_KEY.substring(0, 10));
+    console.log('API URL:', GEMINI_API_URL.substring(0, 100));
+
     const prompt = `Analyze this food image and return ONLY a JSON object with the following structure. Do not include any other text or explanations:
 
 {
@@ -48,6 +54,7 @@ Provide realistic nutritional estimates based on typical serving sizes for the f
       ]
     };
 
+    console.log('Sending request to Gemini API...');
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
       headers: {
@@ -56,11 +63,16 @@ Provide realistic nutritional estimates based on typical serving sizes for the f
       body: JSON.stringify(requestBody)
     });
 
+    console.log('Response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('API Error Response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('Received response from Gemini API');
     
     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
       throw new Error('Invalid response format from Gemini API');
