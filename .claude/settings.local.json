@@ -16,7 +16,10 @@
       "Bash(rm:*)",
       "Bash(ngrok:*)",
       "Bash(npm install:*)",
-      "Bash(npx supabase db dump:*)"
+      "Bash(npx supabase db dump:*)",
+      "Bash(cat:*)",
+      "Bash(test:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
