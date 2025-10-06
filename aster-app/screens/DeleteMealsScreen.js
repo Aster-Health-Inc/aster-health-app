@@ -30,35 +30,35 @@ const DeleteMealsScreen = ({ navigation }) => {
         return;
       }
 
-      // Use RPC to get all meal data (bypasses RLS)
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        'get_user_daily_logs',
-        {
-          p_user_id: user.id,
-          p_log_date: new Date().toISOString().split('T')[0],
+      // Fetch meals from last 30 days
+      const allMealsArray = [];
+      const today = new Date();
+
+      for (let i = 0; i < 30; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+
+        const { data: rpcData, error: rpcError } = await supabase.rpc(
+          'get_user_daily_logs',
+          {
+            p_user_id: user.id,
+            p_log_date: dateStr,
+          }
+        );
+
+        if (!rpcError && rpcData?.meals) {
+          const mealsForDate = rpcData.meals.map(meal => ({
+            ...meal,
+            name: meal.meal_type || 'Meal',
+            log_date: dateStr,
+          }));
+          allMealsArray.push(...mealsForDate);
         }
-      );
-
-      console.log('RPC data:', rpcData);
-      console.log('RPC error:', rpcError);
-
-      if (rpcError) {
-        console.error('Error fetching via RPC:', rpcError);
-        Alert.alert('Error', 'Failed to load meals');
-        return;
       }
 
-      const allMeals = rpcData?.meals || [];
-
-      // Format meals for display
-      const mealsWithDate = allMeals.map(item => ({
-        ...item,
-        name: item.meal_type || 'Meal',
-        log_date: new Date().toISOString().split('T')[0], // Today's date
-      }));
-
-      console.log('Formatted meals:', mealsWithDate);
-      setMeals(mealsWithDate);
+      console.log('Fetched meals from last 30 days:', allMealsArray.length);
+      setMeals(allMealsArray);
     } catch (err) {
       console.error('Error:', err);
       Alert.alert('Error', 'Failed to load meals');
