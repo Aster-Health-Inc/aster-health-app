@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, SafeAreaView, Alert, KeyboardAvoidingView } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import {
@@ -27,6 +27,21 @@ const prettyDate = (d) => {
   const options = { weekday: 'short', month: 'short', day: 'numeric' };
   return d.toLocaleDateString(undefined, options);
 };
+
+const Glass = ({ style, children }) => (
+  <View
+    style={[
+      style,
+      {
+        backgroundColor: 'rgba(255,255,255,0.72)',
+        borderWidth: 0.5,
+        borderColor: 'rgba(0,0,0,0.06)',
+      },
+    ]}
+  >
+    {children}
+  </View>
+);
 
 export default function MealLogHomeScreen() {
   const navigation = useNavigation();
@@ -577,6 +592,58 @@ export default function MealLogHomeScreen() {
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
+      {/* Bottom navigation */}
+      <View pointerEvents="box-none" style={styles.bottomWrap}>
+        <Glass style={styles.glassBar}>
+          {[
+            {
+              key: 'Home',
+              label: 'Home',
+              renderIcon: (color) => <Ionicons name="home-outline" size={22} color={color} />,
+              onPress: () => navigation.navigate('Home'),
+            },
+            {
+              key: 'Food',
+              label: 'Food',
+              renderIcon: (color) => <MaterialCommunityIcons name="silverware-fork-knife" size={22} color={color} />,
+              onPress: () => {},
+            },
+            {
+              key: 'Add',
+              label: 'Add',
+              renderIcon: (color) => <Feather name="plus" size={22} color={color} />,
+              onPress: () => navigation.navigate('Camera', { selectedDate }),
+            },
+            {
+              key: 'Workout',
+              label: 'Workout',
+              renderIcon: (color) => <MaterialCommunityIcons name="arm-flex-outline" size={22} color={color} />,
+              onPress: () => navigation.navigate('Workout'),
+            },
+            {
+              key: 'Analysis',
+              label: 'Analysis',
+              renderIcon: (color) => <Feather name="bar-chart-2" size={22} color={color} />,
+              onPress: () => {},
+            },
+          ].map((item) => {
+            const isActive = item.key === 'Food';
+            const tint = isActive ? '#111111' : '#7C7C7C';
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[styles.tabItem, isActive && styles.tabActive]}
+                onPress={item.onPress}
+                activeOpacity={0.85}
+              >
+                {item.renderIcon(tint)}
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{item.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </Glass>
+      </View>
+
       {/* Water Logging Modal */}
       <Modal
         visible={waterModalVisible}
@@ -1082,5 +1149,45 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  bottomWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 16,
+    alignItems: 'center',
+  },
+  glassBar: {
+    width: '92%',
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 4,
+  },
+  tabActive: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  tabText: {
+    fontSize: 11,
+    color: '#7C7C7C',
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#111111',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,34 +10,42 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  Animated,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Camera, CameraView } from 'expo-camera';
-import { log, warn, error } from '../utils/CrashLogger';
 
 const CameraScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const selectedDate = route.params?.selectedDate || new Date();
 
-  const [image, setImage] = useState(null);
   const [hasPermission, setHasPermission] = useState(null);
   const [showMealSelector, setShowMealSelector] = useState(false);
-  const cameraRef = useRef(null);
 
   const mealTypes = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
 
   useEffect(() => {
     (async () => {
-      if (Platform.OS !== 'web') {
-        const { status } = await Camera.requestCameraPermissionsAsync();
-        setHasPermission(status === 'granted');
+      if (Platform.OS === 'web') {
+        setHasPermission(true);
+        return;
+      }
+
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          alert('Camera permission is required!');
+          setHasPermission(false);
+          Alert.alert(
+            'Camera permission needed',
+            'Please enable camera access in Settings to take meal photos.'
+          );
+        } else {
+          setHasPermission(true);
         }
+      } catch (err) {
+        console.error('Camera permission error:', err);
+        setHasPermission(false);
       }
     })();
   }, []);
@@ -48,23 +56,24 @@ const CameraScreen = () => {
       return;
     }
 
-    if (!cameraRef.current) {
-      alert('Camera not ready');
+    if (hasPermission !== true) {
+      Alert.alert('Camera unavailable', 'Please enable camera access to take a photo.');
       return;
     }
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.85,
         base64: true,
       });
 
-      if (photo) {
-        setImage(photo.uri);
+      if (!result.canceled && result.assets?.length > 0) {
+        const asset = result.assets[0];
         navigation.navigate('PhotoConfirmation', {
-          image: photo.uri,
-          base64: photo.base64,
-          selectedDate: selectedDate
+          image: asset.uri,
+          base64: asset.base64,
+          selectedDate,
         });
       }
     } catch (error) {
@@ -81,9 +90,7 @@ const CameraScreen = () => {
     });
 
     if (!result.canceled && result.assets?.length > 0) {
-      const uri = result.assets[0].uri;
-      const base64 = result.assets[0].base64;
-      setImage(uri);
+      const { uri, base64 } = result.assets[0];
       navigation.navigate('PhotoConfirmation', {
         image: uri,
         base64: base64,
@@ -101,7 +108,6 @@ const CameraScreen = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64 = reader.result.replace('data:', '').replace(/^.+,/, '');
-        setImage(uri);
         navigation.navigate('PhotoConfirmation', {
           image: uri,
           base64: base64,
@@ -152,14 +158,12 @@ const CameraScreen = () => {
     <View style={styles.container}>
       {/* Camera Background */}
       {Platform.OS !== 'web' ? (
-        <CameraView
-          style={styles.camera}
-          ref={cameraRef}
-          facing="back"
-        >
-          {/* Overlay */}
+        <View style={styles.camera}>
+          <View style={styles.cameraBackdrop}>
+            <MaterialCommunityIcons name="food-apple" size={96} color="rgba(255,255,255,0.82)" />
+            <Text style={styles.backdropText}>Point at your meal and snap a photo</Text>
+          </View>
           <View style={styles.overlay}>
-            {/* Top Bar */}
             <View style={styles.topBar}>
               <TouchableOpacity
                 onPress={() => navigation.goBack()}
@@ -169,7 +173,6 @@ const CameraScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Bottom Action Buttons */}
             <View style={styles.actionButtonsContainer}>
               <TouchableOpacity
                 style={styles.actionButton}
@@ -192,7 +195,7 @@ const CameraScreen = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </CameraView>
+        </View>
       ) : (
         <View style={styles.webContainer}>
           <View style={styles.webPlaceholder}>
@@ -274,7 +277,7 @@ export default CameraScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#101820',
   },
   loadingContainer: {
     flex: 1,
@@ -301,11 +304,29 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    position: 'relative',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    overflow: 'hidden',
+    backgroundColor: '#0F1C1E',
+  },
+  cameraBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  backdropText: {
+    marginTop: 18,
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.82)',
+    textAlign: 'center',
   },
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.32)',
   },
   topBar: {
     paddingTop: 60,

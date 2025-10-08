@@ -13,7 +13,6 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
-import Markdown from 'react-native-markdown-display';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService';
@@ -92,11 +91,11 @@ export default function ChatbotModal({ visible, onClose }) {
   /**
    * Generate personalized welcome message based on user data
    */
-  const generateWelcomeMessage = (data) => {
-    const { latestPeriod, userProfile } = data;
+const generateWelcomeMessage = (data) => {
+  const { latestPeriod, userProfile } = data;
 
-    let welcome = "Hey";
-    if (userProfile?.name) {
+  let welcome = "Hey";
+  if (userProfile?.name) {
       welcome += ` ${userProfile.name}`;
     }
     welcome += "! 👋\n\n";
@@ -111,6 +110,65 @@ export default function ChatbotModal({ visible, onClose }) {
 
     return welcome;
   };
+
+const MarkdownInline = ({ content, textStyle, indexKey }) => {
+  const baseStyle = StyleSheet.flatten([styles.markdownText, textStyle]);
+  const pieces = String(content ?? '').split(/\*\*(.+?)\*\*/g);
+
+  return (
+    <Text style={baseStyle}>
+      {pieces.map((piece, idx) => {
+        if (!piece) return null;
+        const isBold = idx % 2 === 1;
+        return (
+          <Text
+            key={`${indexKey}-piece-${idx}`}
+            style={isBold ? [baseStyle, styles.boldText] : baseStyle}
+          >
+            {piece}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+};
+
+const MarkdownBubble = ({ text }) => {
+  if (!text) return null;
+
+  const lines = String(text).split(/\r?\n/);
+
+  return (
+    <View style={styles.markdownContainer}>
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed.length) {
+          return <View key={`space-${idx}`} style={styles.markdownSpacer} />;
+        }
+
+        if (/^[-*]\s+/.test(trimmed)) {
+          const content = trimmed.replace(/^[-*]\s+/, '');
+          return (
+            <View key={`bullet-${idx}`} style={styles.bulletRow}>
+              <View style={styles.bulletDot} />
+              <MarkdownInline
+                content={content}
+                textStyle={styles.bulletText}
+                indexKey={`bullet-${idx}`}
+              />
+            </View>
+          );
+        }
+
+        return (
+          <View key={`line-${idx}`} style={styles.paragraph}>
+            <MarkdownInline content={trimmed} indexKey={`line-${idx}`} />
+          </View>
+        );
+      })}
+    </View>
+  );
+};
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -215,9 +273,7 @@ export default function ChatbotModal({ visible, onClose }) {
               {item.text}
             </Text>
           ) : (
-            <Markdown style={markdownStyles}>
-              {item.text}
-            </Markdown>
+            <MarkdownBubble text={item.text} />
           )}
         </View>
       </View>
@@ -356,27 +412,38 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
   },
-});
-
-const markdownStyles = {
-  body: {
+  markdownContainer: {
+    flexShrink: 1,
+  },
+  markdownSpacer: {
+    height: 6,
+  },
+  paragraph: {
+    marginBottom: 4,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2F7D78',
+    marginTop: 8,
+    marginRight: 8,
+  },
+  markdownText: {
     color: '#111111',
     fontSize: 15,
     lineHeight: 20,
   },
-  strong: {
+  bulletText: {
+    flexShrink: 1,
+  },
+  boldText: {
     fontWeight: '700',
     color: '#2F7D78',
   },
-  bullet_list: {
-    marginVertical: 4,
-  },
-  list_item: {
-    flexDirection: 'row',
-    marginVertical: 2,
-  },
-  paragraph: {
-    marginTop: 0,
-    marginBottom: 4,
-  },
-};
+});
