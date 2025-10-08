@@ -41,3 +41,7 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+
+aster-app/ios/
+aster-app/android/
