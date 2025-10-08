@@ -1,4 +1,4 @@
-export const calculateCyclePhase = (lastPeriodDate, cycleLength = 28) => {
+﻿export const calculateCyclePhase = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
 
   const today = new Date();
@@ -40,7 +40,7 @@ export const calculateCyclePhase = (lastPeriodDate, cycleLength = 28) => {
     nextPhase,
     daysUntilNext,
     cycleLength,
-    progress: (currentCycleDay / cycleLength) * 100
+    progress: (currentCycleDay / cycleLength) * 100,
   };
 };
 
@@ -56,13 +56,13 @@ export const getPhaseInfo = (phase) => {
         'Rest and take it easy',
         'Stay hydrated and eat iron-rich foods',
         'Practice gentle movement like yoga',
-        'Listen to your body\'s needs'
+        "Listen to your body's needs",
       ],
       hormones: {
         estrogen: 'Low and rising',
         progesterone: 'Low',
-        mood: 'Introspective and calm'
-      }
+        mood: 'Introspective and calm',
+      },
     },
     follicular: {
       name: 'Follicular',
@@ -74,35 +74,35 @@ export const getPhaseInfo = (phase) => {
         'Start new projects and make plans',
         'Increase exercise intensity',
         'Try new things and be social',
-        'Focus on goal-setting'
+        'Focus on goal-setting',
       ],
       hormones: {
         estrogen: 'Rising',
         progesterone: 'Low',
-        mood: 'Optimistic and energetic'
-      }
+        mood: 'Optimistic and energetic',
+      },
     },
     ovulation: {
       name: 'Ovulation',
       emoji: '✨',
       color: '#ff9800',
       gradientColors: ['#ff9800', '#f57400'],
-      description: 'You\'re glowing! Peak energy and fertility.',
+      description: "You're glowing! Peak energy and fertility.",
       tips: [
         'Embrace social activities',
         'Tackle challenging workouts',
         'Communicate important matters',
-        'Make big decisions'
+        'Make big decisions',
       ],
       hormones: {
         estrogen: 'Peak',
         progesterone: 'Starting to rise',
-        mood: 'Confident and charismatic'
-      }
+        mood: 'Confident and charismatic',
+      },
     },
     luteal: {
       name: 'Luteal',
-      emoji: '🍂',
+      emoji: '🌙',
       color: '#9c27b0',
       gradientColors: ['#9c27b0', '#6a1b9a'],
       description: 'Winding down. Time for reflection and self-care.',
@@ -110,14 +110,14 @@ export const getPhaseInfo = (phase) => {
         'Focus on completing projects',
         'Practice self-care and relaxation',
         'Prepare for your next cycle',
-        'Listen to your intuition'
+        'Listen to your intuition',
       ],
       hormones: {
         estrogen: 'Declining',
         progesterone: 'High then dropping',
-        mood: 'Reflective and sensitive'
-      }
-    }
+        mood: 'Reflective and sensitive',
+      },
+    },
   };
 
   return phaseData[phase] || null;
@@ -125,34 +125,34 @@ export const getPhaseInfo = (phase) => {
 
 export const calculateNextPeriod = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
-  
+
   const lastPeriod = new Date(lastPeriodDate);
   const nextPeriod = new Date(lastPeriod);
   nextPeriod.setDate(lastPeriod.getDate() + cycleLength);
-  
+
   const today = new Date();
   const daysUntilPeriod = Math.ceil((nextPeriod - today) / (1000 * 60 * 60 * 24));
-  
+
   return {
     date: nextPeriod,
-    daysUntil: daysUntilPeriod
+    daysUntil: daysUntilPeriod,
   };
 };
 
 export const getFertilityWindow = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
-  
+
   const lastPeriod = new Date(lastPeriodDate);
   const ovulationDay = cycleLength - 14;
   const fertileStart = new Date(lastPeriod);
   fertileStart.setDate(lastPeriod.getDate() + ovulationDay - 5);
-  
+
   const fertileEnd = new Date(lastPeriod);
   fertileEnd.setDate(lastPeriod.getDate() + ovulationDay + 1);
-  
+
   return {
     start: fertileStart,
     end: fertileEnd,
-    ovulationDay: ovulationDay
+    ovulationDay: ovulationDay,
   };
 };

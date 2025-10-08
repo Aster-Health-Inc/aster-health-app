@@ -16,11 +16,6 @@ import {
 import { useNavigation } from '@react-navigation/native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { supabase } from '../lib/supabase'
-import { log, warn, error } from '../utils/CrashLogger';
-
-log('User pressed button', { id: 42 });
-warn('Slow API response');
-error('Login failed');
 export default function BasicInfoScreen() {
   const navigation = useNavigation()
 

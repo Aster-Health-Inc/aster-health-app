@@ -18,11 +18,6 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { log, warn, error } from '../utils/CrashLogger';
-
-log('User pressed button', { id: 42 });
-warn('Slow API response');
-error('Login failed');
 const AddFoodScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();

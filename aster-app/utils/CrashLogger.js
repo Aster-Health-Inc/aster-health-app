@@ -1,22 +1,73 @@
-// src/utils/CrashLogger.js
+﻿// src/utils/CrashLogger.js
 
-// helper for timestamp
+// Lightweight console gating + error capture
 const pad = (n) => String(n).padStart(2, '0');
-const ts = () => {
+const timestamp = () => {
   const d = new Date();
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(
+    d.getMilliseconds()
+  ).padStart(3, '0')}`;
 };
 
-export const log = (...args) => {
-  console.log(`[LOG ${ts()}]`, ...args);
+// Log levels: debug < info < warn < error < silent
+const LEVELS = { debug: 10, info: 20, warn: 30, error: 40, silent: 100 };
+
+// Default: warn in all environments unless overridden
+const defaultLevel = 'warn';
+const envLevel = (process?.env?.EXPO_PUBLIC_LOG_LEVEL || '').toLowerCase();
+let currentLevel = LEVELS[envLevel] ?? LEVELS[defaultLevel];
+const runtimeLevel = (globalThis?.__ASTER_LOG_LEVEL__ || '').toString().toLowerCase();
+if (runtimeLevel in LEVELS) {
+  currentLevel = LEVELS[runtimeLevel];
+}
+
+let orig = {
+  log: console.log.bind(console),
+  info: console.info ? console.info.bind(console) : console.log.bind(console),
+  debug: console.debug ? console.debug.bind(console) : console.log.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+};
+
+const shouldLog = (level) => LEVELS[level] >= currentLevel && currentLevel < LEVELS.silent;
+
+export const setLogLevel = (lvl) => {
+  if (!lvl) return;
+  const key = lvl.toString().toLowerCase();
+  if (key in LEVELS) currentLevel = LEVELS[key];
+};
+
+export const debug = (...args) => {
+  if (shouldLog('debug')) orig.debug(`[DBG ${timestamp()}]`, ...args);
+};
+
+export const info = (...args) => {
+  if (shouldLog('info')) orig.info(`[INF ${timestamp()}]`, ...args);
 };
 
 export const warn = (...args) => {
-  console.warn(`[WARN ${ts()}]`, ...args);
+  if (shouldLog('warn')) orig.warn(`[WRN ${timestamp()}]`, ...args);
 };
 
 export const error = (...args) => {
-  console.error(`[ERR ${ts()}]`, ...args);
+  if (shouldLog('error')) orig.error(`[ERR ${timestamp()}]`, ...args);
+};
+
+// Back-compat short names
+export const log = info;
+
+// Patch global console to reduce noise without code-wide edits
+export const initLogging = () => {
+  // Only patch once
+  if (console.__ASTER_LOGGER_PATCHED__) return;
+  Object.defineProperty(console, '__ASTER_LOGGER_PATCHED__', { value: true, enumerable: false });
+
+  console.log = (...args) => info(...args);
+  console.info = (...args) => info(...args);
+  console.debug = (...args) => debug(...args);
+  // Keep warn/error as-is but with timestamp prefixes
+  console.warn = (...args) => warn(...args);
+  console.error = (...args) => error(...args);
 };
 
 // Set up global error capture

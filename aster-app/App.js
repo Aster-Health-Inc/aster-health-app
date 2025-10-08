@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -38,8 +38,8 @@ import DeleteMealsScreen from './screens/DeleteMealsScreen';
 
 // Storage test component
 
-// ✅ import your logger utilities
-import { initGlobalErrorHandler, log, error } from './utils/CrashLogger';
+// âœ… import your logger utilities
+import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLogger';
 
 const Stack = createStackNavigator();
 
@@ -50,6 +50,7 @@ export default function App() {
 
   // 2) Initialize global error handlers once
   useEffect(() => {
+    initLogging();
     initGlobalErrorHandler();
   }, []);
 
@@ -166,3 +167,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 });
+
+

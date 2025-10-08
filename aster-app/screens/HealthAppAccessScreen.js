@@ -1,4 +1,4 @@
-// screens/HealthAccessScreen.js
+﻿// screens/HealthAccessScreen.js
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image, Switch, Platform, Alert
@@ -24,10 +24,11 @@ export default function HealthAccessScreen() {
   const navigation = useNavigation();
 
   const items = useMemo(() => ([
-    { key: 'data1', label: 'Data', identifier: 'HKWorkoutTypeIdentifier', read: true, write: false },
-    { key: 'data2', label: 'Data', identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned', read: true, write: false },
-    { key: 'data3', label: 'Data', identifier: 'HKQuantityTypeIdentifierDistanceWalkingRunning', read: true, write: false },
-    { key: 'data4', label: 'Data', identifier: 'HKQuantityTypeIdentifierHeartRate', read: true, write: false },
+    { key: 'workout', label: 'Workout History', identifier: 'HKWorkoutTypeIdentifier', read: true, write: false },
+    { key: 'steps', label: 'Step Count', identifier: 'HKQuantityTypeIdentifierStepCount', read: true, write: false },
+    { key: 'calories', label: 'Active Calories', identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned', read: true, write: false },
+    { key: 'distance', label: 'Walking + Running Distance', identifier: 'HKQuantityTypeIdentifierDistanceWalkingRunning', read: true, write: false },
+    { key: 'heart', label: 'Heart Rate', identifier: 'HKQuantityTypeIdentifierHeartRate', read: true, write: false },
   ]), []);
 
   const [enabled, setEnabled] = useState(() =>
@@ -55,7 +56,7 @@ export default function HealthAccessScreen() {
           warn('HealthAccess permission not granted', { reason: res && res.reason });
         }
       } else if (Platform.OS !== 'ios') {
-        setBanner('Apple Health is only available on iOS. We’ll skip this step on your device.');
+        setBanner('Apple Health is only available on iOS. we will skip this step on your device.');
       }
 
       navigation.navigate('CarouselWalkthrough');
@@ -77,10 +78,10 @@ export default function HealthAccessScreen() {
       </View>
 
       <View style={s.copyBlock}>
-        <Text style={s.title}>Health</Text>
-        <Text style={s.body}>&quot;Aster&quot; would like to access and update your health data.</Text>
-      </View>
+        <Text style={s.title}>Workouts & Steps</Text>
+        <Text style={s.body}>"Aster" can use Apple Health for accurate workouts when available. If access is denied or you're not on iOS, we'll fall back to Motion & Fitness (Pedometer) and finally the Accelerometer so step tracking still works.</Text>
 
+      </View>
       <View style={s.turnOnAllRow}>
         <TouchableOpacity
           style={[s.turnOnAllPill, allOn ? s.turnOnAllOn : null]}
@@ -112,7 +113,7 @@ export default function HealthAccessScreen() {
       </View>
 
       <TouchableOpacity style={s.primary} onPress={onContinue} activeOpacity={0.9}>
-        <Text style={s.primaryText}>Continue</Text>
+        <Text style={s.primaryText}>Enable Health Access</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={s.secondary} onPress={() => navigation.navigate('CarouselWalkthrough')} activeOpacity={0.9}>
@@ -160,13 +161,13 @@ const s = StyleSheet.create({
   },
   rowFirst: {},
   rowLast: {},
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   blueBox: {
     width: 22, height: 22, borderRadius: 6,
     backgroundColor: '#E6F0FF', justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: '#D0E2FF',
   },
-  rowLabel: { color: C.blue, fontSize: 14, fontWeight: '600' },
+  rowLabel: { color: C.blue, fontSize: 14, fontWeight: '600', flexShrink: 1 },
 
   primary: { backgroundColor: C.black, borderRadius: 28, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
   primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
@@ -176,3 +177,6 @@ const s = StyleSheet.create({
 
   banner: { textAlign: 'center', marginTop: 10, color: '#9A3412', fontSize: 12 },
 });
+
+
+

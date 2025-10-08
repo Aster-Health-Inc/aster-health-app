@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from 'react-native';
+import { Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import camera dependencies with fallback
@@ -59,9 +60,7 @@ const BarcodeScannerComponent = ({ onBarcodeScanned, onClose, isActive = true })
     console.log('Barcode scanned:', { type, data });
     
     // Vibrate on successful scan (if available)
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(200);
-    }
+    Vibration.vibrate(200);
     
     onBarcodeScanned(data, type);
     

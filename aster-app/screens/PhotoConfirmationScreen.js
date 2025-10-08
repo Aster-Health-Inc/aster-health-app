@@ -3,11 +3,6 @@ import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaVi
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeFood } from '../services/geminiService';
-import { log, warn, error } from '../utils/CrashLogger';
-
-log('User pressed button', { id: 42 });
-warn('Slow API response');
-error('Login failed');
 const PhotoConfirmationScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();

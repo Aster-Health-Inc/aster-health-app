@@ -4,11 +4,6 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { upsertMealLog, upsertDailyCalorie } from '../utils/meallogger';
-import { log, warn, error } from '../utils/CrashLogger';
-
-log('User pressed button', { id: 42 });
-warn('Slow API response');
-error('Login failed');
 const NutritionSummaryScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
