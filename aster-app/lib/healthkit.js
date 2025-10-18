@@ -5,6 +5,8 @@ import AppleHealthKit from 'react-native-health';
 const hasHK = !!(AppleHealthKit && AppleHealthKit.initHealthKit);
 const PERMS = (AppleHealthKit && AppleHealthKit.Constants && AppleHealthKit.Constants.Permissions) || {};
 
+export const healthKitAvailable = hasHK;
+
 const mapIdentifierToPerm = (id) => {
   switch (id) {
     case 'HKWorkoutTypeIdentifier':
@@ -140,6 +142,240 @@ export async function readTodaySummary() {
       });
     } catch (e) {
       fallbackStepCount();
+    }
+  });
+}
+
+const HOUR_MS = 1000 * 60 * 60;
+const DAY_MS = HOUR_MS * 24;
+
+const formatters = {
+  time: new Intl.DateTimeFormat('en-US', { hour: 'numeric' }),
+  day: new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }),
+  dayShort: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }),
+  weekdayShort: new Intl.DateTimeFormat('en-US', { weekday: 'short' }),
+  monthShort: new Intl.DateTimeFormat('en-US', { month: 'short' }),
+  monthLong: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }),
+};
+
+const rangeConfigs = {
+  D: { type: 'hour', segments: 8, segmentHours: 3 },
+  W: { type: 'day', segments: 7, segmentDays: 1 },
+  M: { type: 'day', segments: 6, segmentDays: 5 },
+  '6M': { type: 'month', segments: 6 },
+  Y: { type: 'month', segments: 12 },
+};
+
+const addDays = (date, amount) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+};
+
+const startOfDay = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const addMonths = (date, amount) => {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+};
+
+const formatHourLabel = (date) => {
+  const raw = formatters.time.format(date);
+  return raw.replace(/\s+/g, '');
+};
+
+function buildBuckets(range, reference = new Date()) {
+  const config = rangeConfigs[range] || rangeConfigs.Y;
+  const now = new Date(reference);
+  const buckets = [];
+
+  if (config.type === 'hour') {
+    const start = startOfDay(now);
+    const totalSegments = config.segments;
+    const spanHours = config.segmentHours || 1;
+
+    for (let i = 0; i < totalSegments; i += 1) {
+      const bucketStart = new Date(start.getTime() + i * spanHours * HOUR_MS);
+      const bucketEnd = new Date(bucketStart.getTime() + spanHours * HOUR_MS);
+      buckets.push({
+        start: bucketStart,
+        end: bucketEnd,
+        label: formatHourLabel(bucketStart),
+        highlightLabel: `${formatters.day.format(bucketStart)} ${formatters.time.format(bucketStart)}`,
+      });
+    }
+
+    return {
+      type: 'hour',
+      start: buckets[0].start,
+      end: buckets[buckets.length - 1].end,
+      bucketMs: spanHours * HOUR_MS,
+      buckets,
+    };
+  }
+
+  if (config.type === 'day') {
+    const spanDays = config.segmentDays || 1;
+    const totalSegments = config.segments;
+    const end = addDays(startOfDay(now), 1);
+    let bucketEnd = new Date(end);
+
+    for (let i = 0; i < totalSegments; i += 1) {
+      const bucketStart = addDays(bucketEnd, -spanDays);
+      buckets.unshift({
+        start: startOfDay(bucketStart),
+        end: bucketEnd,
+        label:
+          spanDays > 1
+            ? formatters.dayShort.format(startOfDay(bucketStart))
+            : formatters.weekdayShort.format(startOfDay(bucketStart)).charAt(0),
+        highlightLabel: formatters.day.format(startOfDay(bucketStart)),
+      });
+      bucketEnd = startOfDay(bucketStart);
+    }
+
+    return {
+      type: 'day',
+      start: buckets[0].start,
+      end: addDays(startOfDay(now), 1),
+      bucketMs: spanDays * DAY_MS,
+      buckets,
+    };
+  }
+
+  // month-based ranges
+  const totalSegments = config.segments;
+  const endMonth = addMonths(startOfMonth(now), 1);
+  const startMonthRange = addMonths(endMonth, -totalSegments);
+
+  for (let i = 0; i < totalSegments; i += 1) {
+    const bucketStart = addMonths(startMonthRange, i);
+    const bucketEnd = addMonths(bucketStart, 1);
+    buckets.push({
+      start: bucketStart,
+      end: bucketEnd,
+      label: formatters.monthShort.format(bucketStart),
+      highlightLabel: formatters.monthLong.format(bucketStart),
+    });
+  }
+
+  return {
+    type: 'month',
+    start: buckets[0].start,
+    end: buckets[buckets.length - 1].end,
+    buckets,
+  };
+}
+
+const METRIC_TYPES = {
+  steps: {
+    type: 'StepCount',
+  },
+  calories: {
+    type: 'ActiveEnergyBurned',
+    unit: 'kCal',
+  },
+};
+
+const normalizeValue = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+export async function readActivitySeries({ metric = 'steps', range = '6M' } = {}) {
+  if (!hasHK) {
+    return {
+      available: false,
+      labels: [],
+      values: [],
+      highlight: null,
+      highlightIndex: -1,
+      total: 0,
+    };
+  }
+
+  const metricConfig = METRIC_TYPES[metric] || METRIC_TYPES.steps;
+  const bucketConfig = buildBuckets(range);
+  const totals = bucketConfig.buckets.map(() => 0);
+
+  const options = {
+    type: metricConfig.type,
+    startDate: bucketConfig.start.toISOString(),
+    endDate: bucketConfig.end.toISOString(),
+    ascending: true,
+    limit: 2000,
+  };
+
+  if (metricConfig.unit) {
+    options.unit = metricConfig.unit;
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      AppleHealthKit.getSamples(options, (err, samples) => {
+        if (err) {
+          reject(new Error(String(err?.message || err)));
+          return;
+        }
+        const data = Array.isArray(samples) ? samples : [];
+        data.forEach((sample) => {
+          const sampleEnd = new Date(sample.endDate || sample.end || sample.endTimestamp || sample.startDate || sample.start);
+          if (!Number.isFinite(sampleEnd.getTime())) return;
+          if (sampleEnd < bucketConfig.start || sampleEnd > bucketConfig.end) return;
+          const value = normalizeValue(sample.value);
+          if (value <= 0) return;
+
+          let index = -1;
+
+          if (bucketConfig.type === 'month') {
+            index = bucketConfig.buckets.findIndex(
+              (bucket) => sampleEnd >= bucket.start && sampleEnd < bucket.end,
+            );
+          } else {
+            const elapsed = sampleEnd.getTime() - bucketConfig.start.getTime();
+            index = Math.floor(elapsed / bucketConfig.bucketMs);
+            if (index < 0) index = 0;
+            if (index >= totals.length) index = totals.length - 1;
+          }
+
+          if (index >= 0) {
+            totals[index] += value;
+          }
+        });
+
+        const rounded = totals.map((v) => Math.round(v));
+        const highlightIndex = rounded.reduce(
+          (acc, val, idx) => (val > rounded[acc] ? idx : acc),
+          0,
+        );
+        const highlightBucket = bucketConfig.buckets[highlightIndex];
+
+        resolve({
+          available: true,
+          labels: bucketConfig.buckets.map((bucket) => bucket.label),
+          values: rounded,
+          highlight: highlightBucket
+            ? {
+                label: highlightBucket.highlightLabel,
+                value: rounded[highlightIndex] ?? 0,
+              }
+            : null,
+          highlightIndex,
+          total: rounded.reduce((sum, val) => sum + val, 0),
+        });
+      });
+    } catch (e) {
+      reject(e);
     }
   });
 }

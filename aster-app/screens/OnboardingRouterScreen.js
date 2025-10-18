@@ -12,6 +12,7 @@ export default function OnboardingRouterScreen() {
 
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       const userId = user?.id
+      const isAnonymous = Boolean(user?.is_anonymous)
 
       if (userError || !userId) {
         return navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] })
@@ -36,7 +37,8 @@ export default function OnboardingRouterScreen() {
 
         // Check if onboarding is already completed
         if (profile.onboarding_completed) {
-          return navigation.reset({ index: 0, routes: [{ name: 'Home' }] })
+          const destination = isAnonymous ? 'AnonymousUpgrade' : 'Home'
+          return navigation.reset({ index: 0, routes: [{ name: destination }] })
         }
 
         return navigation.reset({ index: 0, routes: [{ name: 'CarouselWalkthrough' }] })

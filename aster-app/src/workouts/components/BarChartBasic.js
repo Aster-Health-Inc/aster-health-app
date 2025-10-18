@@ -42,32 +42,49 @@ const formatValue = (value) => {
   return String(rounded);
 };
 
-export default function BarChartBasic({ labels = [], values = [] }) {
+export default function BarChartBasic({
+  labels = [],
+  values = [],
+  highlightIndex,
+  color = '#5B26CF',
+  backgroundColor = '#F3EDFF',
+}) {
   const numericValues = values.map(toNumber);
   const maxValue = numericValues.length ? findMax(numericValues) : 0;
   const safeMax = maxValue > 0 ? maxValue : 1;
   const slots = numericValues.length || 1;
   const slotWidth = INNER_W / slots;
   const barWidth = slotWidth * 0.54;
-  const peakIdx = numericValues.reduce(
+  const computedPeak = numericValues.reduce(
     (acc, val, idx) => (val > numericValues[acc] ? idx : acc),
-    0
+    0,
   );
+  const peakIdx =
+    Number.isFinite(highlightIndex) && highlightIndex >= 0
+      ? Math.min(highlightIndex, numericValues.length - 1)
+      : computedPeak;
   const peakValue = numericValues[peakIdx] ?? 0;
 
   const ticks = Array.from({ length: TICKS + 1 }, (_, i) => i / TICKS);
 
   return (
-    <View style={styles.wrapper}>
+    <View
+      style={[
+        styles.wrapper,
+        {
+          backgroundColor,
+          borderColor: 'rgba(91,38,207,0.12)',
+        },
+      ]}
+    >
       <Svg width="100%" height={HEIGHT} viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
         <Defs>
           <LinearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor="#2F7D78" stopOpacity="0.92" />
-            <Stop offset="100%" stopColor="#2F7D78" stopOpacity="0.2" />
+            <Stop offset="0%" stopColor={color} stopOpacity="0.85" />
+            <Stop offset="100%" stopColor={color} stopOpacity="0.15" />
           </LinearGradient>
         </Defs>
 
-        {/* horizontal grid + axis labels */}
         {ticks.map((t, idx) => {
           const y = PAD_TOP + INNER_H * (1 - t);
           const valueLabel = formatValue(safeMax * t);
@@ -78,7 +95,7 @@ export default function BarChartBasic({ labels = [], values = [] }) {
                 y1={y}
                 x2={WIDTH - PAD_RIGHT}
                 y2={y}
-                stroke="#E2E5EA"
+                stroke="rgba(91,38,207,0.14)"
                 strokeWidth={idx === 0 ? 1.4 : 1}
                 strokeDasharray={idx === 0 ? undefined : '5 8'}
               />
@@ -86,7 +103,7 @@ export default function BarChartBasic({ labels = [], values = [] }) {
                 x={PAD_LEFT - 12}
                 y={y + 4}
                 textAnchor="end"
-                fill="#9AA0A6"
+                fill="#A49DC0"
                 fontSize="10"
                 fontWeight="600"
               >
@@ -96,7 +113,6 @@ export default function BarChartBasic({ labels = [], values = [] }) {
           );
         })}
 
-        {/* bars */}
         {numericValues.map((val, idx) => {
           const height = (val / safeMax) * INNER_H;
           const x = PAD_LEFT + idx * slotWidth + (slotWidth - barWidth) / 2;
@@ -111,11 +127,11 @@ export default function BarChartBasic({ labels = [], values = [] }) {
               height={height}
               rx={barWidth / 3}
               fill="url(#barFill)"
+              opacity={idx === peakIdx ? 1 : 0.75}
             />
           );
         })}
 
-        {/* peak indicator */}
         {numericValues.length ? (
           (() => {
             const peakHeight = (peakValue / safeMax) * INNER_H;
@@ -132,21 +148,22 @@ export default function BarChartBasic({ labels = [], values = [] }) {
                   y1={PAD_TOP}
                   x2={peakX}
                   y2={PAD_TOP + INNER_H}
-                  stroke="#9FB3BD"
+                  stroke={color}
                   strokeDasharray="4 6"
-                  strokeWidth="1.2"
+                  strokeWidth="1.1"
+                  opacity={0.35}
                 />
                 <Rect
-                  x={peakX - 28}
-                  y={peakY - 34}
-                  width="56"
-                  height="22"
+                  x={peakX - 32}
+                  y={peakY - 36}
+                  width="64"
+                  height="24"
                   rx="10"
-                  fill="#2F7D78"
+                  fill={color}
                 />
                 <SvgText
                   x={peakX}
-                  y={peakY - 19}
+                  y={peakY - 20}
                   fill="#FFFFFF"
                   fontSize="11"
                   fontWeight="700"
@@ -159,17 +176,15 @@ export default function BarChartBasic({ labels = [], values = [] }) {
           })()
         ) : null}
 
-        {/* x-axis */}
         <Line
           x1={PAD_LEFT}
           y1={PAD_TOP + INNER_H}
           x2={WIDTH - PAD_RIGHT}
           y2={PAD_TOP + INNER_H}
-          stroke="#C9CDD2"
+          stroke="rgba(91,38,207,0.18)"
           strokeWidth="1.4"
         />
 
-        {/* x labels */}
         {labels.map((label, idx) => {
           const x = PAD_LEFT + idx * slotWidth + slotWidth / 2;
           return (
@@ -178,7 +193,7 @@ export default function BarChartBasic({ labels = [], values = [] }) {
               x={x}
               y={HEIGHT - 18}
               textAnchor="middle"
-              fill="#82888F"
+              fill="#8B82A8"
               fontSize="11"
               fontWeight="600"
             >
@@ -193,11 +208,9 @@ export default function BarChartBasic({ labels = [], values = [] }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    borderRadius: 18,
-    backgroundColor: '#F8FAF9',
-    paddingVertical: 8,
+    borderRadius: 22,
+    paddingVertical: 10,
     paddingHorizontal: 6,
     borderWidth: 1,
-    borderColor: '#E7EBEF',
   },
 });

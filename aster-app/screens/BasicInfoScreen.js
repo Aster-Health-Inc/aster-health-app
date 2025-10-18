@@ -137,6 +137,16 @@ export default function BasicInfoScreen() {
   // Native input accessory bar for iOS above the keyboard
   const weightAccessoryId = 'weightAccessory'
 
+  const handleBackToAuth = async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.log('Sign out failed while navigating back:', err)
+    } finally {
+      navigation.reset({ index: 0, routes: [{ name: 'SignUp' }] })
+    }
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -338,7 +348,10 @@ export default function BasicInfoScreen() {
 
         {/* Continue */}
         <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-          <Text style={styles.buttonText}>Continue →</Text>
+          <Text style={styles.buttonText}>Continue</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backLink} onPress={handleBackToAuth}>
+          <Text style={styles.backLinkText}>Back</Text>
         </TouchableOpacity>
       </View>
 
@@ -380,6 +393,8 @@ const styles = StyleSheet.create({
 
   button: { backgroundColor: '#000', paddingVertical: 16, borderRadius: 30, alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  backLink: { marginTop: 12, alignItems: 'center' },
+  backLinkText: { fontSize: 14, color: '#7A6A50', fontWeight: '500' },
 
   // modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' },
@@ -412,3 +427,4 @@ const styles = StyleSheet.create({
   },
   accessoryText: { color: '#fff', fontWeight: '700' },
 })
+

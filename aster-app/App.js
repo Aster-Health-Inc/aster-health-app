@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -14,6 +14,8 @@ import SurveyPromptScreen from './screens/SurveyPromptScreen';
 import FlowIntensityScreen from './screens/FlowIntensityScreen';
 import ReminderSetupScreen from './screens/ReminderSetupScreen';
 import CycleDetailsScreen from './screens/CycleDetailsScreen';
+import CycleHomeScreen from './screens/CycleHomeScreen';
+import SettingsScreen from './screens/SettingsScreen';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen';
@@ -23,7 +25,8 @@ import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
 import HealthAppAccessScreen from './screens/HealthAppAccessScreen';
 import HomeScreen from './screens/HomeScreen';
 import WorkoutScreen from './screens/WorkoutScreen';
-
+import AnonymousUpgradeScreen from './screens/AnonymousUpgradeScreen';
+import AuthScreenBase from './screens/AuthScreenBase';
 // Food-related screens
 import MealLogHomeScreen from './screens/MealLogHomeScreen';
 import MealLogScreen from './screens/MealLogScreen';
@@ -38,7 +41,7 @@ import DeleteMealsScreen from './screens/DeleteMealsScreen';
 
 // Storage test component
 
-// âœ… import your logger utilities
+// ✅ import your logger utilities
 import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLogger';
 
 const Stack = createStackNavigator();
@@ -126,6 +129,9 @@ export default function App() {
           <>
             <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
             <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
             <Stack.Screen name="SurveyPrompt" component={SurveyPromptScreen} />
@@ -167,5 +173,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 });
+
 
 
