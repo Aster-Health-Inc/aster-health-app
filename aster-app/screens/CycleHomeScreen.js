@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -11,7 +11,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
@@ -82,6 +82,8 @@ const SYMPTOM_CARDS = [
   },
 ];
 
+const getDefaultSymptomCards = () => SYMPTOM_CARDS.map((card) => ({ ...card }));
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const chunk = (array, size) => {
@@ -112,6 +114,7 @@ const CycleHomeScreen = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [cycleData, setCycleData] = useState(null);
+  const [symptomCards, setSymptomCards] = useState(() => getDefaultSymptomCards());
   const [calendarDate, setCalendarDate] = useState(() => {
     const initial = new Date();
     initial.setHours(0, 0, 0, 0);
@@ -122,18 +125,28 @@ const CycleHomeScreen = () => {
   const today = useMemo(() => new Date(), []);
 
   const loadCycleData = useCallback(async () => {
+    setLoading(true);
     try {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
+
+      if (authError) throw authError;
 
       if (!user) {
         setCycleData(null);
-        setLoading(false);
+        setSymptomCards(getDefaultSymptomCards());
         return;
       }
 
-      const [{ data: userData }, { data: periods }] = await Promise.all([
+      const todayISO = new Date().toISOString().split('T')[0];
+
+      const [
+        { data: userData, error: userDataError },
+        { data: periods, error: periodsError },
+        dailyLogResult,
+      ] = await Promise.all([
         supabase
           .from('users')
           .select('average_cycle_length, average_period_length')
@@ -145,38 +158,77 @@ const CycleHomeScreen = () => {
           .eq('user_id', user.id)
           .order('start_date', { ascending: false })
           .limit(1),
+        supabase
+          .from('daily_logs')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('date', todayISO)
+          .maybeSingle(),
       ]);
 
-      if (!userData || !periods?.length) {
-        setCycleData(null);
-        setLoading(false);
-        return;
+      if (userDataError) throw userDataError;
+      if (periodsError) throw periodsError;
+      if (dailyLogResult.error) throw dailyLogResult.error;
+
+      let computedCycleData = null;
+      if (userData && periods?.length) {
+        const cycleLength = userData.average_cycle_length || 28;
+        const periodLength = userData.average_period_length || 5;
+        const lastPeriodDate = periods[0].start_date;
+        const info = calculateCyclePhase(lastPeriodDate, cycleLength);
+
+        computedCycleData = {
+          ...info,
+          periodLength,
+          lastPeriodDate,
+        };
       }
 
-      const cycleLength = userData.average_cycle_length || 28;
-      const periodLength = userData.average_period_length || 5;
-      const lastPeriodDate = periods[0].start_date;
-      const info = calculateCyclePhase(lastPeriodDate, cycleLength);
+      setCycleData(computedCycleData);
 
-      setCycleData({
-        ...info,
-        periodLength,
-        lastPeriodDate,
-      });
-      setLoading(false);
+      const logData = dailyLogResult.data ?? null;
+      if (logData?.id) {
+        const { data: symptomRes, error: symptomError } = await supabase
+          .from('user_symptoms')
+          .select('symptom: symptom_id (id, name)')
+          .eq('daily_log_id', logData.id);
+
+        if (symptomError) throw symptomError;
+
+        const names =
+          (symptomRes?.map((row) => row.symptom?.name).filter(Boolean) ?? []).sort((a, b) =>
+            a.localeCompare(b),
+          );
+
+        if (names.length) {
+          const updatedCards = SYMPTOM_CARDS.map((card, index) => ({
+            ...card,
+            label: names[index] ?? card.label,
+          }));
+          setSymptomCards(updatedCards);
+        } else {
+          setSymptomCards(getDefaultSymptomCards());
+        }
+      } else {
+        setSymptomCards(getDefaultSymptomCards());
+      }
+
     } catch (error) {
       console.error('CycleHomeScreen loadCycleData error', error);
       setCycleData(null);
+      setSymptomCards(getDefaultSymptomCards());
+    } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadCycleData();
-  }, [loadCycleData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadCycleData();
+    }, [loadCycleData]),
+  );
 
   const handleRefresh = useCallback(() => {
-    setLoading(true);
     loadCycleData();
   }, [loadCycleData]);
 
@@ -272,7 +324,7 @@ const CycleHomeScreen = () => {
   const handleNextMonth = () => setCalendarDate((prev) => addMonths(prev, 1));
 
   const handleLogSymptoms = () => {
-    navigation.navigate('Reminder');
+    navigation.navigate('SymptomLog');
   };
 
   return (
@@ -523,11 +575,11 @@ const CycleHomeScreen = () => {
 
           <View style={[styles.card, styles.moodCard]}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Today's Mood</Text>
+              <Text style={styles.cardTitle}>Today's symptoms</Text>
               <Text style={styles.cardSubtitle}>{todayLabel}</Text>
             </View>
             <View style={styles.symptomRow}>
-              {SYMPTOM_CARDS.map((item) => (
+              {symptomCards.map((item) => (
                 <View
                   key={item.key}
                   style={[styles.symptomCard, { backgroundColor: item.background }]}
@@ -545,7 +597,7 @@ const CycleHomeScreen = () => {
               onPress={handleLogSymptoms}
             >
               <Ionicons name="add" size={18} color="#4B117B" />
-              <Text style={styles.symptomButtonText}>Log Mood</Text>
+              <Text style={styles.symptomButtonText}>Log symptoms</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -913,14 +965,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8D84A6',
   },
+  moodCard: {
+    paddingBottom: 24,
+  },
   symptomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 16,
-  },
-  moodCard: {
-    paddingBottom: 24,
   },
   symptomCard: {
     flex: 1,

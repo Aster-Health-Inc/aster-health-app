@@ -143,7 +143,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   }, [stage]);
 
   const emailValid = useMemo(() => emailRegex.test(email.trim().toLowerCase()), [email]);
-  const passwordValid = password.trim().length >= 6;
+  const passwordValid = password.trim().length >= 8;
 
   const showEmailError = stage !== Stage.METHODS && emailTouched && !emailValid;
   const showPasswordError = stage === Stage.PASSWORD && passwordTouched && !passwordValid;
@@ -356,7 +356,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     <View style={styles.formWrap}>
       <Text style={styles.formTitle}>{copy.emailCTA}</Text>
       <Text style={styles.formSubTitle}>
-        Password must be at least 6 characters.
+        Password must be at least 8 characters including atleast one uppercase, lowercase and a symbol.
       </Text>
 
       <View style={[styles.inputWrapper, showEmailError && styles.inputWrapperError]}>

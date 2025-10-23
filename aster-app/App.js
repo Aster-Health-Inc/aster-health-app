@@ -10,7 +10,6 @@ import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import BasicInfoScreen from './screens/BasicInfoScreen';
-import SurveyPromptScreen from './screens/SurveyPromptScreen';
 import FlowIntensityScreen from './screens/FlowIntensityScreen';
 import ReminderSetupScreen from './screens/ReminderSetupScreen';
 import CycleDetailsScreen from './screens/CycleDetailsScreen';
@@ -27,6 +26,7 @@ import HomeScreen from './screens/HomeScreen';
 import WorkoutScreen from './screens/WorkoutScreen';
 import AnonymousUpgradeScreen from './screens/AnonymousUpgradeScreen';
 import AuthScreenBase from './screens/AuthScreenBase';
+import SymptomLogScreen from './screens/SymptomLogScreen';
 // Food-related screens
 import MealLogHomeScreen from './screens/MealLogHomeScreen';
 import MealLogScreen from './screens/MealLogScreen';
@@ -134,7 +134,6 @@ export default function App() {
             <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
             <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
-            <Stack.Screen name="SurveyPrompt" component={SurveyPromptScreen} />
             <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
             <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
@@ -142,6 +141,7 @@ export default function App() {
             <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
             <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
             <Stack.Screen name="Workout" component={WorkoutScreen} />
+            <Stack.Screen name="SymptomLog" component={SymptomLogScreen} />
 
 
             {/* Food-related */}

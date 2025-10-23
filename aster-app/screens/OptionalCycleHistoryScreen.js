@@ -1,190 +1,480 @@
-// screens/OptionalCycleHistoryScreen.js
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, Platform, Alert
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native'
-import DateTimePicker from '@react-native-community/datetimepicker'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../lib/supabase'
-import { useNavigation } from '@react-navigation/native'
 
-export default function OptionalCycleHistoryScreen() {
-  const navigation = useNavigation()
+// local YYYY-MM-DD to avoid timezone shifts
+const ymd = (d) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const da = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${da}`
+}
 
-  // keep dates in state as Date objects; format to YYYY-MM-DD only when saving
-  const [cycles, setCycles] = useState([
-    { start: null, end: null },
-    { start: null, end: null },
-    { start: null, end: null },
-    { start: null, end: null },
-  ])
+const TOTAL_PERIODS = 4
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 
-  // which cell is being edited
-  const [activePicker, setActivePicker] = useState({ index: null, field: null }) // 'start' | 'end'
-  // use one modal + spinner for BOTH platforms to keep iOS look
-  const [pickerVisible, setPickerVisible] = useState(false)
-  const [tempDate, setTempDate] = useState(new Date('2020-01-01'))
+const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1)
 
-  const openPicker = (index, field) => {
-    const current = cycles[index][field]
-    // seed the spinner with current value or a sensible fallback
-    setTempDate(current instanceof Date ? current : new Date('2020-01-01'))
-    setActivePicker({ index, field })
-    setPickerVisible(true)
-  }
-  // spinner updates temp only; commit on Done for both platforms
-  const handleSpinnerChange = (_, selectedDate) => {
-    if (selectedDate) setTempDate(selectedDate)
-  }
-  const confirmPicker = () => {
-    const { index, field } = activePicker
-    const updated = [...cycles]
-    updated[index][field] = tempDate
-    setCycles(updated)
-    setPickerVisible(false)
-    setActivePicker({ index: null, field: null })
-  }
-  const cancelPicker = () => {
-    setPickerVisible(false)
-    setActivePicker({ index: null, field: null })
-  }
+const addMonths = (date, amount) => {
+  const result = new Date(date)
+  result.setMonth(result.getMonth() + amount)
+  return result
+}
 
-  const fmtDisplay = (d) => (d instanceof Date ? d.toDateString() : 'Select date')
-  const toYMD = (d) => d.toISOString().split('T')[0]
+const sameDay = (a, b) =>
+  !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
-  const handleContinue = async () => {
-    const filled = cycles.filter(c => c.start instanceof Date && c.end instanceof Date)
-    if (filled.length === 0) {
-      navigation.navigate('ReminderSetup')
+const inRangeInclusive = (date, start, end) =>
+  !!date && !!start && !!end && date >= start && date <= end
+
+const formatRangeLabel = (start, end) => {
+  if (!start || !end) return 'Tap to add dates'
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const startOptions = sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }
+  const endOptions = { month: 'short', day: 'numeric', year: 'numeric' }
+  const from = start.toLocaleDateString('en-US', startOptions)
+  const to = end.toLocaleDateString('en-US', endOptions)
+  return `${from} - ${to}`
+}
+
+const buildCalendarMatrix = (cursor) => {
+  const first = startOfMonth(cursor)
+  const startWeekday = first.getDay()
+  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+  const totalCells = 42 // 6 rows
+  return Array.from({ length: totalCells }, (_, index) => {
+    const day = index - startWeekday + 1
+    if (day < 1 || day > daysInMonth) {
+      return { isCurrent: false, date: null }
+    }
+    return { isCurrent: true, date: new Date(cursor.getFullYear(), cursor.getMonth(), day) }
+  })
+}
+
+const OptionalCycleHistoryScreen = ({ navigation }) => {
+  const today = useMemo(() => new Date(), [])
+  const initialCursor = useMemo(() => startOfMonth(today), [today])
+
+  const [periods, setPeriods] = useState(
+    Array.from({ length: TOTAL_PERIODS }, () => ({ start: null, end: null })),
+  )
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [cursors, setCursors] = useState(
+    Array.from({ length: TOTAL_PERIODS }, (_, idx) => addMonths(initialCursor, -idx)),
+  )
+
+  const hasAtLeastOneRange = periods.some((p) => p.start && p.end)
+
+  const selectPeriod = (index) => {
+    if (activeIndex === index) {
+      setActiveIndex(null)
       return
     }
 
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError || !user) throw userError || new Error('Not signed in')
-
-      const entries = filled.map(cycle => ({
-        user_id: user.id,
-        start_date: toYMD(cycle.start),
-        end_date: toYMD(cycle.end),
-        flow_level: null,
-        symptoms: [],
-        notes: ''
-      }))
-
-      const { error: insertError } = await supabase.from('periods').insert(entries)
-      if (insertError) {
-        console.log('❌ Insert error:', insertError)
-        Alert.alert('Failed to save history')
-      } else {
-        navigation.navigate('ReminderSetup')
+    setActiveIndex(index)
+    setCursors((prev) => {
+      const next = [...prev]
+      const period = periods[index]
+      if (period.start) {
+        next[index] = startOfMonth(period.start)
+      } else if (!next[index]) {
+        next[index] = addMonths(initialCursor, -index)
       }
-    } catch (err) {
-      console.log('❌ Unexpected error:', err)
-      Alert.alert('Something went wrong. Try again.')
+      return next
+    })
+  }
+
+  const shiftMonth = (targetIndex, direction) => {
+    setCursors((prev) => {
+      const next = [...prev]
+      const base = prev[targetIndex] || addMonths(initialCursor, -targetIndex)
+      next[targetIndex] = addMonths(base, direction)
+      return next
+    })
+  }
+
+  const handleDayPress = (cell) => {
+    if (activeIndex === null || !cell.isCurrent || !cell.date) return
+    const selectedDate = cell.date
+    let shouldCollapse = false
+
+    setPeriods((prev) => {
+      const next = [...prev]
+      const current = { ...next[activeIndex] }
+
+      if (!current.start || (current.start && current.end)) {
+        current.start = selectedDate
+        current.end = null
+      } else if (sameDay(selectedDate, current.start)) {
+        current.start = null
+        current.end = null
+      } else if (selectedDate < current.start) {
+        current.start = selectedDate
+        current.end = null
+      } else {
+        current.end = selectedDate
+        shouldCollapse = true
+      }
+
+      next[activeIndex] = current
+      return next
+    })
+
+    if (shouldCollapse) {
+      setActiveIndex(null)
+    }
+  }
+
+const handleContinue = async () => {
+  const completed = periods.filter((p) => p.start && p.end && p.start <= p.end)
+
+  if (completed.length === 0) {
+    Alert.alert('Add at least one period', 'Please enter at least one full period range.')
+    return
+  }
+
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user || !user.id || !user.email) {
+      throw userError || new Error('Missing auth user or email')
+    }
+
+    // IMPORTANT: resolve the canonical public.users.id for this email
+    const { data: publicUserId, error: idErr } = await supabase.rpc(
+      'get_or_create_public_user',
+      { p_auth_id: user.id, p_email: user.email }
+    )
+    if (idErr) throw idErr
+    if (!publicUserId) throw new Error('Could not resolve public user id')
+
+    const payload = completed.map((period) => ({
+      user_id: publicUserId,          // <-- use canonical public.users.id
+      start_date: ymd(period.start),
+      end_date: ymd(period.end),
+    }))
+
+    const { error: upsertError } = await supabase
+      .from('periods')
+      .upsert(payload, { onConflict: 'user_id,start_date' })
+
+    if (upsertError) throw upsertError
+
+    navigation.navigate('ReminderSetup')
+  } catch (error) {
+    console.log('[warn] optional history error:', error)
+    Alert.alert('Error', error?.message || 'We could not save your history. Please try again.')
+  }
+}
+
+
+  const handleSkip = () => {
+    navigation.navigate('ReminderSetup')
+  }
+
+  const goBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack()
+    } else {
+      navigation.navigate('FlowIntensity')
     }
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>For better predictions...</Text>
-      <Text style={styles.subtitle}>
-        Include the days you experienced menstrual bleeding in your last four cycles
-      </Text>
-
-      {cycles.map((cycle, index) => (
-        <View key={index} style={styles.row}>
-          <Text style={styles.cycleLabel}>Period {index + 1}:</Text>
-
-          <TouchableOpacity
-            style={styles.dateBox}
-            onPress={() => openPicker(index, 'start')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.dateText}>{fmtDisplay(cycle.start)}</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.toText}>to</Text>
-
-          <TouchableOpacity
-            style={styles.dateBox}
-            onPress={() => openPicker(index, 'end')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.dateText}>{fmtDisplay(cycle.end)}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.backButton} activeOpacity={0.7} onPress={goBack}>
+            <Ionicons name="chevron-back" size={24} color="#4B117B" />
           </TouchableOpacity>
         </View>
-      ))}
 
-      {/* One iOS-style modal for BOTH platforms */}
-      {pickerVisible && (
-        <Modal transparent animationType="fade" visible>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <DateTimePicker
-                value={tempDate}
-                mode="date"
-                display="spinner"            // force spinner to keep iOS feel
-                maximumDate={new Date()}      // allow up to today (fixes Sept–Dec and future issues)
-                minimumDate={new Date(1900, 0, 1)}
-                onChange={handleSpinnerChange}
-                themeVariant="light"
-              />
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalCancel]} onPress={cancelPicker}>
-                  <Text style={styles.modalBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, styles.modalConfirm]} onPress={confirmPicker}>
-                  <Text style={[styles.modalBtnText, { color: '#fff' }]}>Done</Text>
-                </TouchableOpacity>
-              </View>
+        <Text style={styles.subtitle}>Tell me about your period!</Text>
+        <Text style={styles.title}>For better predictions . . .</Text>
+        <Text style={styles.instructions}>
+          Include the days you experienced menstrual bleeding in your last 4 cycles.
+        </Text>
+
+        {periods.map((period, index) => {
+          const isActive = index === activeIndex
+          const cursor = cursors[index] || addMonths(initialCursor, -index)
+          const matrix = isActive ? buildCalendarMatrix(cursor) : []
+          return (
+            <View key={`period-${index}`} style={[styles.periodShell, isActive && styles.periodShellActive]}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => selectPeriod(index)}
+                style={styles.periodHeader}
+              >
+                <View>
+                  <Text style={styles.periodTitle}>
+                    Period {index + 1}
+                    {index === 0 ? ' (Last period)' : ''}
+                  </Text>
+                  <Text style={[styles.periodSummary, !period.start && !period.end && styles.periodSummaryPlaceholder]}>
+                    {formatRangeLabel(period.start, period.end)}
+                  </Text>
+                </View>
+                <Ionicons name={isActive ? 'chevron-up' : 'chevron-down'} size={18} color="#4B117B" />
+              </TouchableOpacity>
+
+              {isActive && (
+                <View style={styles.calendarContainer}>
+                  <View style={styles.calendarHeader}>
+                    <TouchableOpacity onPress={() => shiftMonth(index, -1)} activeOpacity={0.7}>
+                      <Ionicons name="chevron-back" size={20} color="#4B117B" />
+                    </TouchableOpacity>
+                    <Text style={styles.calendarTitle}>
+                      {MONTH_NAMES[cursor.getMonth()]} {cursor.getFullYear()}
+                    </Text>
+                    <TouchableOpacity onPress={() => shiftMonth(index, 1)} activeOpacity={0.7}>
+                      <Ionicons name="chevron-forward" size={20} color="#4B117B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.weekdayRow}>
+                    {WEEKDAYS.map((day, idx) => (
+                      <Text key={`weekday-${idx}`} style={styles.weekdayText}>
+                        {day}
+                      </Text>
+                    ))}
+                  </View>
+
+                  <View style={styles.calendarGrid}>
+                    {matrix.map((cell, idx) => {
+                      const key = cell.date ? cell.date.toISOString() : `empty-${index}-${idx}`
+                      const selectedStart = sameDay(cell.date, period.start)
+                      const selectedEnd = sameDay(cell.date, period.end)
+                      const inRange = inRangeInclusive(cell.date, period.start, period.end)
+
+                      const cellStyle = [
+                        styles.dayCell,
+                        !cell.isCurrent && styles.dayCellMuted,
+                        inRange && styles.dayCellRange,
+                        (selectedStart || selectedEnd) && styles.dayCellSelected,
+                      ]
+
+                      const textStyle = [
+                        styles.dayLabel,
+                        !cell.isCurrent && styles.dayLabelMuted,
+                        (selectedStart || selectedEnd) && styles.dayLabelSelected,
+                      ]
+
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          style={cellStyle}
+                          disabled={!cell.isCurrent}
+                          onPress={() => handleDayPress(cell)}
+                        >
+                          <Text style={textStyle}>{cell.date ? cell.date.getDate() : ''}</Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
-          </View>
-        </Modal>
-      )}
+          )
+        })}
 
-      <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-        <Text style={styles.continueText}>Continue →</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.cta, !hasAtLeastOneRange && styles.ctaDisabled]}
+          onPress={handleContinue}
+          disabled={!hasAtLeastOneRange}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.ctaText}>Continue</Text>
+        </TouchableOpacity>
 
-      <Text style={styles.skipText} onPress={() => navigation.navigate('ReminderSetup')}>
-        I'm not sure
-      </Text>
-    </ScrollView>
+        <TouchableOpacity onPress={handleSkip} activeOpacity={0.7}>
+          <Text style={styles.skipText}>I'm not sure</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: '#FFFFFF', padding: 20, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 20 },
-
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, width: '100%', justifyContent: 'center' },
-  cycleLabel: { fontSize: 14, width: 90, textAlign: 'right', marginRight: 8 },
-
-  dateBox: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    width: 130,
-    alignItems: 'center'
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#EDE5F7',
   },
-  dateText: { fontSize: 14, color: '#333' },
-  toText: { fontSize: 14, marginHorizontal: 6 },
-
-  continueButton: { backgroundColor: '#000', paddingVertical: 12, width: '90%', borderRadius: 25, alignItems: 'center', marginTop: 20 },
-  continueText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  skipText: { marginTop: 15, fontSize: 14, color: '#555', textDecorationLine: 'underline' },
-
-  // iOS-style modal (matches Basic)
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' },
-  modalBox: { width: '85%', maxHeight: '70%', backgroundColor: '#fff', borderRadius: 14, padding: 14 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
-  modalBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8 },
-  modalCancel: { backgroundColor: '#eee', marginRight: 8 },
-  modalConfirm: { backgroundColor: '#000' },
-  modalBtnText: { color: '#000', fontWeight: '600' },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginBottom: 16,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E2D4F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#4B117B',
+    marginBottom: 6,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1F103B',
+  },
+  instructions: {
+    fontSize: 14,
+    color: '#5E4A82',
+    marginTop: 12,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  periodShell: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#D1C0ED',
+  },
+  periodShellActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#C5B4EF',
+    shadowColor: '#2D1E4A',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  periodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  periodTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#4B117B',
+  },
+  periodSummary: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#4B117B',
+  },
+  periodSummaryPlaceholder: {
+    color: '#9A89C8',
+  },
+  calendarContainer: {
+    marginTop: 18,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2E1656',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  weekdayText: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    color: '#8E79BE',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginVertical: 3,
+  },
+  dayCellMuted: {
+    opacity: 0,
+  },
+  dayCellRange: {
+    backgroundColor: '#E7DAFF',
+  },
+  dayCellSelected: {
+    backgroundColor: '#4B117B',
+  },
+  dayLabel: {
+    fontSize: 15,
+    color: '#31195A',
+    fontWeight: '600',
+  },
+  dayLabelMuted: {
+    color: '#C6B9E0',
+  },
+  dayLabelSelected: {
+    color: '#FFFFFF',
+  },
+  cta: {
+    marginTop: 12,
+    backgroundColor: '#4B117B',
+    borderRadius: 28,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaDisabled: {
+    backgroundColor: '#C5B4EF',
+  },
+  ctaText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  skipText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#4B117B',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
 })
+
+export default OptionalCycleHistoryScreen
