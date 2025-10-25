@@ -2,19 +2,55 @@
 /**
  * Service for integrating with Gemini AI chatbot
  * Uses Google's Gemini API for health assistant responses
+ * Includes multi-layer safety guardrails
  */
 
 import Constants from 'expo-constants';
+import { HealthGuardrails } from '../utils/healthGuardrails';
+import { log, error as logError } from '../utils/CrashLogger';
 
 export class ChatbotAPIService {
 
   /**
-   * Send message to Gemini AI
+   * Send message to Gemini AI with guardrails validation
    * @param {string} message - User's message
    * @param {Object} userContext - User's health data context
    * @returns {Promise<Object>} Chatbot response
    */
   static async sendMessage(message, userContext) {
+    log('ChatbotAPIService: sendMessage called');
+
+    // ====== LAYER 1: VALIDATE USER INPUT ======
+    const inputValidation = HealthGuardrails.validateUserInput(message);
+
+    // Check for critical violations in user input
+    const criticalInputViolations = inputValidation.violations.filter(
+      v => v.severity === 'CRITICAL'
+    );
+
+    if (criticalInputViolations.length > 0) {
+      log('ChatbotAPIService: Critical input violation detected, blocking');
+
+      return {
+        success: true,
+        response: HealthGuardrails._getSafetyFallbackMessage(criticalInputViolations),
+        blocked: true,
+        reason: 'input_validation_failed',
+        violations: criticalInputViolations,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          guardrailsBlocked: true
+        }
+      };
+    }
+
+    // Use sanitized input (PII redacted)
+    const sanitizedMessage = inputValidation.sanitizedInput;
+
+    if (inputValidation.violations.length > 0) {
+      log(`ChatbotAPIService: Input sanitized (${inputValidation.violations.length} violations)`);
+    }
+
     const GEMINI_API_KEY = Constants.expoConfig?.extra?.GOOGLE_GEMINI_API_KEY ||
                             process.env.GOOGLE_GEMINI_API_KEY ||
                             'AIzaSyA74k2BfdJY5n_q_30T1w6_k1hQ0-EPtPk';
@@ -25,8 +61,19 @@ export class ChatbotAPIService {
       // Prepare the context string for the chatbot
       const contextString = this.formatContextForAPI(userContext);
 
-      // Create system prompt for health assistant
+      // Create system prompt for health assistant with safety guidelines
       const systemPrompt = `You are Aster Assistant, a friendly and empathetic women's health companion.
+
+CRITICAL SAFETY RULES (MUST FOLLOW):
+- NEVER provide medical diagnoses or claim to diagnose conditions
+- NEVER recommend starting, stopping, or changing medications
+- NEVER give advice that could replace a doctor's consultation
+- ALWAYS recommend consulting a healthcare provider for medical concerns
+- State "I'm not a medical professional" when discussing health issues
+- For serious symptoms (severe pain, heavy bleeding, etc.), ALWAYS recommend seeing a doctor
+- Do not make definitive claims about medical conditions
+
+RESPONSE STYLE:
 
 RESPONSE STYLE:
 - Keep responses SHORT (3-4 sentences max)
@@ -66,7 +113,7 @@ GUIDELINES:
 
 ${contextString}`;
 
-      const fullPrompt = `${systemPrompt}\n\nUser Query: ${message}\n\nProvide a short, friendly response with a helpful follow-up:`;
+      const fullPrompt = `${systemPrompt}\n\nUser Query: ${sanitizedMessage}\n\nProvide a short, friendly response with a helpful follow-up:`;
 
       const payload = {
         contents: [{
@@ -79,10 +126,29 @@ ${contextString}`;
           topK: 40,
           topP: 0.95,
           maxOutputTokens: 1024,
-        }
+        },
+        // Enable Gemini's built-in safety settings
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
       };
 
-      console.log('Sending to Gemini API...');
+      log('Sending to Gemini API...');
 
       const response = await fetch(GEMINI_API_URL, {
         method: 'POST',
@@ -99,16 +165,77 @@ ${contextString}`;
 
       const data = await response.json();
 
-      // Extract response from Gemini's response structure
-      const geminiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text ||
-                            'I apologize, but I couldn\'t generate a response. Please try again.';
+      // Check if Gemini blocked the response due to safety
+      const candidate = data.candidates?.[0];
+      const finishReason = candidate?.finishReason;
 
+      if (finishReason === 'SAFETY') {
+        const safetyRatings = candidate?.safetyRatings || [];
+        const blockedCategory = safetyRatings.find(r => r.blocked)?.category;
+
+        log(`ChatbotAPIService: Gemini blocked response due to safety (${blockedCategory})`);
+
+        return {
+          success: true,
+          response: "I want to keep our conversation respectful and helpful. Let's focus on your health tracking and wellness goals. How can I assist you today? 💙",
+          blocked: true,
+          reason: 'gemini_safety_filter',
+          category: blockedCategory,
+          metadata: {
+            model: 'gemini-2.0-flash-exp',
+            timestamp: new Date().toISOString(),
+            geminiBlocked: true,
+            safetyRatings
+          }
+        };
+      }
+
+      // Extract response from Gemini's response structure
+      let geminiResponse = candidate?.content?.parts?.[0]?.text ||
+                          'I apologize, but I couldn\'t generate a response. Please try again.';
+
+      // ====== LAYER 2 & 3: VALIDATE AI OUTPUT ======
+      const validation = await HealthGuardrails.validateComplete(
+        sanitizedMessage,
+        geminiResponse,
+        userContext
+      );
+
+      log(`ChatbotAPIService: Validation complete - Passed: ${validation.passed}, Violations: ${validation.violations.length}`);
+
+      // Check if response should be blocked
+      if (validation.blockResponse) {
+        logError('ChatbotAPIService: Response blocked by guardrails', {
+          violations: validation.violations,
+          originalResponse: geminiResponse.substring(0, 100)
+        });
+
+        return {
+          success: true,
+          response: validation.finalResponse,
+          blocked: true,
+          reason: 'output_validation_failed',
+          violations: validation.violations,
+          metadata: {
+            model: 'gemini-2.0-flash-exp',
+            timestamp: new Date().toISOString(),
+            guardrailsBlocked: true,
+            originalResponseTruncated: geminiResponse.substring(0, 100)
+          }
+        };
+      }
+
+      // Return validated/modified response (with disclaimers if needed)
       return {
         success: true,
-        response: geminiResponse,
+        response: validation.finalResponse,
+        blocked: false,
         metadata: {
           model: 'gemini-2.0-flash-exp',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          guardrailsPassed: validation.passed,
+          violations: validation.violations.length > 0 ? validation.violations : undefined,
+          processingTimeMs: validation.metadata.processingTimeMs
         }
       };
 
