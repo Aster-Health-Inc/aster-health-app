@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { supabase } from '../lib/supabase';
@@ -65,6 +65,7 @@ const HomeScreen = () => {
   const [userName, setUserName] = useState('Jessica');
   const [chatbotVisible, setChatbotVisible] = useState(false);
   const navigation = useNavigation();
+  const route = useRoute();
   const { flags } = useFeatureFlags();
   const chatbotEnabled = flags?.chatbot !== false;
 
@@ -102,6 +103,17 @@ const HomeScreen = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const trigger = route?.params?.openChatbot;
+    if (!trigger) return;
+
+    setChatbotVisible(true);
+
+    if (navigation.setParams) {
+      navigation.setParams({ openChatbot: undefined });
+    }
+  }, [navigation, route?.params?.openChatbot]);
 
   const formattedDate = useMemo(
     () =>
@@ -259,17 +271,7 @@ const HomeScreen = () => {
       </View>
       <BottomTaskbar activeKey="Home" />
       {chatbotEnabled && (
-        <>
-          <TouchableOpacity
-            activeOpacity={0.92}
-            onPress={() => setChatbotVisible(true)}
-            style={styles.chatbotFab}
-          >
-            <Ionicons name="sparkles-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.chatbotFabText}>Ask Aster</Text>
-          </TouchableOpacity>
-          <ChatbotModal visible={chatbotVisible} onClose={() => setChatbotVisible(false)} />
-        </>
+        <ChatbotModal visible={chatbotVisible} onClose={() => setChatbotVisible(false)} />
       )}
     </SafeAreaView>
   );
@@ -478,27 +480,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#5F5478',
-  },
-  chatbotFab: {
-    position: 'absolute',
-    right: H_PADDING,
-    bottom: 110,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderRadius: 999,
-    backgroundColor: '#4B117B',
-    shadowColor: '#3F2560',
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
-  },
-  chatbotFabText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

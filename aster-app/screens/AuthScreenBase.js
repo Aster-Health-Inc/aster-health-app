@@ -13,6 +13,9 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord } from '../utils/authUser';
@@ -73,7 +76,24 @@ const oauthProviders = [
   },
 ];
 
-const getRedirectUri = () => { try { const uri = Linking.createURL('auth/callback'); return uri || FALLBACK_REDIRECT_URI; } catch { return FALLBACK_REDIRECT_URI; } };
+const getRedirectUri = () => {
+  try {
+    if (Platform.OS === 'web') {
+      const uri = Linking.createURL('auth/callback');
+      return uri || FALLBACK_REDIRECT_URI;
+    }
+
+    const authSessionUri = makeRedirectUri({
+      scheme: 'aster',
+      path: 'auth/callback',
+      preferLocalhost: true,
+    });
+
+    return authSessionUri || FALLBACK_REDIRECT_URI;
+  } catch {
+    return FALLBACK_REDIRECT_URI;
+  }
+};
 
 const Stage = {
   METHODS: 'methods',
@@ -105,7 +125,10 @@ const modeCopy = {
   },
 };
 
+WebBrowser.maybeCompleteAuthSession();
+
 const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
+  const navigation = useNavigation();
   const [mode, setMode] = useState(initialMode === Mode.SIGN_IN ? Mode.SIGN_IN : Mode.SIGN_UP);
   const [stage, setStage] = useState(Stage.METHODS);
   const [email, setEmail] = useState('');
@@ -156,9 +179,60 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: redirectUri } });
-      if (error) { throw error; }
-      if (data?.url) { try { await Linking.openURL(data.url); } catch {} }
+      if (Platform.OS === 'web') {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: redirectUri },
+        });
+        if (error) throw error;
+        if (data?.url) {
+          await Linking.openURL(data.url);
+        }
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) {
+        throw new Error('Unable to open the authentication page.');
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        throw new Error('Authentication cancelled');
+      }
+
+      if (result.type === 'locked') {
+        throw new Error('Authentication failed to start. Please unlock your device and try again.');
+      }
+
+      if (result.type === 'success' && result.url) {
+        const parsed = Linking.parse(result.url);
+        const queryParams = parsed?.queryParams ?? {};
+        const authCode = queryParams.code ?? queryParams.auth_code ?? null;
+
+        if (!authCode || typeof authCode !== 'string') {
+          throw new Error('Authentication response missing authorization code.');
+        }
+
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession({
+          provider,
+          code: authCode,
+          redirectTo: redirectUri,
+        });
+        if (exchangeError) throw exchangeError;
+        return;
+      }
+
+      throw new Error('Authentication did not complete. Please try again.');
     } catch (err) {
       const message = err?.message ?? 'Something went wrong while trying to authenticate.';
       if (message !== 'Authentication cancelled') {
@@ -176,6 +250,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       if (error) throw error;
       if (data?.user) {
         await ensureUserRecord(data.user);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'OnboardingRouter' }],
+        });
       }
     } catch (err) {
       Alert.alert('Anonymous login failed', err?.message ?? 'Please try again.');
@@ -213,18 +291,36 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         });
         if (error) throw error;
 
-        if (data?.user) {
-          await ensureUserRecord(data.user);
-        } else {
-          const { data: userData } = await supabase.auth.getUser();
-          await ensureUserRecord(userData?.user);
-        }
+        let resolvedUser = data?.user ?? data?.session?.user ?? null;
 
         if (!data?.session) {
-          Alert.alert(
-            'Confirm your email',
-            'Check your inbox to finish creating your account.',
-          );
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+          if (signInError) {
+            Alert.alert(
+              'Confirm your email',
+              'Check your inbox to finish creating your account.',
+            );
+            return;
+          }
+
+          resolvedUser = signInData?.user ?? resolvedUser;
+        }
+
+        if (!resolvedUser) {
+          const { data: userData } = await supabase.auth.getUser();
+          resolvedUser = userData?.user ?? null;
+        }
+
+        if (resolvedUser) {
+          await ensureUserRecord(resolvedUser);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'OnboardingRouter' }],
+          });
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -232,6 +328,16 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           password,
         });
         if (error) throw error;
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          await ensureUserRecord(userData.user);
+        }
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'OnboardingRouter' }],
+        });
       }
     } catch (err) {
       Alert.alert('Authentication error', err?.message ?? 'Please try again.');

@@ -18,8 +18,8 @@ import SettingsScreen from './screens/SettingsScreen';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen';
+import AdditionalInfoScreen from './screens/AdditionalInfoScreen';
 import ReminderScreen from './screens/ReminderScreen';
-import CarouselWalkthroughScreen from './screens/CarouselWalkthroughScreen';
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
 import HealthAppAccessScreen from './screens/HealthAppAccessScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -111,6 +111,7 @@ export default function App() {
             <Stack.Screen name="Consent" component={ConsentScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
+            <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
 
             {/* Food testing routes */}
             <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
@@ -128,6 +129,7 @@ export default function App() {
         ) : (
           <>
             <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} />
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
@@ -136,10 +138,10 @@ export default function App() {
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
             <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
             <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
+            <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
             <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
-            <Stack.Screen name="CarouselWalkthrough" component={CarouselWalkthroughScreen} />
             <Stack.Screen name="Workout" component={WorkoutScreen} />
             <Stack.Screen name="SymptomLog" component={SymptomLogScreen} />
 
@@ -173,6 +175,3 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 });
-
-
-

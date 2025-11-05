@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../lib/supabase'
+import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 
 const DAYS = 6
 const INTENSITY_LEVELS = [1, 2, 3]
@@ -22,6 +23,8 @@ const intensityColors = {
 const FlowIntensityScreen = ({ navigation }) => {
   const [ratings, setRatings] = useState(Array(DAYS).fill(null))
   const isComplete = useMemo(() => ratings.slice(0, 4).every((value) => value !== null), [ratings])
+
+  useOnboardingGuard(navigation)
 
   const handleSelect = (dayIndex, intensity) => {
     setRatings((prev) => {

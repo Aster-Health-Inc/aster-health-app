@@ -1,88 +1,177 @@
-// screens/ReminderSetupScreen.js
-import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
-import * as Notifications from 'expo-notifications'
-import { useNavigation } from '@react-navigation/native'
-export default function ReminderSetupScreen() {
-  const navigation = useNavigation()
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { useNavigation } from '@react-navigation/native';
 
-  const requestNotificationPermission = async () => {
+import { useOnboardingGuard } from '../utils/useOnboardingGuard';
+
+const COLORS = {
+  background: '#EDE5F7',
+  textPrimary: '#1F103B',
+  textSecondary: '#5C4E7B',
+  accent: '#4B117B',
+  skip: '#1F103B',
+  buttonText: '#FFFFFF',
+};
+
+const COPY = Object.freeze({
+  heading: 'Tell me about your period!',
+  title: 'Notifications',
+  bodyLines: [
+    'Want us to gently nudge you when it’s time to log how you feel, track symptoms or just vibe-check your hormones?',
+    'It’s like having a supportive bestie who actually knows your body.',
+  ],
+});
+
+export default function ReminderSetupScreen() {
+  const navigation = useNavigation();
+  const [requesting, setRequesting] = useState(false);
+
+  useOnboardingGuard(navigation);
+
+  const proceedToReminder = useCallback(() => {
+    navigation.navigate('Reminder');
+  }, [navigation]);
+
+  const requestPermissions = useCallback(async () => {
+    if (requesting) return;
+    setRequesting(true);
+
     try {
-      const { status } = await Notifications.requestPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission denied', 'You can enable notifications later in settings.')
-      } else {
-        Alert.alert('Notifications enabled!', 'We\'ll send you helpful reminders.')
+      const existing = await Notifications.getPermissionsAsync();
+      if (existing.status === 'granted') {
+        proceedToReminder();
+        return;
       }
 
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Reminder' }],
-      })
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Notifications not enabled',
+          'You can turn them on later from Settings.',
+        );
+      }
+      proceedToReminder();
     } catch (error) {
-      console.log('Notification permission error:', error)
-      Alert.alert('Error', 'Could not request notification permissions.')
+      console.log('Notification permission error:', error);
+      Alert.alert('Error', 'We could not request notification permissions.');
+      proceedToReminder();
+    } finally {
+      setRequesting(false);
     }
-  }
+  }, [proceedToReminder, requesting]);
+
+  const body = useMemo(
+    () => COPY.bodyLines.join('\n\n'),
+    [],
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Notifications</Text>
-      <Text style={styles.description}>
-        Press <Text style={styles.allowBold}>“Allow”</Text> to let us send you reminders.
-        {'\n\n'}
-        Want us to gently nudge you when it's time to log how you feel, track symptoms, or get cycle-based hormone insights?
-      </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.heading}>{COPY.heading}</Text>
+          <Text style={styles.title}>{COPY.title}</Text>
+          <Text style={styles.body}>{body}</Text>
+        </View>
 
-      <TouchableOpacity style={styles.button} onPress={requestNotificationPermission}>
-        <Text style={styles.buttonText}>Allow notifications</Text>
-      </TouchableOpacity>
-
-      {/* 🚀 Testing Shortcut Button */}
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#555', marginTop: 20 }]}
-        onPress={() => navigation.navigate('Reminder')}
-      >
-        <Text style={styles.buttonText}>Skip & Go to Reminder Screen</Text>
-      </TouchableOpacity>
-    </View>
-  )
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.primaryButton, requesting && styles.primaryButtonDisabled]}
+            activeOpacity={0.9}
+            onPress={requestPermissions}
+            disabled={requesting}
+          >
+            <Text style={styles.primaryButtonText}>
+              {requesting ? 'Requesting…' : 'Allow Notifications'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.skipButton}
+            activeOpacity={0.85}
+            onPress={proceedToReminder}
+          >
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 32,
+    paddingTop: 64,
+    paddingBottom: 32,
+    justifyContent: 'space-between',
+  },
+  content: {
+    alignItems: 'center',
+    gap: 16,
+  },
+  heading: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
   },
   title: {
-    fontSize: 26,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
     textAlign: 'center',
-    color: '#333',
-    marginBottom: 24,
   },
-  description: {
+  body: {
+    marginTop: 8,
     fontSize: 16,
-    textAlign: 'center',
-    color: '#555',
-    marginBottom: 40,
     lineHeight: 24,
+    textAlign: 'center',
+    color: COLORS.textSecondary,
   },
-  allowBold: {
-    fontWeight: '700',
-    color: '#000',
-  },
-  button: {
-    backgroundColor: '#000',
-    paddingVertical: 14,
-    borderRadius: 30,
+  actions: {
     alignItems: 'center',
+    gap: 18,
   },
-  buttonText: {
-    color: '#fff',
+  primaryButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#4B117B',
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.75,
+  },
+  primaryButtonText: {
+    color: COLORS.buttonText,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '700',
   },
-})
+  skipButton: {
+    paddingVertical: 6,
+  },
+  skipText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.skip,
+  },
+});

@@ -280,10 +280,17 @@ function buildBuckets(range, reference = new Date()) {
 const METRIC_TYPES = {
   steps: {
     type: 'StepCount',
+    aggregator: 'sum',
   },
   calories: {
     type: 'ActiveEnergyBurned',
     unit: 'kCal',
+    aggregator: 'sum',
+  },
+  heartRate: {
+    type: 'HeartRate',
+    unit: 'count/min',
+    aggregator: 'average',
   },
 };
 
@@ -306,7 +313,11 @@ export async function readActivitySeries({ metric = 'steps', range = '6M' } = {}
 
   const metricConfig = METRIC_TYPES[metric] || METRIC_TYPES.steps;
   const bucketConfig = buildBuckets(range);
-  const totals = bucketConfig.buckets.map(() => 0);
+  const totals = bucketConfig.buckets.map(() =>
+    metricConfig.aggregator === 'average'
+      ? { sum: 0, count: 0 }
+      : 0,
+  );
 
   const options = {
     type: metricConfig.type,
@@ -349,13 +360,25 @@ export async function readActivitySeries({ metric = 'steps', range = '6M' } = {}
           }
 
           if (index >= 0) {
-            totals[index] += value;
+            if (metricConfig.aggregator === 'average') {
+              totals[index].sum += value;
+              totals[index].count += 1;
+            } else {
+              totals[index] += value;
+            }
           }
         });
 
-        const rounded = totals.map((v) => Math.round(v));
-        const highlightIndex = rounded.reduce(
-          (acc, val, idx) => (val > rounded[acc] ? idx : acc),
+        const values = totals.map((record) => {
+          if (metricConfig.aggregator === 'average') {
+            const { sum, count } = record;
+            return Math.round(count > 0 ? sum / count : 0);
+          }
+          return Math.round(record);
+        });
+
+        const highlightIndex = values.reduce(
+          (acc, val, idx) => (val > values[acc] ? idx : acc),
           0,
         );
         const highlightBucket = bucketConfig.buckets[highlightIndex];
@@ -363,15 +386,26 @@ export async function readActivitySeries({ metric = 'steps', range = '6M' } = {}
         resolve({
           available: true,
           labels: bucketConfig.buckets.map((bucket) => bucket.label),
-          values: rounded,
+          values,
           highlight: highlightBucket
             ? {
                 label: highlightBucket.highlightLabel,
-                value: rounded[highlightIndex] ?? 0,
+                value: values[highlightIndex] ?? 0,
               }
             : null,
           highlightIndex,
-          total: rounded.reduce((sum, val) => sum + val, 0),
+          total:
+            metricConfig.aggregator === 'average'
+              ? Math.round(
+                  values.length
+                    ? values.reduce((sum, val) => sum + val, 0) / values.length
+                    : 0,
+                )
+              : values.reduce((sum, val) => sum + val, 0),
+          bucketMeta: bucketConfig.buckets.map((bucket) => ({
+            start: bucket.start.toISOString(),
+            end: bucket.end.toISOString(),
+          })),
         });
       });
     } catch (e) {

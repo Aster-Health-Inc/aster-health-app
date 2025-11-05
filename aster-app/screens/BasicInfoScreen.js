@@ -18,6 +18,7 @@ import { useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
 
 import { supabase } from '../lib/supabase'
+import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 
 const DEFAULT_BIRTHDATE = new Date('2000-01-01')
 const MAX_DATE = new Date()
@@ -55,6 +56,8 @@ export default function BasicInfoScreen() {
   const weightRef = useRef(null)
   const feetListRef = useRef(null)
   const inchListRef = useRef(null)
+
+  useOnboardingGuard(navigation)
 
   const age = birthdate ? getAgeFromDate(birthdate) : ''
   const hasHeight = heightFeet !== null && heightInches !== null
@@ -185,11 +188,21 @@ export default function BasicInfoScreen() {
     }
   }
 
-  const handleBack = () => {
+  const handleBack = async () => {
     if (navigation.canGoBack()) {
       navigation.goBack()
-    } else {
-      navigation.navigate('OnboardingRouter')
+      return
+    }
+
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.log('[warn] basicInfo back signOut error:', error)
+    } finally {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignUp' }],
+      })
     }
   }
 

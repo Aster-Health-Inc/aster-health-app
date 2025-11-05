@@ -15,6 +15,7 @@ import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
 
 import { supabase } from '../lib/supabase'
+import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 
 const DEFAULT_LAST_PERIOD = new Date()
 const MAX_DATE = new Date()
@@ -32,6 +33,8 @@ const CycleDetailsScreen = ({ navigation }) => {
   const [periodLength, setPeriodLength] = useState('')
 
   const periodLengthRef = useRef(null)
+
+  useOnboardingGuard(navigation)
 
   const isFormValid =
     !!lastPeriod &&
@@ -94,11 +97,17 @@ const CycleDetailsScreen = ({ navigation }) => {
 
       await supabase
         .from('users')
-        .update({
-          average_cycle_length: numericCycle,
-          average_period_length: numericPeriod,
-        })
-        .eq('id', user.id)
+        .upsert(
+          [
+            {
+              id: user.id,
+              email: user.email ?? null,
+              average_cycle_length: numericCycle,
+              average_period_length: numericPeriod,
+            },
+          ],
+          { onConflict: 'id' },
+        )
 
       navigation.navigate('FlowIntensity')
     } catch (error) {

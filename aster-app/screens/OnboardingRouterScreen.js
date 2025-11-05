@@ -41,7 +41,7 @@ export default function OnboardingRouterScreen() {
           return navigation.reset({ index: 0, routes: [{ name: destination }] })
         }
 
-        return navigation.reset({ index: 0, routes: [{ name: 'CarouselWalkthrough' }] })
+        return navigation.reset({ index: 0, routes: [{ name: 'ReminderSetup' }] })
 
       } catch (err) {
         console.log('❌ Routing error:', err)

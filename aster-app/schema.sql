@@ -198,6 +198,7 @@ ALTER TABLE meals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meal_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE water_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reminder_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE onboarding_answers ENABLE ROW LEVEL SECURITY;
 
 -- User can only access their own data policies
 CREATE POLICY "Users can view own profile" ON user_profiles FOR SELECT USING (auth.uid() = user_id);
@@ -230,6 +231,10 @@ CREATE POLICY "Users can update own water logs" ON water_logs FOR UPDATE USING (
 CREATE POLICY "Users can view own reminder settings" ON reminder_settings FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own reminder settings" ON reminder_settings FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own reminder settings" ON reminder_settings FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own onboarding answers" ON onboarding_answers FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own onboarding answers" ON onboarding_answers FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own onboarding answers" ON onboarding_answers FOR UPDATE USING (auth.uid() = user_id);
 
 -- Symptom categories are public (read-only for all authenticated users)
 CREATE POLICY "Authenticated users can view symptom categories" ON symptom_categories FOR SELECT USING (auth.role() = 'authenticated');

@@ -151,7 +151,7 @@ const CycleHomeScreen = () => {
           .from('users')
           .select('average_cycle_length, average_period_length')
           .eq('id', user.id)
-          .single(),
+          .maybeSingle(),
         supabase
           .from('periods')
           .select('start_date')
@@ -171,17 +171,19 @@ const CycleHomeScreen = () => {
       if (dailyLogResult.error) throw dailyLogResult.error;
 
       let computedCycleData = null;
-      if (userData && periods?.length) {
-        const cycleLength = userData.average_cycle_length || 28;
-        const periodLength = userData.average_period_length || 5;
+      if (periods?.length) {
+        const cycleLength = userData?.average_cycle_length ?? 28;
+        const periodLength = userData?.average_period_length ?? 5;
         const lastPeriodDate = periods[0].start_date;
         const info = calculateCyclePhase(lastPeriodDate, cycleLength);
 
-        computedCycleData = {
-          ...info,
-          periodLength,
-          lastPeriodDate,
-        };
+        if (info) {
+          computedCycleData = {
+            ...info,
+            periodLength,
+            lastPeriodDate,
+          };
+        }
       }
 
       setCycleData(computedCycleData);

@@ -1,182 +1,478 @@
-﻿// screens/HealthAccessScreen.js
-import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Image, Switch, Platform, Alert
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { requestHealthPermissions } from '../lib/healthkit';
-import { log, warn, error } from '../utils/CrashLogger';
 
-const C = {
-  bg: '#FFFFFF',
-  groupBg: '#F2F2F7',
-  grayPill: '#E9E9EB',
-  text: '#111111',
-  sub: '#6C6C70',
-  blue: '#007AFF',
-  switchGreen: '#34C759',
-  black: '#000000',
-  border: '#D1D1D6',
+import { requestHealthPermissions } from '../lib/healthkit';
+import { syncHealthMetricsToSupabase } from '../lib/healthkitSync';
+import { log, warn, error } from '../utils/CrashLogger';
+import { ensureUserRecord } from '../utils/authUser';
+import { supabase } from '../lib/supabase';
+import { useOnboardingGuard } from '../utils/useOnboardingGuard';
+
+const COLORS = {
+  lavender: '#EDE5F7',
+  card: '#FFFFFF',
+  textPrimary: '#1F103B',
+  textSecondary: '#6C5A8A',
+  accent: '#4B117B',
+  pill: '#EFE7FB',
+  switchTrack: '#D6C6F0',
+  switchThumb: '#FFFFFF',
+  toggleIconBg: '#E8DFFF',
+  toggleIconBorder: '#D6C6F0',
+  divider: '#EFE7FB',
+  skipBorder: '#E0D5F4',
+  banner: '#8B2F1F',
 };
 
-export default function HealthAccessScreen() {
-  const navigation = useNavigation();
+const HEALTH_ITEMS = [
+  {
+    key: 'steps',
+    label: 'Steps',
+    identifier: 'HKQuantityTypeIdentifierStepCount',
+    read: true,
+    write: false,
+  },
+  {
+    key: 'calories',
+    label: 'Active Calories',
+    identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned',
+    read: true,
+    write: false,
+  },
+  {
+    key: 'heartRate',
+    label: 'Heart Rate',
+    identifier: 'HKQuantityTypeIdentifierHeartRate',
+    read: true,
+    write: false,
+  },
+];
 
-  const items = useMemo(() => ([
-    { key: 'workout', label: 'Workout History', identifier: 'HKWorkoutTypeIdentifier', read: true, write: false },
-    { key: 'steps', label: 'Step Count', identifier: 'HKQuantityTypeIdentifierStepCount', read: true, write: false },
-    { key: 'calories', label: 'Active Calories', identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned', read: true, write: false },
-    { key: 'distance', label: 'Walking + Running Distance', identifier: 'HKQuantityTypeIdentifierDistanceWalkingRunning', read: true, write: false },
-    { key: 'heart', label: 'Heart Rate', identifier: 'HKQuantityTypeIdentifierHeartRate', read: true, write: false },
-  ]), []);
+const SAFE_APPLE_HEALTH_ERROR =
+  'We could not connect to Apple Health right now. You can enable this later from Settings.';
+
+const HealthAppAccessScreen = () => {
+  const navigation = useNavigation();
+  const items = useMemo(() => HEALTH_ITEMS, []);
+  const isMountedRef = useRef(true);
 
   const [enabled, setEnabled] = useState(() =>
-    items.reduce((acc, it) => ({ ...acc, [it.key]: true }), {})
+    items.reduce((acc, cur) => ({ ...acc, [cur.key]: true }), {}),
   );
-  const allOn = Object.values(enabled).every(Boolean);
   const [banner, setBanner] = useState(null);
+  const [requesting, setRequesting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
 
-  const toggleAll = (val) => {
-    const u = {};
-    for (const it of items) u[it.key] = val;
-    setEnabled(u);
+  useOnboardingGuard(navigation);
+
+  const allOn = useMemo(() => Object.values(enabled).every(Boolean), [enabled]);
+
+  const updateAll = (value) => {
+    setEnabled(() => items.reduce((acc, item) => ({ ...acc, [item.key]: value }), {}));
   };
-  const toggleOne = (key, val) => setEnabled((e) => ({ ...e, [key]: val }));
 
-  const onContinue = async () => {
-    try {
-      log('HealthAccess continue', { selected: Object.keys(enabled).filter(k => enabled[k]) });
-      const selected = items.filter(it => enabled[it.key]);
+  const toggleItem = (key, explicitValue) => {
+    setEnabled((prev) => ({
+      ...prev,
+      [key]: explicitValue ?? !prev[key],
+    }));
+  };
 
-      if (Platform.OS === 'ios' && selected.length) {
-        const res = await requestHealthPermissions(selected);
-        if (!res || !res.ok) {
-          setBanner((res && res.reason) || 'Health permissions not granted. You can enable them later in Settings.');
-          warn('HealthAccess permission not granted', { reason: res && res.reason });
-        }
-      } else if (Platform.OS !== 'ios') {
-        setBanner('Apple Health is only available on iOS. we will skip this step on your device.');
+  const requestPermissionsFor = async (selectedItems) => {
+    if (Platform.OS !== 'ios') {
+      if (isMountedRef.current) {
+        setBanner('Apple Health is only available on iOS. We will skip this step on your device.');
       }
+      return { ok: false };
+    }
 
-      navigation.navigate('CarouselWalkthrough');
-    } catch (e) {
-      error('HealthAccess error', { err: String(e) });
-      Alert.alert('Heads up', 'Could not request Health permissions right now.');
-      navigation.navigate('CarouselWalkthrough');
+    if (!selectedItems.length) {
+      if (isMountedRef.current) {
+        setBanner('Choose at least one data type to continue.');
+      }
+      return { ok: false };
+    }
+
+    if (isMountedRef.current) {
+      setRequesting(true);
+    }
+
+    try {
+      const response = await requestHealthPermissions(selectedItems);
+      if (!response?.ok) {
+        const reason =
+          response?.reason ||
+          'Health permissions not granted. You can enable them later in Settings.';
+        if (isMountedRef.current) {
+          setBanner(reason);
+        }
+        warn('Health permissions not granted', { reason });
+      } else if (isMountedRef.current) {
+        setBanner(null);
+      }
+      return response;
+    } catch (err) {
+      const message = SAFE_APPLE_HEALTH_ERROR;
+      error('Health permission request failed', { error: String(err) });
+      if (isMountedRef.current) {
+        setBanner(message);
+      }
+      return { ok: false, reason: message };
+    } finally {
+      if (isMountedRef.current) {
+        setRequesting(false);
+      }
     }
   };
 
+  const syncMetrics = async (userId) => {
+    if (!userId) return;
+
+    try {
+      if (isMountedRef.current) {
+        setSyncing(true);
+      }
+      await syncHealthMetricsToSupabase(userId);
+      if (isMountedRef.current) {
+        setBanner(null);
+      }
+    } catch (err) {
+      const message =
+        (err && typeof err === 'object' && (err.message || err.reason)) ||
+        (typeof err === 'string' ? err : 'Unknown error');
+      error('Health metrics sync failed', {
+        message,
+        code: err && typeof err === 'object' ? err.code : undefined,
+        details: err && typeof err === 'object' ? err.details : undefined,
+      });
+      if (isMountedRef.current) {
+        setBanner('We could not sync your latest health data. You can retry from Settings.');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setSyncing(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    const bootstrap = async () => {
+      let resolvedUser = null;
+
+      try {
+        const {
+          data: { user: fetchedUser },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !fetchedUser?.id) {
+          warn('Health access screen missing user', { userError });
+          return;
+        }
+
+        await ensureUserRecord(fetchedUser);
+        resolvedUser = fetchedUser;
+        if (isMountedRef.current) {
+          setAuthUser(fetchedUser);
+        }
+      } catch (err) {
+        warn('ensureUserRecord from health access failed', { err: String(err) });
+      }
+
+      if (!resolvedUser?.id) return;
+
+      const response = await requestPermissionsFor(items);
+      if (response?.ok) {
+        await syncMetrics(resolvedUser.id);
+      }
+    };
+
+    bootstrap();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [items]);
+
+  const handleContinue = async () => {
+    const selectedItems = items.filter((item) => enabled[item.key]);
+    const response = await requestPermissionsFor(selectedItems);
+    log('Health access continue pressed', {
+      selected: selectedItems.map((item) => item.identifier),
+      ok: response?.ok,
+    });
+
+    if (response?.ok) {
+      await syncMetrics(authUser?.id);
+    }
+
+    navigation.navigate('ReminderSetup');
+  };
+
+  const handleSkip = () => {
+    navigation.navigate('ReminderSetup');
+  };
+
   return (
-    <View style={s.screen}>
-      <Text style={s.header}>Health Access</Text>
-
-      <View style={s.iconWrap}>
-        <View style={s.iconSquare}>
-          <Image source={require('../assets/apple-health.png')} style={s.heart} resizeMode="contain" />
-        </View>
-      </View>
-
-      <View style={s.copyBlock}>
-        <Text style={s.title}>Workouts & Steps</Text>
-        <Text style={s.body}>"Aster" can use Apple Health for accurate workouts when available. If access is denied or you're not on iOS, we'll fall back to Motion & Fitness (Pedometer) and finally the Accelerometer so step tracking still works.</Text>
-
-      </View>
-      <View style={s.turnOnAllRow}>
-        <TouchableOpacity
-          style={[s.turnOnAllPill, allOn ? s.turnOnAllOn : null]}
-          activeOpacity={0.8}
-          onPress={() => toggleAll(!allOn)}
-        >
-          <Text style={s.turnOnAllText}>Turn on All</Text>
-        </TouchableOpacity>
-
-        <Switch value={allOn} onValueChange={toggleAll} trackColor={{ true: C.switchGreen }} />
-      </View>
-
-      <View style={s.group}>
-        {items.map((it, idx) => (
-          <View key={it.key} style={[s.row, idx === 0 && s.rowFirst, idx === items.length - 1 && s.rowLast]}>
-            <View style={s.rowLeft}>
-              <View style={s.blueBox}>
-                <Ionicons name="square-outline" size={12} color={C.blue} />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Health Access</Text>
+            <View style={styles.heartWrapper}>
+              <View style={styles.heartBadge}>
+                <Image
+                  source={require('../assets/apple-health.png')}
+                  style={styles.heartIcon}
+                  resizeMode="contain"
+                />
               </View>
-              <Text style={s.rowLabel}>{it.label}</Text>
             </View>
-            <Switch
-              value={enabled[it.key]}
-              onValueChange={(v) => toggleOne(it.key, v)}
-              trackColor={{ true: C.switchGreen }}
-            />
+            <Text style={styles.cardSubtitle}>
+              "Aster" would like to access and update your health data.
+            </Text>
+
+            <View style={styles.toggleRow}>
+              <TouchableOpacity
+                style={styles.toggleRowLeft}
+                activeOpacity={0.85}
+                onPress={() => updateAll(!allOn)}
+              >
+                <Ionicons name="flash-outline" size={18} color={COLORS.accent} />
+                <Text style={styles.toggleRowText}>Turn on All</Text>
+              </TouchableOpacity>
+              <View style={styles.switchWrapper}>
+                <Switch
+                  value={allOn}
+                  onValueChange={updateAll}
+                  thumbColor={COLORS.switchThumb}
+                  trackColor={{ true: COLORS.accent, false: COLORS.switchTrack }}
+                  ios_backgroundColor={COLORS.switchTrack}
+                  style={styles.switch}
+                />
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {items.map((item) => {
+              const value = enabled[item.key];
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  style={styles.listRow}
+                  activeOpacity={0.85}
+                  onPress={() => toggleItem(item.key)}
+                >
+                  <View style={styles.listRowLeft}>
+                    <View style={styles.listIcon}>
+                      <Ionicons name="document-text-outline" size={16} color={COLORS.accent} />
+                    </View>
+                    <Text style={styles.listLabel}>{item.label}</Text>
+                  </View>
+                  <View style={styles.switchWrapper}>
+                    <Switch
+                      value={value}
+                      onValueChange={(next) => toggleItem(item.key, next)}
+                      thumbColor={COLORS.switchThumb}
+                      trackColor={{ true: COLORS.accent, false: COLORS.switchTrack }}
+                      ios_backgroundColor={COLORS.switchTrack}
+                      style={styles.switch}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                (requesting || syncing) && styles.primaryButtonDisabled,
+              ]}
+              activeOpacity={0.9}
+              onPress={handleContinue}
+              disabled={requesting || syncing}
+            >
+              <Text style={styles.primaryButtonText}>
+                {requesting ? 'Requesting�' : syncing ? 'Syncing�' : 'Continue'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        ))}
+
+          <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
+
+          {banner ? <Text style={styles.banner}>{banner}</Text> : null}
+        </ScrollView>
       </View>
-
-      <TouchableOpacity style={s.primary} onPress={onContinue} activeOpacity={0.9}>
-        <Text style={s.primaryText}>Enable Health Access</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={s.secondary} onPress={() => navigation.navigate('CarouselWalkthrough')} activeOpacity={0.9}>
-        <Text style={s.secondaryText}>Skip for now</Text>
-      </TouchableOpacity>
-
-      {banner ? <Text style={s.banner}>{banner}</Text> : null}
-    </View>
+    </SafeAreaView>
   );
-}
+};
 
-const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: C.bg, paddingHorizontal: 20, paddingTop: 18 },
-  header: { fontSize: 13, textAlign: 'center', color: C.sub, marginBottom: 8 },
-
-  iconWrap: { alignItems: 'center', marginTop: 4 },
-  iconSquare: {
-    width: 64, height: 64, borderRadius: 14, backgroundColor: '#F7F7FA',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.lavender,
   },
-  heart: { width: 36, height: 36 },
-
-  copyBlock: { marginTop: 14 },
-  title: { fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 6 },
-  body: { fontSize: 14, color: C.sub },
-
-  turnOnAllRow: { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  turnOnAllPill: { backgroundColor: C.grayPill, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
-  turnOnAllOn: { backgroundColor: '#E4F7EA' },
-  turnOnAllText: { color: C.text, fontWeight: '700' },
-
-  group: { marginTop: 12, backgroundColor: C.grayPill, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
-  row: {
-    backgroundColor: '#F8F8FA',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  container: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    shadowColor: '#000000',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 32,
+    elevation: 5,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  heartWrapper: {
+    alignItems: 'center',
+    marginTop: 18,
+  },
+  heartBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: COLORS.pill,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heartIcon: {
+    width: 36,
+    height: 36,
+  },
+  cardSubtitle: {
+    marginTop: 18,
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  toggleRow: {
+    marginTop: 26,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginVertical: 6,
+  },
+  toggleRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+  },
+  toggleRowText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.accent,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.divider,
+    marginVertical: 22,
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  listRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  listIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: COLORS.toggleIconBg,
     borderWidth: 1,
-    borderColor: '#ECECEE',
+    borderColor: COLORS.toggleIconBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  rowFirst: {},
-  rowLast: {},
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  blueBox: {
-    width: 22, height: 22, borderRadius: 6,
-    backgroundColor: '#E6F0FF', justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: '#D0E2FF',
+  listLabel: {
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    fontWeight: '600',
   },
-  rowLabel: { color: C.blue, fontSize: 14, fontWeight: '600', flexShrink: 1 },
-
-  primary: { backgroundColor: C.black, borderRadius: 28, alignItems: 'center', paddingVertical: 14, marginTop: 16 },
-  primaryText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-
-  secondary: { borderColor: C.black, borderWidth: 1.5, borderRadius: 28, alignItems: 'center', paddingVertical: 12, marginTop: 10, backgroundColor: '#fff' },
-  secondaryText: { color: C.black, fontWeight: '700', fontSize: 16 },
-
-  banner: { textAlign: 'center', marginTop: 10, color: '#9A3412', fontSize: 12 },
+  switchWrapper: {
+    width: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switch: {
+    transform: [{ scaleX: 0.84 }, { scaleY: 0.84 }],
+  },
+  primaryButton: {
+    marginTop: 28,
+    backgroundColor: COLORS.accent,
+    borderRadius: 26,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  skipButton: {
+    marginTop: 16,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: COLORS.skipBorder,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  skipText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.accent,
+  },
+  banner: {
+    marginTop: 16,
+    textAlign: 'center',
+    color: COLORS.banner,
+    fontSize: 12,
+    lineHeight: 16,
+  },
 });
 
-
-
+export default HealthAppAccessScreen;

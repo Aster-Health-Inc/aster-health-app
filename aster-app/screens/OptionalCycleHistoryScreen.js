@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../lib/supabase'
+import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 
 // local YYYY-MM-DD to avoid timezone shifts
 const ymd = (d) => {
@@ -84,6 +85,8 @@ const OptionalCycleHistoryScreen = ({ navigation }) => {
   const [cursors, setCursors] = useState(
     Array.from({ length: TOTAL_PERIODS }, (_, idx) => addMonths(initialCursor, -idx)),
   )
+
+  useOnboardingGuard(navigation)
 
   const hasAtLeastOneRange = periods.some((p) => p.start && p.end)
 
@@ -181,7 +184,7 @@ const handleContinue = async () => {
 
     if (upsertError) throw upsertError
 
-    navigation.navigate('ReminderSetup')
+    navigation.navigate('AdditionalInfo')
   } catch (error) {
     console.log('[warn] optional history error:', error)
     Alert.alert('Error', error?.message || 'We could not save your history. Please try again.')
