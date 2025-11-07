@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aster.y",
+      "bundleIdentifier": "com.aster.healthapp",
+      "usesAppleSignIn": true, 
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app needs access to camera to take photos for nutrition analysis."
