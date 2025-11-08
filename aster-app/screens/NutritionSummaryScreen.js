@@ -83,26 +83,30 @@ const NutritionSummaryScreen = () => {
         .from('users')
         .select('id')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
         
       console.log('Existing user check:', { existingUser, userFetchError });
       
+      if (userFetchError && userFetchError.code !== 'PGRST116') {
+        console.error('Failed to fetch user:', userFetchError);
+        throw new Error('Unable to verify user record. Please try again.');
+      }
+      
       if (!existingUser) {
-        console.log('User not found, creating user in public.users table...');
-        const { data: newUser, error: userCreateError } = await supabase
+        console.log('User not found, inserting via upsert...');
+        const { error: userCreateError } = await supabase
           .from('users')
-          .insert([{ 
-            id: user.id, 
-            email: user.email,
-            average_cycle_length: 28,
-            average_period_length: 5
-          }])
-          .select()
-          .single();
+          .upsert(
+            { 
+              id: user.id, 
+              email: user.email,
+              average_cycle_length: 28,
+              average_period_length: 5
+            },
+            { onConflict: 'id' }
+          );
           
-        console.log('User creation result:', { newUser, userCreateError });
-        
-        if (userCreateError) {
+        if (userCreateError && userCreateError.code !== '23505') {
           console.error('Failed to create user:', userCreateError);
           throw new Error('Unable to create user record. Please contact support.');
         }
