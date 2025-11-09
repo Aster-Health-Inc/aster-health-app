@@ -1,1 +1,0 @@
-# aster-health-app
