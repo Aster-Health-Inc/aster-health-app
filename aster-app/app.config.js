@@ -4,7 +4,7 @@ export default ({ config }) => ({
   ...config,
   ios: {
     ...(config.ios ?? {}),
-    bundleIdentifier: 'com.aster.healthapp.dev',
+    bundleIdentifier: 'com.asterhealth.app',
     usesAppleSignIn: true,
     infoPlist: {
       NSHealthShareUsageDescription:
@@ -16,7 +16,7 @@ export default ({ config }) => ({
   },
   extra: {
     ...(config.extra ?? {}),
-    eas: { projectId: 'c220f578-b1ce-41ff-971c-88e90f13c7e5' },
+    eas: { projectId: 'c7848903-1c4b-4c4a-a8da-b10c04c2d0a6' },
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY
   },
   plugins: [

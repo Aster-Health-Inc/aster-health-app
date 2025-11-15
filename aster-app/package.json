@@ -61,6 +61,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@react-native/eslint-config": "^0.74.0",
+    "eas-cli": "^16.27.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
