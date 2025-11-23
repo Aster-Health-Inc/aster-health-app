@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
-import ChatbotAPIService from '../services/chatbotAPIService';
+import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
 
 export default function ChatbotModal({ visible, onClose }) {
   const [input, setInput] = useState("");
