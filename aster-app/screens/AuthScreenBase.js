@@ -19,6 +19,7 @@ import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord } from '../utils/authUser';
+import { error as logError, info as logInfo } from '../utils/CrashLogger';
 
 let LinearGradientComponent;
 try {
@@ -178,6 +179,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
+    logInfo('[OAuth] Starting', provider, 'redirect:', redirectUri);
     try {
       if (Platform.OS === 'web') {
         const { data, error } = await supabase.auth.signInWithOAuth({
@@ -185,6 +187,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           options: { redirectTo: redirectUri },
         });
         if (error) throw error;
+        logInfo('[OAuth] Web signInWithOAuth response', provider, 'url present:', Boolean(data?.url));
         if (data?.url) {
           await Linking.openURL(data.url);
         }
@@ -200,11 +203,13 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       });
 
       if (error) throw error;
+      logInfo('[OAuth] Native signInWithOAuth response', provider, 'url present:', Boolean(data?.url));
       if (!data?.url) {
         throw new Error('Unable to open the authentication page.');
       }
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      logInfo('[OAuth] WebBrowser result', provider, 'type:', result?.type);
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
         throw new Error('Authentication cancelled');
@@ -229,12 +234,14 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           redirectTo: redirectUri,
         });
         if (exchangeError) throw exchangeError;
+        logInfo('[OAuth] Session exchange complete', provider);
         return;
       }
 
       throw new Error('Authentication did not complete. Please try again.');
     } catch (err) {
       const message = err?.message ?? 'Something went wrong while trying to authenticate.';
+      logError('[OAuth] Authentication error', provider, err);
       if (message !== 'Authentication cancelled') {
         Alert.alert('Authentication error', message);
       }
@@ -256,6 +263,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         });
       }
     } catch (err) {
+      logError('[Auth] Anonymous login failed', err);
       Alert.alert('Anonymous login failed', err?.message ?? 'Please try again.');
     } finally {
       setOauthLoading(null);
@@ -340,6 +348,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         });
       }
     } catch (err) {
+      logError('[Auth] Email authentication error', mode, err);
       Alert.alert('Authentication error', err?.message ?? 'Please try again.');
     } finally {
       setSubmitting(false);

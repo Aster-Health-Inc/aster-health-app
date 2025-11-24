@@ -12,8 +12,8 @@ const timestamp = () => {
 // Log levels: debug < info < warn < error < silent
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40, silent: 100 };
 
-// Default: warn in all environments unless overridden
-const defaultLevel = 'warn';
+// Default to verbose logging in dev so local terminals show useful info
+const defaultLevel = typeof __DEV__ !== 'undefined' && __DEV__ ? 'debug' : 'warn';
 const envLevel = (process?.env?.EXPO_PUBLIC_LOG_LEVEL || '').toLowerCase();
 let currentLevel = LEVELS[envLevel] ?? LEVELS[defaultLevel];
 const runtimeLevel = (globalThis?.__ASTER_LOG_LEVEL__ || '').toString().toLowerCase();
@@ -30,6 +30,7 @@ let orig = {
 };
 
 const shouldLog = (level) => LEVELS[level] >= currentLevel && currentLevel < LEVELS.silent;
+const levelName = () => Object.keys(LEVELS).find((key) => LEVELS[key] === currentLevel) || 'unknown';
 
 export const setLogLevel = (lvl) => {
   if (!lvl) return;
@@ -68,6 +69,8 @@ export const initLogging = () => {
   // Keep warn/error as-is but with timestamp prefixes
   console.warn = (...args) => warn(...args);
   console.error = (...args) => error(...args);
+
+  info('[Logger] Initialized at level:', levelName());
 };
 
 // Set up global error capture
