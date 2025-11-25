@@ -38,6 +38,12 @@ import TimeAmountScreen from './screens/TimeAmountScreen';
 import EditGoalsScreen from './screens/EditGoalsScreen';
 import FoodLogScreen from './screens/FoodLogScreen';
 import DeleteMealsScreen from './screens/DeleteMealsScreen';
+import HelpFeedbackScreen from './screens/HelpFeedbackScreen';
+import FeedbackScreen from './screens/FeedbackScreen';
+import ReportBugScreen from './screens/ReportBugScreen';
+import SupportScreen from './screens/SupportScreen';
+import NotificationsScreen from './screens/NotificationsScreen';
+import AccountDetailsScreen from './screens/AccountDetailsScreen';
 
 // Storage test component
 
@@ -133,6 +139,12 @@ export default function App() {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen} />
+            <Stack.Screen name="Feedback" component={FeedbackScreen} />
+            <Stack.Screen name="ReportBug" component={ReportBugScreen} />
+            <Stack.Screen name="Support" component={SupportScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
             <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
             <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
             <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />

@@ -5,14 +5,18 @@ import {
   View,
   Text,
   TextInput,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   SafeAreaView,
   ActivityIndicator,
+  ScrollView,
+  TouchableOpacity,
 } from "react-native";
+import Svg, { Path } from 'react-native-svg';
+import { Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
@@ -24,18 +28,22 @@ export default function ChatbotModal({ visible, onClose }) {
   const [userContext, setUserContext] = useState(null);
   const [messages, setMessages] = useState([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
-  const listRef = useRef(null);
+  const scrollRef = useRef(null);
+  const waveOffsets = Array.from(
+    { length: Math.ceil(Dimensions.get('window').height / 28) + 2 },
+    (_, i) => i * 28,
+  );
 
   useEffect(() => {
     if (visible) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 0);
+      setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: false }), 0);
       if (!hasShownWelcome) {
         // Only load and show welcome on first open
         setMessages([{ id: "sys-hello", role: "assistant", text: "Hey! Getting your health data ready... ✨" }]);
         loadUserData();
       }
     }
-  }, [visible]);
+  }, [visible, hasShownWelcome]);
 
   /**
    * Load user data when modal opens
@@ -170,8 +178,8 @@ const MarkdownBubble = ({ text }) => {
   );
 };
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText ?? input).trim();
     if (!text || sending) return;
 
     const userMsg = { id: String(Date.now()), role: "user", text };
@@ -209,7 +217,7 @@ const MarkdownBubble = ({ text }) => {
       ]);
     } finally {
       setSending(false);
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 0);
+      setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 0);
     }
   };
 
@@ -282,133 +290,227 @@ const MarkdownBubble = ({ text }) => {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Aster Assistant</Text>
-          <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
-            <Text style={styles.closeText}>Close</Text>
-          </Pressable>
-        </View>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <Svg width="100%" height="100%" style={styles.waves} preserveAspectRatio="none">
+            {waveOffsets.map((offset) => (
+              <Path
+                key={`wave-${offset}`}
+                d={`M0 ${offset + 12} Q40 ${offset} 80 ${offset + 12} T160 ${offset + 12} T240 ${offset + 12} T320 ${offset + 12} T400 ${offset + 12}`}
+                fill="none"
+                stroke="#FFFFFF"
+                strokeWidth="3"
+                opacity={0.35}
+              />
+            ))}
+          </Svg>
 
-        {/* Messages */}
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: 12 }}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-        />
-
-        {/* Loading indicator */}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#4A90E2" />
-            <Text style={styles.loadingText}>Loading your health data...</Text>
-          </View>
-        )}
-
-        {/* Composer */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-        >
-          <View style={styles.composer}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Type your message"
-              placeholderTextColor="#9a9a9a"
-              style={styles.input}
-              multiline
-            />
-            <Pressable
-              onPress={sendMessage}
-              disabled={sending || input.trim().length === 0}
-              style={({ pressed }) => [
-                styles.sendBtn,
-                (sending || input.trim().length === 0) && { opacity: 0.5 },
-                pressed && { transform: [{ scale: 0.98 }] },
-              ]}
-            >
-              <Text style={styles.sendText}>{sending ? "..." : "Send"}</Text>
+          <View style={styles.header}>
+            <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
+              <Ionicons name="close" size={22} color="#3F2560" />
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
+          >
+            <ScrollView
+              ref={scrollRef}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.suggestionWrap}>
+                {['When will my next period be?', 'What foods should I be avoiding right now?', 'What is the Luteal Phase?', 'Why is my estrogen higher than usual?'].map(
+                  (q) => (
+                    <TouchableOpacity
+                      key={q}
+                      style={styles.suggestionPill}
+                      activeOpacity={0.85}
+                      onPress={() => {
+                        setInput(q);
+                        sendMessage(q);
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{q}</Text>
+                    </TouchableOpacity>
+                  ),
+                )}
+              </View>
+
+              <View style={styles.messagesArea}>
+                {messages.map((m) => (
+                  <View
+                    key={m.id}
+                    style={[styles.bubbleRow, m.role === 'user' ? styles.rightRow : styles.leftRow]}
+                  >
+                    <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.botBubble]}>
+                      {m.role === 'user' ? (
+                        <Text style={[styles.bubbleText, styles.userText]}>{m.text}</Text>
+                      ) : (
+                        <MarkdownBubble text={m.text} />
+                      )}
+                    </View>
+                  </View>
+                ))}
+
+                {!messages.length && (
+                  <View style={[styles.bubbleRow, styles.leftRow]}>
+                    <View style={[styles.bubble, styles.botBubble]}>
+                      <Text style={styles.bubbleText}>
+                        Hey there,{'\n'}Feel free to ask me anything or click one of the suggested
+                        questions to learn more about your health!
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {loading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#4A90E2" />
+                  <Text style={styles.loadingText}>Loading your health data...</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.composer}>
+              <Ionicons name="search" size={18} color="#807499" style={styles.leadingIcon} />
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Type here..."
+                placeholderTextColor="#9A90B0"
+                style={styles.input}
+                multiline
+              />
+              <Pressable
+                onPress={() => sendMessage()}
+                disabled={sending || input.trim().length === 0}
+                style={({ pressed }) => [
+                  styles.micBtn,
+                  (sending || input.trim().length === 0) && { opacity: 0.4 },
+                  pressed && { transform: [{ scale: 0.96 }] },
+                ]}
+              >
+                <Ionicons name="mic-outline" size={18} color="#4B117B" />
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F5F7" },
+  safeArea: { flex: 1, backgroundColor: '#EDE6FF' },
+  container: { flex: 1, backgroundColor: '#EDE6FF' },
+  waves: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E0E0E0",
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    paddingTop: 10,
+    paddingBottom: 6,
   },
-  title: { color: "#111111", fontSize: 18, fontWeight: "700", flex: 1 },
-  closeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#F4F5F7" },
-  closeText: { color: "#111111", fontWeight: "600" },
-
-  bubbleRow: { marginVertical: 6, flexDirection: "row" },
+  closeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F6F2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B8A6E8',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    paddingTop: 4,
+    gap: 16,
+  },
+  suggestionWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  suggestionPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F6F2FF',
+    borderRadius: 18,
+    shadowColor: '#B8A6E8',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  suggestionText: {
+    color: '#3A2B58',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  messagesArea: {
+    gap: 10,
+    paddingTop: 6,
+  },
+  bubbleRow: { marginVertical: 2, flexDirection: "row" },
   leftRow: { justifyContent: "flex-start" },
   rightRow: { justifyContent: "flex-end" },
-  bubble: { maxWidth: "78%", padding: 12, borderRadius: 16 },
-  botBubble: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 4, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  userBubble: { backgroundColor: "#2F7D78", borderTopRightRadius: 4 },
-  botText: { color: "#111111" },
-  userText: { color: "white" },
-  bubbleText: { fontSize: 15, lineHeight: 20 },
+  bubble: { maxWidth: "80%", padding: 12, borderRadius: 16 },
+  botBubble: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 6, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  userBubble: { backgroundColor: "#E1D7FF", borderTopRightRadius: 6 },
+  bubbleText: { fontSize: 15, lineHeight: 20, color: '#2E2148' },
+  userText: { color: '#2E2148' },
 
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    padding: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    minHeight: 42,
-    maxHeight: 120,
-    color: "#111111",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F6F2FF',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: "#F4F5F7",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    shadowColor: '#B8A6E8',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
-  sendBtn: {
-    height: 42,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: "#2F7D78",
-    alignItems: "center",
-    justifyContent: "center",
+  leadingIcon: { marginRight: 6 },
+  input: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 120,
+    color: '#2E2148',
+    paddingVertical: 6,
+    fontSize: 14,
   },
-  sendText: { color: "white", fontWeight: "700" },
+  micBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8DEFF',
+    marginLeft: 8,
+  },
 
-  // Loading styles
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
   },
   loadingText: {
-    color: "#8C8C8C",
+    color: "#6A5B86",
     marginLeft: 8,
     fontSize: 14,
   },
@@ -435,7 +537,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   markdownText: {
-    color: '#111111',
+    color: '#2E2148',
     fontSize: 15,
     lineHeight: 20,
   },
@@ -444,6 +546,6 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: '700',
-    color: '#2F7D78',
+    color: '#2E2148',
   },
 });
