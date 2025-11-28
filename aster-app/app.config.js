@@ -16,8 +16,7 @@ export default ({ config }) => ({
   },
   extra: {
     ...(config.extra ?? {}),
-    eas: { projectId: 'c7848903-1c4b-4c4a-a8da-b10c04c2d0a6' },
-    GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY
+    eas: { projectId: 'c7848903-1c4b-4c4a-a8da-b10c04c2d0a6' }
   },
   plugins: [
     ...(config.plugins ?? []),

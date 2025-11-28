@@ -1,96 +1,94 @@
-import Constants from 'expo-constants';
+// services/geminiService.js
+/**
+ * Service for food image analysis via Supabase Edge Function
+ * SECURE VERSION: API calls proxied through Edge Function
+ * - API key hidden on server
+ * - User authentication required
+ * - Better security and rate limiting
+ */
 
-const GEMINI_API_KEY = Constants.expoConfig?.extra?.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || 'AIzaSyA74k2BfdJY5n_q_30T1w6_k1hQ0-EPtPk';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
+import { supabase } from '../lib/supabase';
+import { log, error as logError } from '../utils/CrashLogger';
 
+/**
+ * Analyze food image using Gemini AI via secure Edge Function
+ * @param {string} base64Image - Base64 encoded image data
+ * @returns {Promise<Object>} Nutrition data
+ */
 export async function analyzeFood(base64Image) {
   try {
-    console.log('Starting food analysis...');
-    console.log('API Key (first 10 chars):', GEMINI_API_KEY.substring(0, 10));
-    console.log('API URL:', GEMINI_API_URL.substring(0, 100));
+    log('Starting food analysis via Edge Function...');
 
-    const prompt = `Analyze this food image and return ONLY a JSON object with the following structure. Do not include any other text or explanations:
+    // Validate input
+    if (!base64Image || typeof base64Image !== 'string') {
+      throw new Error('Invalid image data provided');
+    }
 
-{
-  "food_name": "Name of the food item",
-  "description": "Brief description of the food",
-  "calories": 0,
-  "protein": "0g",
-  "carbohydrates": "0g",
-  "fat": "0g",
-  "serving_info": {
-    "type": "Dinner/Lunch/Breakfast/Snack",
-    "servings": "1 serving",
-    "weight": "0g"
-  },
-  "ingredients": [
-    {"name": "Ingredient 1", "amount": "0g"},
-    {"name": "Ingredient 2", "amount": "0g"}
-  ],
-  "micronutrients": {
-    "vitamin_d": "0.00 mg",
-    "omega_3": "0.00 mg",
-    "iron": "0.00 mg"
-  }
-}
+    // Get current session for authentication
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-Provide realistic nutritional estimates based on typical serving sizes for the food shown.`;
+    if (sessionError || !session) {
+      throw new Error('User not authenticated. Please log in and try again.');
+    }
 
-    const requestBody = {
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt
-            },
-            {
-              inline_data: {
-                mime_type: "image/jpeg",
-                data: base64Image
-              }
-            }
-          ]
-        }
-      ]
-    };
+    // Call Supabase Edge Function
+    // The Edge Function will:
+    // 1. Verify authentication
+    // 2. Validate image data
+    // 3. Call Gemini API with server-side API key
+    // 4. Return nutrition data
 
-    console.log('Sending request to Gemini API...');
-    const response = await fetch(GEMINI_API_URL, {
+    const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_FOOD_ANALYSIS_URL ||
+                              'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/food-analysis';
+
+    log('Calling Edge Function:', EDGE_FUNCTION_URL);
+
+    const response = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': supabase.supabaseKey, // Supabase anon key
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({
+        base64Image: base64Image,
+      }),
     });
 
-    console.log('Response status:', response.status);
+    log('Edge Function response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('API Error Response:', errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      logError('Edge Function error:', errorText);
+      throw new Error(`Food analysis failed: ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('Received response from Gemini API');
-    
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-      throw new Error('Invalid response format from Gemini API');
+    const result = await response.json();
+
+    // Check if request was blocked (e.g., by safety filters)
+    if (result.blocked) {
+      throw new Error(result.error || 'Image content was blocked by safety filters');
     }
 
-    const textResponse = data.candidates[0].content.parts[0].text;
-    
-    // Extract JSON from the response (in case there's extra text)
-    const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to analyze food');
     }
 
-    const nutritionData = JSON.parse(jsonMatch[0]);
-    return nutritionData;
+    log('Food analysis successful');
+    return result.data;
 
   } catch (error) {
-    console.error('Error analyzing food:', error);
-    throw new Error('Failed to analyze food. Please try again.');
+    logError('Error analyzing food:', error);
+
+    // Provide user-friendly error messages
+    if (error.message.includes('not authenticated')) {
+      throw new Error('Please log in to use food analysis');
+    } else if (error.message.includes('blocked')) {
+      throw new Error('Unable to analyze this image. Please try a different photo.');
+    } else if (error.message.includes('network')) {
+      throw new Error('Network error. Please check your connection and try again.');
+    } else {
+      throw new Error('Failed to analyze food. Please try again.');
+    }
   }
 }
