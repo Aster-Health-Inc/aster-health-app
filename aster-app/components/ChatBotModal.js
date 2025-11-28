@@ -394,7 +394,11 @@ const MarkdownBubble = ({ text }) => {
                   pressed && { transform: [{ scale: 0.96 }] },
                 ]}
               >
-                <Ionicons name="mic-outline" size={18} color="#4B117B" />
+                <Ionicons
+                  name={input.trim().length > 0 ? "send" : "mic-outline"}
+                  size={18}
+                  color="#4B117B"
+                />
               </Pressable>
             </View>
           </KeyboardAvoidingView>

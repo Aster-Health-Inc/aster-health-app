@@ -312,7 +312,7 @@ ${contextString}`
       throw new Error('Gemini API key not configured')
     }
 
-    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`
 
     const geminiResponse = await fetch(GEMINI_API_URL, {
       method: 'POST',
@@ -402,7 +402,7 @@ ${contextString}`
         response: detokenizedResponse,
         blocked: false,
         metadata: {
-          model: 'gemini-2.0-flash-exp',
+          model: 'gemini-2.5-flash',
           timestamp: new Date().toISOString(),
           sanitized: true,
           tokenized: true,

@@ -92,7 +92,7 @@ serve(async (req) => {
       throw new Error('Food analysis service is not configured')
     }
 
-    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`
 
     // 5. CREATE PROMPT FOR FOOD ANALYSIS
     const prompt = `Analyze this food image and return ONLY a JSON object with the following structure. Do not include any other text or explanations:
@@ -226,7 +226,7 @@ Provide realistic nutritional estimates based on typical serving sizes for the f
         success: true,
         data: nutritionData,
         metadata: {
-          model: 'gemini-2.0-flash-exp',
+          model: 'gemini-2.5-flash',
           timestamp: new Date().toISOString(),
           user_id: user.id,
         },
