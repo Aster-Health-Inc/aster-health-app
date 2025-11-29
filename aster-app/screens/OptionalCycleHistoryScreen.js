@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../lib/supabase'
+import { useOnboarding } from '../src/context/OnboardingContext'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 
 // local YYYY-MM-DD to avoid timezone shifts
@@ -75,6 +75,7 @@ const buildCalendarMatrix = (cursor) => {
 }
 
 const OptionalCycleHistoryScreen = ({ navigation }) => {
+  const { setPeriodHistory } = useOnboarding()
   const today = useMemo(() => new Date(), [])
   const initialCursor = useMemo(() => startOfMonth(today), [today])
 
@@ -158,41 +159,18 @@ const handleContinue = async () => {
     return
   }
 
-  try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user || !user.id || !user.email) {
-      throw userError || new Error('Missing auth user or email')
-    }
+  const payload = completed.map((period) => ({
+    start: period.start,
+    end: period.end,
+  }))
 
-    // IMPORTANT: resolve the canonical public.users.id for this email
-    const { data: publicUserId, error: idErr } = await supabase.rpc(
-      'get_or_create_public_user',
-      { p_auth_id: user.id, p_email: user.email }
-    )
-    if (idErr) throw idErr
-    if (!publicUserId) throw new Error('Could not resolve public user id')
-
-    const payload = completed.map((period) => ({
-      user_id: publicUserId,          // <-- use canonical public.users.id
-      start_date: ymd(period.start),
-      end_date: ymd(period.end),
-    }))
-
-    const { error: upsertError } = await supabase
-      .from('periods')
-      .upsert(payload, { onConflict: 'user_id,start_date' })
-
-    if (upsertError) throw upsertError
-
-    navigation.navigate('AdditionalInfo')
-  } catch (error) {
-    console.log('[warn] optional history error:', error)
-    Alert.alert('Error', error?.message || 'We could not save your history. Please try again.')
-  }
+  setPeriodHistory(payload)
+  navigation.navigate('AdditionalInfo')
 }
 
 
   const handleSkip = () => {
+    setPeriodHistory([])
     navigation.navigate('ReminderSetup')
   }
 

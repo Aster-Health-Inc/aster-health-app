@@ -17,9 +17,11 @@ import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { SvgXml } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord } from '../utils/authUser';
 import { error as logError, info as logInfo } from '../utils/CrashLogger';
+import { LOGO_SVG } from '../assets/logoSvg';
 
 let LinearGradientComponent;
 try {
@@ -564,7 +566,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.hero}>
-            <Text style={styles.brand}>Aster</Text>
+            <SvgXml xml={LOGO_SVG} width={200} height={79} />
           </View>
 
           <View style={styles.card}>
@@ -628,12 +630,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 32,
     paddingTop: 48,
-  },
-  brand: {
-    fontSize: 44,
-    fontWeight: '700',
-    color: COLORS.irisDark,
-    letterSpacing: 1.2,
   },
   card: {
     backgroundColor: COLORS.white,
@@ -782,7 +778,7 @@ const styles = StyleSheet.create({
     width: 36,
   },
   anonymousButton: {
-    backgroundColor: COLORS.iris,
+    backgroundColor: '#4B117B',
     paddingVertical: 18,
     borderRadius: 24,
     width: '100%',
@@ -809,7 +805,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   primaryButton: {
-    backgroundColor: COLORS.iris,
+    backgroundColor: '#4B117B',
     paddingVertical: 16,
     borderRadius: 24,
     alignSelf: 'stretch',

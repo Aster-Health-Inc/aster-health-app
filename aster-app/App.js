@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from './lib/supabase';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
+import { OnboardingProvider } from './src/context/OnboardingContext';
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
@@ -23,7 +24,6 @@ import ReminderScreen from './screens/ReminderScreen';
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
 import HealthAppAccessScreen from './screens/HealthAppAccessScreen';
 import HomeScreen from './screens/HomeScreen';
-import WorkoutScreen from './screens/WorkoutScreen';
 import AnonymousUpgradeScreen from './screens/AnonymousUpgradeScreen';
 import AuthScreenBase from './screens/AuthScreenBase';
 import SymptomLogScreen from './screens/SymptomLogScreen';
@@ -102,6 +102,7 @@ export default function App() {
   console.log('App render - Session:', session, 'User:', session?.user);
 
   return (
+    <OnboardingProvider>
     <FeatureFlagsProvider>
     <NavigationContainer>
       <StatusBar style="auto" />
@@ -154,7 +155,6 @@ export default function App() {
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
             <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
-            <Stack.Screen name="Workout" component={WorkoutScreen} />
             <Stack.Screen name="SymptomLog" component={SymptomLogScreen} />
 
 
@@ -176,6 +176,7 @@ export default function App() {
       </Stack.Navigator>
     </NavigationContainer>
     </FeatureFlagsProvider>
+    </OnboardingProvider>
   );
 }
 

@@ -14,6 +14,9 @@ import { useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
 import { useOnboardingGuard } from '../utils/useOnboardingGuard';
+import { useOnboarding } from '../src/context/OnboardingContext';
+import { getCanonicalUserId } from '../utils/authUser';
+import { updatePredictionsForUser, saveCyclePrediction } from '../utils/cyclePredictions';
 
 const COLORS = {
   background: '#EDE5F7',
@@ -53,11 +56,12 @@ const to24HourString = (date) => {
 export default function ReminderScreen() {
   const navigation = useNavigation();
   useOnboardingGuard(navigation);
+  const { state, updateReminder, resetOnboarding } = useOnboarding();
 
   const [selectedTime, setSelectedTime] = useState(() => {
-    const now = new Date();
-    now.setSeconds(0, 0);
-    return now;
+    const initial = state.reminder.time ? new Date(state.reminder.time) : new Date();
+    initial.setSeconds(0, 0);
+    return initial;
   });
   const [saving, setSaving] = useState(false);
 
@@ -72,8 +76,9 @@ export default function ReminderScreen() {
       const next = new Date(date);
       next.setSeconds(0, 0);
       setSelectedTime(next);
+      updateReminder({ time: next });
     },
-    [],
+    [updateReminder],
   );
 
   const persistReminder = useCallback(async () => {
@@ -86,34 +91,163 @@ export default function ReminderScreen() {
       } = await supabase.auth.getUser();
       if (userError || !user) throw userError || new Error('Not signed in');
 
+      const canonicalUserId = await getCanonicalUserId(user);
+      const { profile, cycle, flowIntensity, periodHistory, additionalInfo } = state;
+
+      const { data: existingUserRow, error: existingUserError } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (existingUserError) {
+        console.log('Existing user fetch error (non-blocking):', existingUserError);
+      }
+      const resolvedEmail = user.email ?? existingUserRow?.email ?? null;
+
+      // Validate required onboarding inputs
+      if (
+        !profile.name ||
+        !profile.birthdate ||
+        !profile.weight ||
+        profile.heightFeet === null ||
+        profile.heightInches === null ||
+        !cycle.lastPeriodDate ||
+        !cycle.averageCycleLength ||
+        !cycle.averagePeriodLength
+      ) {
+        throw new Error('Missing required onboarding details. Please go back and complete all fields.');
+      }
+
+      const toYMD = (d) => {
+        if (!d) return null;
+        const dateObj = d instanceof Date ? d : new Date(d);
+        return dateObj.toISOString().split('T')[0];
+      };
+
+      const heightTotalInches = Number(profile.heightFeet) * 12 + Number(profile.heightInches);
+      const birthdateYmd = toYMD(profile.birthdate);
+      const lastPeriodYmd = toYMD(cycle.lastPeriodDate);
+
+      // Build period payload (current + history)
+      const periodPayload = [];
+      if (lastPeriodYmd) {
+        periodPayload.push({ user_id: canonicalUserId, start_date: lastPeriodYmd });
+      }
+      if (periodHistory?.length) {
+        periodHistory.forEach((p) => {
+          const start = toYMD(p.start);
+          if (start) {
+            periodPayload.push({
+              user_id: canonicalUserId,
+              start_date: start,
+              end_date: toYMD(p.end),
+            });
+          }
+        });
+      }
+
+      // Flow intensity entries (keep associated to auth id for existing consumers)
+      const flowEntries =
+        flowIntensity?.map((intensity, index) => ({
+          user_id: user.id,
+          day_number: index + 1,
+          intensity,
+        }))?.filter((entry) => entry.intensity !== null) ?? [];
+
+      // Persist in one go
       const reminderTime = to24HourString(selectedTime);
-      const { error: upsertError } = await supabase
-        .from('reminder_settings')
-        .upsert(
-          [
+
+      const writes = [
+        resolvedEmail
+          ? supabase
+              .from('users')
+              .upsert(
+                [
+                  {
+                    id: user.id,
+                    email: resolvedEmail,
+                    average_cycle_length: cycle.averageCycleLength,
+                    average_period_length: cycle.averagePeriodLength,
+                  },
+                ],
+                { onConflict: 'id' },
+              )
+          : Promise.resolve({ error: null }),
+        supabase
+          .from('user_profiles')
+          .upsert(
+            [
+              {
+                user_id: user.id,
+                name: profile.name.trim(),
+                birthdate: birthdateYmd,
+                height: heightTotalInches,
+                weight: parseFloat(profile.weight),
+                unit_system: profile.unitSystem || 'imperial',
+                onboarding_completed: true,
+              },
+            ],
+            { onConflict: 'user_id' },
+          ),
+        periodPayload.length
+          ? supabase.from('periods').upsert(periodPayload, { onConflict: 'user_id,start_date' })
+          : Promise.resolve({ error: null }),
+        flowEntries.length
+          ? supabase.from('flow_intensity_logs').insert(flowEntries)
+          : Promise.resolve({ error: null }),
+        supabase
+          .from('onboarding_answers')
+          .upsert(
             {
-              user_id: user.id,
-              reminder_time: reminderTime,
-              reminder_days: DAILY_DAYS,
-              checkin_enabled: true,
+              user_id: canonicalUserId,
+              unusual_bleeding: additionalInfo.unusualBleeding,
+              fertile_window_intercourse: additionalInfo.fertileWindowIntercourse,
+              other_conditions:
+                additionalInfo.conditionsChoice === 'No'
+                  ? 'none'
+                  : additionalInfo.conditionsChoice === 'Prefer not to say'
+                    ? 'prefer_not_to_say'
+                    : (additionalInfo.conditionsText || '').trim(),
             },
-          ],
-          { onConflict: 'user_id' },
-        );
+            { onConflict: 'user_id' },
+          ),
+        supabase
+          .from('reminder_settings')
+          .upsert(
+            [
+              {
+                user_id: user.id,
+                reminder_time: reminderTime,
+                reminder_days: DAILY_DAYS,
+                checkin_enabled: true,
+              },
+            ],
+            { onConflict: 'user_id' },
+          ),
+      ];
 
-      if (upsertError) {
-        throw upsertError;
+      const results = await Promise.all(writes);
+      const failed = results.find((r) => r?.error);
+      if (failed?.error) throw failed.error;
+
+      const predictionResult = await updatePredictionsForUser(canonicalUserId);
+
+      if (!predictionResult && lastPeriodYmd) {
+        const lpDate = new Date(lastPeriodYmd);
+        const next = new Date(lpDate);
+        next.setDate(lpDate.getDate() + cycle.averageCycleLength);
+        const ovu = new Date(next);
+        ovu.setDate(next.getDate() - 14);
+        await saveCyclePrediction(canonicalUserId, {
+          predicted_period_date: toYMD(next),
+          predicted_ovulation_date: toYMD(ovu),
+          predicted_cycle_length: cycle.averageCycleLength,
+          confidence_score: 0.5,
+          prediction_method: 'onboarding_fallback',
+        });
       }
 
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ onboarding_completed: true })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
+      resetOnboarding();
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     } catch (error) {
       console.log('Reminder save error:', error);

@@ -12,14 +12,14 @@ import {
   View,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../lib/supabase'
-import { ensureUserRecord } from '../utils/authUser'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
+import { useOnboarding } from '../src/context/OnboardingContext'
 
 const OPTION_VALUES = ['Yes', 'No', 'Prefer not to say']
 const CONDITION_CHOICES = ['No', 'Prefer not to say']
 
 const AdditionalInfoScreen = ({ navigation }) => {
+  const { updateAdditionalInfo } = useOnboarding()
   const [unusualBleeding, setUnusualBleeding] = useState(null)
   const [fertileWindowIntercourse, setFertileWindowIntercourse] = useState(null)
   const [conditionsChoice, setConditionsChoice] = useState(null)
@@ -56,53 +56,15 @@ const AdditionalInfoScreen = ({ navigation }) => {
       return
     }
 
-    try {
-      setSubmitting(true)
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-
-      if (userError || !user?.id) {
-        throw userError || new Error('Missing authenticated user')
-      }
-
-      await ensureUserRecord(user)
-
-      const {
-        data: publicUserId,
-        error: idError,
-      } = await supabase.rpc('get_or_create_public_user', {
-        p_auth_id: user.id,
-        p_email: user.email ?? null,
-      })
-
-      if (idError) throw idError
-      if (!publicUserId) throw new Error('Unable to resolve user record')
-
-      const payload = {
-        user_id: publicUserId,
-        unusual_bleeding: unusualBleeding,
-        fertile_window_intercourse: fertileWindowIntercourse,
-        other_conditions: normalizeConditions(),
-      }
-
-
-      const { error: upsertError } = await supabase
-        .from('onboarding_answers')
-        .upsert(payload, { onConflict: 'user_id' })
-
-      if (upsertError) throw upsertError
-
-      navigation.navigate('HealthAppAccess')
-    } catch (error) {
-      console.log('[warn] additional info submit error:', error)
-      const message =
-        error?.message || error?.details || 'We could not save your answers. Please try again.'
-      Alert.alert('Error', message)
-    } finally {
-      setSubmitting(false)
-    }
+    setSubmitting(true)
+    updateAdditionalInfo({
+      unusualBleeding,
+      fertileWindowIntercourse,
+      conditionsChoice,
+      conditionsText,
+    })
+    setSubmitting(false)
+    navigation.navigate('HealthAppAccess')
   }
 
   const handleSkip = () => {

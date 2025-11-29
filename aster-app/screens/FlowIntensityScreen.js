@@ -8,8 +8,8 @@ import {
   Alert,
 } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from '../lib/supabase'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
+import { useOnboarding } from '../src/context/OnboardingContext'
 
 const DAYS = 6
 const INTENSITY_LEVELS = [1, 2, 3]
@@ -21,6 +21,7 @@ const intensityColors = {
 }
 
 const FlowIntensityScreen = ({ navigation }) => {
+  const { setFlowIntensity } = useOnboarding()
   const [ratings, setRatings] = useState(Array(DAYS).fill(null))
   const isComplete = useMemo(() => ratings.slice(0, 4).every((value) => value !== null), [ratings])
 
@@ -35,34 +36,12 @@ const FlowIntensityScreen = ({ navigation }) => {
   }
 
   const handleContinue = async () => {
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-      if (userError || !user?.id) throw userError || new Error('Missing user')
-
-      const entries = ratings
-        .map((intensity, index) => ({
-          user_id: user.id,
-          day_number: index + 1,
-          intensity,
-        }))
-        .filter((entry) => entry.intensity !== null)
-
-      if (entries.length < 4) {
-        Alert.alert('Almost there', 'Please rate at least the first four days before continuing.')
-        return
-      }
-
-      const { error: insertError } = await supabase.from('flow_intensity_logs').insert(entries)
-      if (insertError) throw insertError
-
-      navigation.navigate('OptionalCycleHistory')
-    } catch (error) {
-      console.log('[warn] flowIntensity submit error:', error)
-      Alert.alert('Error', 'We could not save your flow intensity. Please try again.')
+    if (ratings.slice(0, 4).some((v) => v === null)) {
+      Alert.alert('Almost there', 'Please rate at least the first four days before continuing.')
+      return
     }
+    setFlowIntensity(ratings)
+    navigation.navigate('OptionalCycleHistory')
   }
 
   const handleSkip = () => {

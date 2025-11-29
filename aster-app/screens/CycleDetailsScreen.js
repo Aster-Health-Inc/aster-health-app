@@ -14,8 +14,8 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
 
-import { supabase } from '../lib/supabase'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
+import { useOnboarding } from '../src/context/OnboardingContext'
 
 const DEFAULT_LAST_PERIOD = new Date()
 const MAX_DATE = new Date()
@@ -26,6 +26,7 @@ const formatDate = (date) =>
 const sanitizeNumber = (value, maxLength = 2) => value.replace(/[^0-9]/g, '').slice(0, maxLength)
 
 const CycleDetailsScreen = ({ navigation }) => {
+  const { updateCycle } = useOnboarding()
   const [lastPeriod, setLastPeriod] = useState(null)
   const [tempLastPeriod, setTempLastPeriod] = useState(DEFAULT_LAST_PERIOD)
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -80,44 +81,12 @@ const CycleDetailsScreen = ({ navigation }) => {
       return
     }
 
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-      if (userError || !user?.id) throw userError || new Error('Missing user')
-
-      const formattedDate = lastPeriod.toISOString().split('T')[0]
-
-      await supabase
-        .from('periods')
-        .upsert([{ user_id: user.id, start_date: formattedDate }], {
-          onConflict: 'user_id,start_date',
-        })
-
-      await supabase
-        .from('users')
-        .upsert(
-          [
-            {
-              id: user.id,
-              email: user.email ?? null,
-              average_cycle_length: numericCycle,
-              average_period_length: numericPeriod,
-            },
-          ],
-          { onConflict: 'id' },
-        )
-
-      navigation.navigate('FlowIntensity')
-    } catch (error) {
-      console.log('[warn] cycleDetails submit error:', error)
-      Alert.alert(
-        'Saved with issues',
-        'We had trouble storing your details, but you can continue and update them later.',
-        [{ text: 'Continue', onPress: () => navigation.navigate('FlowIntensity') }],
-      )
-    }
+    updateCycle({
+      lastPeriodDate: lastPeriod,
+      averageCycleLength: numericCycle,
+      averagePeriodLength: numericPeriod,
+    })
+    navigation.navigate('FlowIntensity')
   }
 
   const goBack = () => {

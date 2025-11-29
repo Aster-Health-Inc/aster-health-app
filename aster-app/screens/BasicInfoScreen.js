@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons'
 
 import { supabase } from '../lib/supabase'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
+import { useOnboarding } from '../src/context/OnboardingContext'
 
 const DEFAULT_BIRTHDATE = new Date('2000-01-01')
 const MAX_DATE = new Date()
@@ -41,6 +42,7 @@ const getAgeFromDate = (date) => {
 
 export default function BasicInfoScreen() {
   const navigation = useNavigation()
+  const { updateProfile } = useOnboarding()
 
   const [name, setName] = useState('')
   const [birthdate, setBirthdate] = useState(null)
@@ -156,36 +158,15 @@ export default function BasicInfoScreen() {
       return
     }
 
-    try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-      if (userError) throw userError
-
-      const { error: upsertError } = await supabase
-        .from('user_profiles')
-        .upsert([
-          {
-            user_id: user.id,
-            name,
-            birthdate: birthdate.toISOString().split('T')[0],
-            height: normalizedHeight,
-            weight: numericWeight,
-            unit_system: 'imperial',
-          },
-        ])
-
-      if (upsertError) {
-        console.log('[warn] Supabase upsert error:', upsertError)
-        Alert.alert('Error saving your info. Please try again.')
-      } else {
-        navigation.navigate('CycleDetails')
-      }
-    } catch (error) {
-      console.log('[warn] handleSubmit error:', error)
-      Alert.alert('Error saving your info. Please try again.')
-    }
+    updateProfile({
+      name: name.trim(),
+      birthdate,
+      weight: numericWeight.toString(),
+      heightFeet,
+      heightInches,
+      unitSystem: 'imperial',
+    })
+    navigation.navigate('CycleDetails')
   }
 
   const handleBack = async () => {

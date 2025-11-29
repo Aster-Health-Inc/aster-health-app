@@ -15,6 +15,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
+import { getCanonicalUserId } from '../utils/authUser';
+import { updatePredictionsForUser } from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
 
 const BACKGROUND_COLOR = '#EEE7FF';
@@ -142,6 +144,8 @@ const CycleHomeScreen = () => {
 
       const todayISO = new Date().toISOString().split('T')[0];
 
+      const canonicalUserId = await getCanonicalUserId(user);
+
       const [
         { data: userData, error: userDataError },
         { data: periods, error: periodsError },
@@ -155,7 +159,7 @@ const CycleHomeScreen = () => {
         supabase
           .from('periods')
           .select('start_date')
-          .eq('user_id', user.id)
+          .eq('user_id', canonicalUserId)
           .order('start_date', { ascending: false })
           .limit(1),
         supabase
@@ -170,11 +174,38 @@ const CycleHomeScreen = () => {
       if (periodsError) throw periodsError;
       if (dailyLogResult.error) throw dailyLogResult.error;
 
+      let periodRows = periods;
+      if ((!periodRows || periodRows.length === 0) && canonicalUserId !== user.id) {
+        // Fallback to auth id in case older data was stored that way; migrate it forward
+        const { data: legacyPeriods } = await supabase
+          .from('periods')
+          .select('start_date, end_date')
+          .eq('user_id', user.id)
+          .order('start_date', { ascending: false })
+          .limit(12);
+
+        periodRows = legacyPeriods;
+
+        if (legacyPeriods?.length) {
+          const migrated = legacyPeriods.map((p) => ({
+            user_id: canonicalUserId,
+            start_date: p.start_date,
+            end_date: p.end_date ?? null,
+          }));
+          try {
+            await supabase.from('periods').upsert(migrated, { onConflict: 'user_id,start_date' });
+            await updatePredictionsForUser(canonicalUserId);
+          } catch (migrateErr) {
+            console.log('CycleHome migrate legacy periods failed', migrateErr);
+          }
+        }
+      }
+
       let computedCycleData = null;
-      if (periods?.length) {
+      if (periodRows?.length) {
         const cycleLength = userData?.average_cycle_length ?? 28;
         const periodLength = userData?.average_period_length ?? 5;
-        const lastPeriodDate = periods[0].start_date;
+        const lastPeriodDate = periodRows[0].start_date;
         const info = calculateCyclePhase(lastPeriodDate, cycleLength);
 
         if (info) {

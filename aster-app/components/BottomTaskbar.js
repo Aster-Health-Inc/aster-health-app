@@ -17,7 +17,7 @@ const COLORS = {
 
 const ICONS = {
   home: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M8.12602 14C8.57006 15.7252 10.1362 17 12 17C13.8638 17 15.4299 15.7252 15.874 14M11.0177 2.764L4.23539 8.03912C3.78202 8.39175 3.55534 8.56806 3.39203 8.78886C3.24737 8.98444 3.1396 9.20478 3.07403 9.43905C3 9.70352 3 9.9907 3 10.5651V17.8C3 18.9201 3 19.4801 3.21799 19.908C3.40973 20.2843 3.71569 20.5903 4.09202 20.782C4.51984 21 5.07989 21 6.2 21H17.8C18.9201 21 19.4802 21 19.908 20.782C20.2843 20.5903 20.5903 20.2843 20.782 19.908C21 19.4801 21 18.9201 21 17.8V10.5651C21 9.9907 21 9.70352 20.926 9.43905C20.8604 9.20478 20.7526 8.98444 20.608 8.78886C20.4447 8.56806 20.218 8.39175 19.7646 8.03913L12.9823 2.764C12.631 2.49075 12.4553 2.35412 12.2613 2.3016C12.0902 2.25526 11.9098 2.25526 11.7387 2.3016C11.5447 2.35412 11.369 2.49075 11.0177 2.764Z" stroke="#404040" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8.12602 14C8.57006 15.7252 10.1362 17 12 17C13.8638 17 15.4299 15.7252 15.874 14M11.0177 2.764L4.23539 8.03912C3.78202 8.39175 3.55534 8.56806 3.39203 8.78886C3.24737 8.98444 3.1396 9.20478 3.07403 9.43905C3 9.70352 3 9.9907 3 10.5651V17.8C3 18.9201 3 19.4801 3.21799 19.908C3.40973 20.2843 3.71569 20.5903 4.09202 20.782C4.51984 21 5.07989 21 6.2 21H17.8C18.9201 21 19.4802 21 19.908 20.782C20.2843 20.5903 20.5903 20.2843 20.782 19.908C21 19.4801 21 18.9201 21 17.8V10.5651C21 9.9907 21 9.70352 20.926 9.43905C20.8604 9.20478 20.7526 8.98444 20.608 8.78886C20.4447 8.56806 20.218 8.39175 19.7646 8.03913L12.9823 2.764C12.631 2.49075 12.4553 2.35412 12.2613 2.3016C12.0902 2.25526 11.9098 2.25526 11.7387 2.3016C11.5447 2.35412 11.369 2.49075 11.0177 2.764Z" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`,
   cycle: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M24.002 12C24.002 18.6274 18.6294 24 12.002 24C5.37454 24 0.00195312 18.6274 0.00195312 12C0.00195312 5.37258 5.37454 0 12.002 0C18.6294 0 24.002 5.37258 24.002 12ZM2.30169 12C2.30169 17.3573 6.64465 21.7003 12.002 21.7003C17.3593 21.7003 21.7022 17.3573 21.7022 12C21.7022 6.64269 17.3593 2.29974 12.002 2.29974C6.64465 2.29974 2.30169 6.64269 2.30169 12Z" fill="#767680" fill-opacity="0.05"/>
@@ -40,17 +40,23 @@ const ICONS = {
   food: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M7 2V22M4 2.5V7.5C4 10 7 10 7 10C7 10 10 10 10 7.5V2.5M17 10V22M17 10C18.657 10 20 8.209 20 6C20 3.791 18.657 2 17 2C15.343 2 14 3.791 14 6C14 8.209 15.343 10 17 10Z" stroke="#404040" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`,
-  workout: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M15 21L14.336 18.384C14.1152 17.5154 13.6603 16.7241 13.021 16.096L11.5 14.6M6 11.153C7 9.183 8.538 8.04 12 8M12 8C12.219 7.997 12.544 7.996 12.87 7.996C13.375 7.996 13.627 7.996 13.828 8.09C14.029 8.184 14.236 8.43 14.648 8.924C14.766 9.064 14.888 9.191 15 9.276M12 8L10.73 9.958C10.033 11.034 9.684 11.573 9.67 12.138C9.66409 12.3899 9.70582 12.6406 9.793 12.877C9.988 13.407 10.493 13.804 11.5 14.598M20 8.198C17.963 10.491 16.155 10.143 15 9.277L11.5 14.599M4 17.73L4.678 17.892C6.407 18.302 8.203 17.516 9 16M17 4.5C17 4.89782 16.842 5.27936 16.5607 5.56066C16.2794 5.84196 15.8978 6 15.5 6C15.1022 6 14.7206 5.84196 14.4393 5.56066C14.158 5.27936 14 4.89782 14 4.5C14 4.10218 14.158 3.72064 14.4393 3.43934C14.7206 3.15804 15.1022 3 15.5 3C15.8978 3 16.2794 3.15804 16.5607 3.43934C16.842 3.72064 17 4.10218 17 4.5Z" stroke="#404040" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  health: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <g clip-path="url(#clip0_40001758_19834)">
+    <path d="M0.857422 12.1368H4.61171C4.76978 12.135 4.92453 12.0912 5.06009 12.0099C5.19565 11.9285 5.30714 11.8126 5.38314 11.674L8.46885 5.50255C8.5449 5.3489 8.66614 5.22219 8.8163 5.13945C8.96645 5.05671 9.13833 5.0219 9.30885 5.03969C9.47869 5.05117 9.64079 5.11504 9.77281 5.2225C9.90483 5.32996 10.0003 5.47572 10.046 5.63969L13.8688 18.3597C13.919 18.5322 14.0221 18.6846 14.1636 18.7954C14.3051 18.9061 14.4779 18.9696 14.6574 18.9768C14.8257 18.9713 14.9885 18.9163 15.1257 18.8187C15.2629 18.7211 15.3683 18.5853 15.4288 18.4283L17.7774 12.6854C17.8421 12.5243 17.9532 12.3861 18.0967 12.2884C18.2402 12.1907 18.4095 12.138 18.5831 12.1368H23.1431" stroke="#404040" stroke-width="1.66" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <defs>
+    <clipPath id="clip0_40001758_19834">
+    <rect width="24" height="24" fill="white"/>
+    </clipPath>
+    </defs>
   </svg>`,
 };
 
 const DEFAULT_ITEMS = [
   { key: 'Home', label: 'Home', route: 'Home', icon: ICONS.home },
   { key: 'Cycle', label: 'Cycle', route: 'CycleHome', icon: ICONS.cycle },
-  { key: 'Chat', label: '', route: 'Home', isCenter: true, icon: ICONS.chat },
-  { key: 'Food', label: 'Food', route: 'MealLogHome', icon: ICONS.food },
-  { key: 'Workout', label: 'Workout', route: 'Workout', icon: ICONS.workout },
+  { key: 'Health', label: 'Health', route: 'HealthAppAccess', icon: ICONS.health },
+  { key: 'Chat', label: 'Chatbot', route: 'Home', icon: ICONS.chat },
 ];
 
 function BottomTaskbar({ activeKey, items = DEFAULT_ITEMS, style, onTabPress }) {
@@ -93,7 +99,7 @@ function BottomTaskbar({ activeKey, items = DEFAULT_ITEMS, style, onTabPress }) 
                 isCenter && styles.iconWrapCenter,
               ]}
             >
-              <SvgXml xml={item.icon} width={isCenter ? 32 : 24} height={isCenter ? 32 : 24} />
+              <SvgXml xml={item.icon} width={isCenter ? 32 : 28} height={isCenter ? 32 : 28} />
             </View>
             {item.label ? (
               <Text style={[styles.label, isActive && styles.labelActive]}>{item.label}</Text>
@@ -126,25 +132,26 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 16,
+    bottom: 12,
     alignItems: 'center',
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '86%',
-    borderRadius: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    width: '90%',
+    minHeight: 70,
+    borderRadius: 36,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
     borderColor: COLORS.border,
     borderWidth: 1,
     gap: 6,
     overflow: 'hidden',
     backgroundColor: Platform.OS === 'ios' ? 'transparent' : COLORS.glassBottom,
     shadowColor: COLORS.shadow,
-    shadowOpacity: Platform.OS === 'ios' ? 0.12 : 0.16,
-    shadowRadius: Platform.OS === 'ios' ? 16 : 12,
+    shadowOpacity: Platform.OS === 'ios' ? 0.16 : 0.18,
+    shadowRadius: Platform.OS === 'ios' ? 18 : 14,
     shadowOffset: { width: 0, height: 10 },
   },
   barAndroid: {
@@ -159,7 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   tabActive: {
-    backgroundColor: COLORS.activeFill,
+    backgroundColor: '#E0E0E0',
   },
   centerTab: {
     flex: 1,

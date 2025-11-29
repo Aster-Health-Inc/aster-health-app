@@ -1,12 +1,12 @@
 import React from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { SvgXml } from 'react-native-svg';
+import { LOGO_SVG } from '../assets/logoSvg';
 
 const WelcomeScreen = ({ navigation }) => (
   <SafeAreaView style={styles.container}>
     <View style={styles.hero}>
-      <View style={styles.logoPlaceholder}>
-        <Text style={styles.brandText}>Aster</Text>
-      </View>
+      <SvgXml xml={LOGO_SVG} width={220} height={87} />
     </View>
 
     <View style={styles.footer}>
@@ -33,21 +33,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoPlaceholder: {
-    alignItems: 'center',
-  },
-  brandText: {
-    fontSize: 40,
-    fontWeight: '600',
-    color: '#4B3199',
-    letterSpacing: 1,
-  },
   footer: {
     paddingHorizontal: 32,
     paddingBottom: 48,
   },
   startButton: {
-    backgroundColor: '#4B3199',
+    backgroundColor: '#4B117B',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',
