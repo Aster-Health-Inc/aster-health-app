@@ -204,7 +204,7 @@ const AddFoodScreen = () => {
         {
           text: 'View Food Log',
           onPress: () => {
-            navigation.navigate('MealLogHome', { 
+            navigation.navigate('FoodLog', { 
               refreshData: true,
               timestamp: Date.now()
             });

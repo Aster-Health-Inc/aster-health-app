@@ -55,7 +55,7 @@ const ICONS = {
 const DEFAULT_ITEMS = [
   { key: 'Home', label: 'Home', route: 'Home', icon: ICONS.home },
   { key: 'Cycle', label: 'Cycle', route: 'CycleHome', icon: ICONS.cycle },
-  { key: 'Health', label: 'Health', route: 'HealthAppAccess', icon: ICONS.health },
+  { key: 'Food', label: 'Nutrition', route: 'FoodLog', icon: ICONS.food },
   { key: 'Chat', label: 'Chatbot', route: 'Home', icon: ICONS.chat },
 ];
 

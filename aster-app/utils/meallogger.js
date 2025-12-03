@@ -148,7 +148,6 @@ export const fetchUserDailyLogs = async (user_id, date) => {
   console.log('🔍 RPC get_user_daily_logs result:', { rpcData, rpcError });
   
   if (!rpcError && rpcData) {
-    // Water is already in oz from the database
     const result = {
       meals: rpcData.meals || [],
       mealItems: rpcData.mealItems || [],
@@ -156,11 +155,19 @@ export const fetchUserDailyLogs = async (user_id, date) => {
       dailyTotals: rpcData.dailyTotals || {},
     };
 
-    console.log('🔍 fetchUserDailyLogs returning RPC result:', result);
-    return result;
+    const hasMealData =
+      (result.meals && result.meals.length > 0) ||
+      (result.dailyTotals && Object.keys(result.dailyTotals || {}).length > 0);
+
+    if (hasMealData) {
+      console.log('🔍 fetchUserDailyLogs returning RPC result:', result);
+      return result;
+    }
+
+    console.log('🔍 RPC returned empty data; falling back to direct queries...');
   }
   
-  console.log('🔍 RPC failed, falling back to direct queries...');
+  console.log('🔍 RPC failed or empty, falling back to direct queries...');
   
   // Fallback to direct queries if RPC fails
   // First, let's check if there are ANY meal_logs for this user

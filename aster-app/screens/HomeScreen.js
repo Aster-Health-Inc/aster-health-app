@@ -376,7 +376,11 @@ const HomeScreen = () => {
             >
               <Ionicons name="person-outline" size={20} color="#3F2560" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('PastAnalytics')}
+            >
               <Ionicons name="calendar-outline" size={20} color="#3F2560" />
             </TouchableOpacity>
           </View>
@@ -435,7 +439,7 @@ const HomeScreen = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.quickActionBtn}
-                onPress={() => navigation.navigate('MealLogHome')}
+                onPress={() => navigation.navigate('FoodLog')}
               >
                 <Ionicons name="restaurant-outline" size={18} color="#4B117B" />
                 <Text style={styles.quickActionText}>Log Food</Text>

@@ -20,7 +20,6 @@ const SURFACE = '#FFFFFF';
 
 const SETTINGS_ITEMS = [
   { key: 'account', label: 'Account Details', navigateTo: 'AccountDetails' },
-  { key: 'personal', label: 'Personal Information', navigateTo: 'PersonalInformation' },
   { key: 'privacy', label: 'Privacy & Information Safety', navigateTo: 'PrivacySafety' },
   { key: 'notifications', label: 'Notifications', navigateTo: 'Notifications' },
   { key: 'help', label: 'Help & Feedback', navigateTo: 'HelpFeedback' },

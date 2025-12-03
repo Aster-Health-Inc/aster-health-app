@@ -1,14 +1,17 @@
 import { supabase } from '../lib/supabase';
 
-export const calculateCyclePredictions = async (userId) => {
+export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
   try {
+    const candidateIds = [userId, ...(extraUserIds || [])].filter(Boolean);
+    if (!candidateIds.length) return null;
+
     // Get user's period history
     const { data: periods, error } = await supabase
       .from('periods')
-      .select('start_date, end_date')
-      .eq('user_id', userId)
+      .select('user_id, start_date, end_date')
+      .in('user_id', candidateIds)
       .order('start_date', { ascending: false })
-      .limit(6); // Last 6 cycles for more accurate predictions
+      .limit(12); // grab a bit more since we may be mixing legacy ids
 
     if (error || !periods || periods.length === 0) {
       return null;
@@ -116,9 +119,9 @@ export const getActivePrediction = async (userId) => {
   }
 };
 
-export const updatePredictionsForUser = async (userId) => {
+export const updatePredictionsForUser = async (userId, options = {}) => {
   try {
-    const prediction = await calculateCyclePredictions(userId);
+    const prediction = await calculateCyclePredictions(userId, options.includeUserIds);
     if (prediction) {
       return await saveCyclePrediction(userId, prediction);
     }

@@ -44,6 +44,7 @@ import ReportBugScreen from './screens/ReportBugScreen';
 import SupportScreen from './screens/SupportScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import AccountDetailsScreen from './screens/AccountDetailsScreen';
+import PastAnalyticsScreen from './screens/PastAnalyticsScreen';
 
 // Storage test component
 
@@ -155,7 +156,16 @@ export default function App() {
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
             <Stack.Screen name="Reminder" component={ReminderScreen} />
             <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
-            <Stack.Screen name="SymptomLog" component={SymptomLogScreen} />
+            <Stack.Screen
+              name="SymptomLog"
+              component={SymptomLogScreen}
+              options={{
+                presentation: 'transparentModal',
+                cardStyle: { backgroundColor: 'transparent' },
+                animationEnabled: true,
+              }}
+            />
+            <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
 
 
             {/* Food-related */}

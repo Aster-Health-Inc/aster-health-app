@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   SafeAreaView,
   StyleSheet,
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 import { useOnboarding } from '../src/context/OnboardingContext'
 
-const DAYS = 6
+const DEFAULT_DAYS = 6
 const INTENSITY_LEVELS = [1, 2, 3]
 
 const intensityColors = {
@@ -21,9 +21,42 @@ const intensityColors = {
 }
 
 const FlowIntensityScreen = ({ navigation }) => {
-  const { setFlowIntensity } = useOnboarding()
-  const [ratings, setRatings] = useState(Array(DAYS).fill(null))
-  const isComplete = useMemo(() => ratings.slice(0, 4).every((value) => value !== null), [ratings])
+  const { state, setFlowIntensity } = useOnboarding()
+  const parsedPeriodLength = Number.parseInt(state?.cycle?.averagePeriodLength, 10)
+  const hasValidPeriodLength = !Number.isNaN(parsedPeriodLength) && parsedPeriodLength > 0
+
+  // Number of flow days to show; fall back to a sensible default if the input is missing/invalid
+  const totalDays = useMemo(() => {
+    if (!hasValidPeriodLength) return DEFAULT_DAYS
+    if (parsedPeriodLength > 4) return DEFAULT_DAYS
+    return parsedPeriodLength
+  }, [hasValidPeriodLength, parsedPeriodLength])
+
+  // How many days must be rated before continuing
+  const requiredDays = useMemo(() => {
+    if (!hasValidPeriodLength) return 4
+    if (parsedPeriodLength <= 3) return parsedPeriodLength
+    if (parsedPeriodLength === 4) return 4
+    return 4
+  }, [hasValidPeriodLength, parsedPeriodLength])
+
+  const [ratings, setRatings] = useState(Array(totalDays).fill(null))
+  const isComplete = useMemo(
+    () => ratings.slice(0, requiredDays).every((value) => value !== null),
+    [ratings, requiredDays],
+  )
+
+  // Adjust ratings array if the number of days changes (e.g., different period length)
+  useEffect(() => {
+    setRatings((prev) => {
+      if (prev.length === totalDays) return prev
+      const next = Array(totalDays).fill(null)
+      for (let i = 0; i < Math.min(prev.length, next.length); i += 1) {
+        next[i] = prev[i]
+      }
+      return next
+    })
+  }, [totalDays])
 
   useOnboardingGuard(navigation)
 
@@ -36,8 +69,11 @@ const FlowIntensityScreen = ({ navigation }) => {
   }
 
   const handleContinue = async () => {
-    if (ratings.slice(0, 4).some((v) => v === null)) {
-      Alert.alert('Almost there', 'Please rate at least the first four days before continuing.')
+    if (ratings.slice(0, requiredDays).some((v) => v === null)) {
+      Alert.alert(
+        'Almost there',
+        `Please rate at least the first ${requiredDays} day${requiredDays > 1 ? 's' : ''} before continuing.`,
+      )
       return
     }
     setFlowIntensity(ratings)

@@ -1,8 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeFood } from '../services/geminiService';
+
+const BACKGROUND = '#E6E0F3';
+const SURFACE = '#FFFFFF';
+const ACCENT = '#4B117B';
+
 const PhotoConfirmationScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
@@ -61,46 +76,44 @@ const PhotoConfirmationScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={28} color="black" />
+        <TouchableOpacity style={styles.circleBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="close" size={22} color="#4A4A4A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Confirm Photo</Text>
-        <View style={{ width: 28 }} />
+        <View style={styles.circleBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Photo */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.photoContainer}>
           <Image source={{ uri: image }} style={styles.photo} />
-          <TouchableOpacity style={styles.retakeButton} onPress={handleRetake}>
+          <TouchableOpacity style={styles.retakeButton} onPress={handleRetake} activeOpacity={0.85}>
             <Text style={styles.retakeButtonText}>Retake</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Photo Quality */}
-        <View style={styles.qualityContainer}>
-          <View style={styles.qualityCheck}>
-            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+        <View style={styles.qualityCard}>
+          <Text style={styles.sectionTitle}>Photo Quality</Text>
+          <View style={styles.qualityRow}>
+            <Ionicons name="checkmark-circle" size={18} color="#3CB371" />
             <Text style={styles.qualityText}>Excellent, ready for analysis</Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Analyze Button */}
-      <TouchableOpacity 
-        style={[styles.analyzeButton, analyzing && styles.analyzeButtonDisabled]} 
+      <TouchableOpacity
+        style={[styles.primaryButton, analyzing && styles.primaryButtonDisabled]}
         onPress={handleAnalyzePhoto}
         disabled={analyzing}
+        activeOpacity={0.85}
       >
         {analyzing ? (
           <View style={styles.analyzingContainer}>
             <ActivityIndicator color="#fff" size="small" />
-            <Text style={styles.analyzeButtonText}>Analyzing...</Text>
+            <Text style={styles.primaryButtonText}>Analyzing...</Text>
           </View>
         ) : (
-          <Text style={styles.analyzeButtonText}>Analyze This Photo</Text>
+          <Text style={styles.primaryButtonText}>Analyze This Photo</Text>
         )}
       </TouchableOpacity>
     </SafeAreaView>
@@ -112,83 +125,112 @@ export default PhotoConfirmationScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: BACKGROUND,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
+  },
+  circleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: SURFACE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B9AFD6',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#2E2E2E',
   },
   scrollContent: {
-    padding: 20,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+    paddingTop: 12,
   },
   photoContainer: {
     position: 'relative',
-    marginBottom: 20,
+    marginBottom: 18,
+    borderRadius: 22,
+    overflow: 'hidden',
+    shadowColor: '#C4B9DF',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
   photo: {
     width: '100%',
     height: 300,
-    borderRadius: 20,
     backgroundColor: '#f0f0f0',
   },
   retakeButton: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#ff4444',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 14,
   },
   retakeButtonText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  qualityContainer: {
-    backgroundColor: '#f8f9fa',
+  qualityCard: {
+    backgroundColor: SURFACE,
     padding: 16,
     borderRadius: 16,
-    marginBottom: 20,
+    shadowColor: '#C4B9DF',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
-  qualityCheck: {
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#222',
+    marginBottom: 10,
+  },
+  qualityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   qualityText: {
-    fontSize: 16,
-    color: '#4CAF50',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#4B4B4B',
   },
-  analyzeButton: {
+  primaryButton: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 28,
     left: 20,
     right: 20,
-    backgroundColor: '#FF6B9D',
+    backgroundColor: ACCENT,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center',
+    shadowColor: '#4B117B',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
-  analyzeButtonText: {
+  primaryButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
-  analyzeButtonDisabled: {
-    backgroundColor: '#ccc',
+  primaryButtonDisabled: {
+    backgroundColor: '#AAA',
   },
   analyzingContainer: {
     flexDirection: 'row',

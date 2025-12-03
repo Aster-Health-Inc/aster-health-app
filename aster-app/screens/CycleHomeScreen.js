@@ -57,34 +57,34 @@ const LEGEND_ITEMS = [
   },
 ];
 
-const SYMPTOM_CARDS = [
+const TODAY_CARDS = [
   {
-    key: 'cramps',
-    label: 'Cramps',
+    key: 'symptoms',
+    label: 'Add symptoms',
     icon: (color) => <MaterialCommunityIcons name="heart-pulse" size={20} color={color} />,
-    background: '#FFE9ED',
-    iconBackground: '#FBD6DF',
-    tint: '#EA5165',
+    background: '#FFE8F0',
+    iconBackground: '#F7D8E5',
+    tint: '#D74B6A',
   },
   {
-    key: 'happy',
-    label: 'Happy',
+    key: 'mood',
+    label: 'Add mood',
     icon: (color) => <Ionicons name="happy-outline" size={20} color={color} />,
-    background: '#E9F8F1',
-    iconBackground: '#D5F0E3',
-    tint: '#4DB587',
+    background: '#E8F1FF',
+    iconBackground: '#D5E5FF',
+    tint: '#3D70B2',
   },
   {
     key: 'energy',
-    label: 'Medium',
+    label: 'Energy',
     icon: (color) => <MaterialCommunityIcons name="battery-medium" size={20} color={color} />,
-    background: '#FFF6E6',
-    iconBackground: '#FFE7C7',
-    tint: '#C9A650',
+    background: '#FFF7E0',
+    iconBackground: '#FBE8BC',
+    tint: '#C0943A',
   },
 ];
 
-const getDefaultSymptomCards = () => SYMPTOM_CARDS.map((card) => ({ ...card }));
+const getDefaultSymptomCards = () => TODAY_CARDS.map((card) => ({ ...card }));
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -158,13 +158,13 @@ const CycleHomeScreen = () => {
           .maybeSingle(),
         supabase
           .from('periods')
-          .select('start_date')
-          .eq('user_id', canonicalUserId)
+          .select('user_id, start_date, end_date')
+          .in('user_id', canonicalUserId === user.id ? [canonicalUserId] : [canonicalUserId, user.id])
           .order('start_date', { ascending: false })
-          .limit(1),
+          .limit(12),
         supabase
           .from('daily_logs')
-          .select('id')
+          .select('id, energy_level')
           .eq('user_id', user.id)
           .eq('date', todayISO)
           .maybeSingle(),
@@ -174,30 +174,31 @@ const CycleHomeScreen = () => {
       if (periodsError) throw periodsError;
       if (dailyLogResult.error) throw dailyLogResult.error;
 
-      let periodRows = periods;
-      if ((!periodRows || periodRows.length === 0) && canonicalUserId !== user.id) {
-        // Fallback to auth id in case older data was stored that way; migrate it forward
-        const { data: legacyPeriods } = await supabase
-          .from('periods')
-          .select('start_date, end_date')
-          .eq('user_id', user.id)
-          .order('start_date', { ascending: false })
-          .limit(12);
+      let periodRows = periods ?? [];
+      const canonicalRows = periodRows.filter((p) => p.user_id === canonicalUserId);
+      const legacyRows = periodRows.filter((p) => p.user_id === user.id);
 
-        periodRows = legacyPeriods;
+      if (!canonicalRows.length && legacyRows.length && canonicalUserId !== user.id) {
+        const migrated = legacyRows.map((p) => ({
+          user_id: canonicalUserId,
+          start_date: p.start_date,
+          end_date: p.end_date ?? null,
+        }));
+        try {
+          await supabase.from('periods').upsert(migrated, { onConflict: 'user_id,start_date' });
+          await updatePredictionsForUser(canonicalUserId);
+        } catch (migrateErr) {
+          console.log('CycleHome migrate legacy periods failed', migrateErr);
+        }
+      }
 
-        if (legacyPeriods?.length) {
-          const migrated = legacyPeriods.map((p) => ({
-            user_id: canonicalUserId,
-            start_date: p.start_date,
-            end_date: p.end_date ?? null,
-          }));
-          try {
-            await supabase.from('periods').upsert(migrated, { onConflict: 'user_id,start_date' });
-            await updatePredictionsForUser(canonicalUserId);
-          } catch (migrateErr) {
-            console.log('CycleHome migrate legacy periods failed', migrateErr);
-          }
+      periodRows = canonicalRows.length ? canonicalRows : legacyRows;
+
+      if (periodRows.length) {
+        try {
+          await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
+        } catch (predictionErr) {
+          console.log('CycleHome update predictions error', predictionErr);
         }
       }
 
@@ -221,27 +222,43 @@ const CycleHomeScreen = () => {
 
       const logData = dailyLogResult.data ?? null;
       if (logData?.id) {
-        const { data: symptomRes, error: symptomError } = await supabase
-          .from('user_symptoms')
-          .select('symptom: symptom_id (id, name)')
-          .eq('daily_log_id', logData.id);
+        const [symptomRes, moodRes] = await Promise.all([
+          supabase
+            .from('user_symptoms')
+            .select('symptom: symptom_id (name)')
+            .eq('daily_log_id', logData.id),
+          supabase
+            .from('user_moods')
+            .select('mood: mood_id (name)')
+            .eq('daily_log_id', logData.id),
+        ]);
 
-        if (symptomError) throw symptomError;
+        if (symptomRes.error) throw symptomRes.error;
+        if (moodRes.error) throw moodRes.error;
 
-        const names =
-          (symptomRes?.map((row) => row.symptom?.name).filter(Boolean) ?? []).sort((a, b) =>
+        const symptomNames =
+          (symptomRes.data?.map((row) => row.symptom?.name).filter(Boolean) ?? []).sort((a, b) =>
             a.localeCompare(b),
           );
+        const moodNames =
+          (moodRes.data?.map((row) => row.mood?.name).filter(Boolean) ?? []).sort((a, b) =>
+            a.localeCompare(b),
+          );
+        const updatedCards = getDefaultSymptomCards();
 
-        if (names.length) {
-          const updatedCards = SYMPTOM_CARDS.map((card, index) => ({
-            ...card,
-            label: names[index] ?? card.label,
-          }));
-          setSymptomCards(updatedCards);
-        } else {
-          setSymptomCards(getDefaultSymptomCards());
+        if (symptomNames.length) {
+          updatedCards[0].label = symptomNames.join(', ');
         }
+        if (moodNames.length) {
+          updatedCards[1].label = moodNames.join(', ');
+        }
+        if (typeof logData.energy_level === 'number') {
+          const bounded = Math.min(Math.max(logData.energy_level, 1), 5);
+          const percent = Math.round(((bounded - 1) / 4) * 100);
+          updatedCards[2].label = `${percent}%`;
+        }
+
+        setSymptomCards(updatedCards);
       } else {
         setSymptomCards(getDefaultSymptomCards());
       }
@@ -620,7 +637,13 @@ const CycleHomeScreen = () => {
                   <View style={[styles.symptomIcon, { backgroundColor: item.iconBackground }]}>
                     {item.icon(item.tint)}
                   </View>
-                  <Text style={[styles.symptomLabel, { color: item.tint }]}>{item.label}</Text>
+                  <Text
+                    style={[styles.symptomLabel, { color: item.tint }]}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {item.label}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -1004,6 +1027,7 @@ const styles = StyleSheet.create({
   symptomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 16,
   },

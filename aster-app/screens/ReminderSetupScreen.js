@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
 
 import { useOnboardingGuard } from '../utils/useOnboardingGuard';
+import { useOnboarding } from '../src/context/OnboardingContext';
 
 const COLORS = {
   background: '#EDE5F7',
@@ -33,12 +34,19 @@ const COPY = Object.freeze({
 export default function ReminderSetupScreen() {
   const navigation = useNavigation();
   const [requesting, setRequesting] = useState(false);
+  const { updateReminder } = useOnboarding();
 
   useOnboardingGuard(navigation);
 
   const proceedToReminder = useCallback(() => {
+    updateReminder({ checkinEnabled: true });
     navigation.navigate('Reminder');
-  }, [navigation]);
+  }, [navigation, updateReminder]);
+
+  const skipNotifications = useCallback(() => {
+    updateReminder({ checkinEnabled: false, time: null });
+    navigation.navigate('Reminder', { skipReminder: true });
+  }, [navigation, updateReminder]);
 
   const requestPermissions = useCallback(async () => {
     if (requesting) return;
@@ -96,7 +104,7 @@ export default function ReminderSetupScreen() {
           <TouchableOpacity
             style={styles.skipButton}
             activeOpacity={0.85}
-            onPress={proceedToReminder}
+            onPress={skipNotifications}
           >
             <Text style={styles.skipText}>Skip for now</Text>
           </TouchableOpacity>

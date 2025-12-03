@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
 import { useOnboardingGuard } from '../utils/useOnboardingGuard';
@@ -55,8 +55,11 @@ const to24HourString = (date) => {
 
 export default function ReminderScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   useOnboardingGuard(navigation);
   const { state, updateReminder, resetOnboarding } = useOnboarding();
+  const checkinEnabled = state.reminder.checkinEnabled !== false;
+  const hasAutoSavedRef = useRef(false);
 
   const [selectedTime, setSelectedTime] = useState(() => {
     const initial = state.reminder.time ? new Date(state.reminder.time) : new Date();
@@ -155,24 +158,35 @@ export default function ReminderScreen() {
         }))?.filter((entry) => entry.intensity !== null) ?? [];
 
       // Persist in one go
-      const reminderTime = to24HourString(selectedTime);
+      const reminderTime = checkinEnabled ? to24HourString(selectedTime) : null;
+
+      // Avoid email uniqueness explosions: if another user owns this email, skip setting it here
+      let emailForUpsert = resolvedEmail ?? existingUserRow?.email ?? null;
+      if (emailForUpsert) {
+        const { data: emailOwner } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', emailForUpsert)
+          .maybeSingle();
+        if (emailOwner?.id && emailOwner.id !== user.id) {
+          console.log('Skipping email upsert: email already used by another user');
+          emailForUpsert = existingUserRow?.email ?? null;
+        }
+      }
+
+      const userRow = {
+        id: user.id,
+        average_cycle_length: cycle.averageCycleLength,
+        average_period_length: cycle.averagePeriodLength,
+      };
+      if (emailForUpsert) {
+        userRow.email = emailForUpsert;
+      }
 
       const writes = [
-        resolvedEmail
-          ? supabase
-              .from('users')
-              .upsert(
-                [
-                  {
-                    id: user.id,
-                    email: resolvedEmail,
-                    average_cycle_length: cycle.averageCycleLength,
-                    average_period_length: cycle.averagePeriodLength,
-                  },
-                ],
-                { onConflict: 'id' },
-              )
-          : Promise.resolve({ error: null }),
+        supabase
+          .from('users')
+          .upsert([userRow], { onConflict: 'id' }),
         supabase
           .from('user_profiles')
           .upsert(
@@ -218,8 +232,8 @@ export default function ReminderScreen() {
               {
                 user_id: user.id,
                 reminder_time: reminderTime,
-                reminder_days: DAILY_DAYS,
-                checkin_enabled: true,
+                reminder_days: checkinEnabled ? DAILY_DAYS : [],
+                checkin_enabled: checkinEnabled,
               },
             ],
             { onConflict: 'user_id' },
@@ -230,7 +244,9 @@ export default function ReminderScreen() {
       const failed = results.find((r) => r?.error);
       if (failed?.error) throw failed.error;
 
-      const predictionResult = await updatePredictionsForUser(canonicalUserId);
+      const predictionResult = await updatePredictionsForUser(canonicalUserId, {
+        includeUserIds: [user.id],
+      });
 
       if (!predictionResult && lastPeriodYmd) {
         const lpDate = new Date(lastPeriodYmd);
@@ -259,6 +275,19 @@ export default function ReminderScreen() {
       setSaving(false);
     }
   }, [navigation, saving, selectedTime]);
+
+  // If user opted out of notifications, skip the time selection UI and persist immediately
+  useEffect(() => {
+    if (
+      route?.params?.skipReminder &&
+      checkinEnabled === false &&
+      !saving &&
+      !hasAutoSavedRef.current
+    ) {
+      hasAutoSavedRef.current = true;
+      persistReminder();
+    }
+  }, [checkinEnabled, persistReminder, route?.params?.skipReminder, saving]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
