@@ -69,6 +69,11 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
 
 export const saveCyclePrediction = async (userId, prediction) => {
   try {
+    // Ensure user row exists before saving prediction
+    await supabase
+      .from('users')
+      .upsert([{ id: userId }], { onConflict: 'id' });
+
     // Mark previous predictions as inactive
     await supabase
       .from('cycle_predictions')

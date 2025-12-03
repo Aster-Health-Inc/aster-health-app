@@ -174,16 +174,33 @@ export class ChatbotDataService {
 
   /**
    * Fetch user profile
+   * Falls back to 'users' table if user_profiles doesn't exist
    */
   static async fetchUserProfile(userId) {
+    // Try user_profiles table first
     const { data: profile, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
       .single();
 
-    if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" errors
-    return profile || null;
+    if (!error && profile) {
+      return profile;
+    }
+
+    // Fallback to users table if user_profiles doesn't exist or has no data
+    const { data: userProfile, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (userError && userError.code !== 'PGRST116') {
+      console.warn('Could not fetch user profile from either table:', userError);
+      return null;
+    }
+
+    return userProfile || null;
   }
 
   /**

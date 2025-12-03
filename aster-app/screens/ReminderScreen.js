@@ -175,7 +175,7 @@ export default function ReminderScreen() {
       }
 
       const userRow = {
-        id: user.id,
+        id: canonicalUserId,
         average_cycle_length: cycle.averageCycleLength,
         average_period_length: cycle.averagePeriodLength,
       };

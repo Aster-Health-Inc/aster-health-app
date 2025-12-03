@@ -37,8 +37,10 @@ class IdentifierTokenizer {
   detokenize(text: string): string {
     let result = text
     // Replace all tokens with original values
+    // Escape special regex characters in token before creating RegExp
     this.reverseMap.forEach((originalValue, token) => {
-      result = result.replace(new RegExp(token, 'g'), originalValue)
+      const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      result = result.replace(new RegExp(escapedToken, 'g'), originalValue)
     })
     return result
   }
@@ -286,21 +288,22 @@ CRITICAL SAFETY RULES (MUST FOLLOW):
 - NEVER provide medical diagnoses or claim to diagnose conditions
 - NEVER recommend starting, stopping, or changing medications
 - NEVER give advice that could replace a doctor's consultation
-- ALWAYS recommend consulting a healthcare provider for medical concerns
-- State "I'm not a medical professional" when discussing health issues
-- For serious symptoms (severe pain, heavy bleeding, etc.), ALWAYS recommend seeing a doctor
+- For serious or concerning symptoms (severe pain, heavy bleeding, sudden changes, etc.), recommend consulting a healthcare provider
 - Do not make definitive claims about medical conditions
+- You can discuss general health information without repeating disclaimers in every message
+- Only state "I'm not a medical professional" when the user specifically asks for medical advice or diagnosis
 
 RESPONSE STYLE:
-- Keep responses SHORT (3-4 sentences max)
-- Address the user by their name when appropriate (use the name provided in context)
-- Start with a warm greeting like "Great question!" or "Sure!"
+- Keep responses SHORT but complete (aim for 3-5 sentences, adjust as needed for the question)
+- Address the user by their name token when appropriate (e.g., if context shows "NAME_TOKEN_abc123", use exactly that in your response - it will be replaced with their real name)
+- Start with a warm greeting like "Great question, NAME_TOKEN!" or "Sure!" when appropriate
 - Answer the question directly first
 - Use **bold** for important numbers and key information
 - Use bullet points (•) when listing multiple items
-- End with ONE helpful follow-up question or suggestion
+- End with ONE helpful follow-up question or suggestion when appropriate
 - Use emojis sparingly (max 1-2 per message)
 - Be conversational and friendly, not clinical
+- Avoid repeating safety disclaimers unless specifically relevant to the question
 
 ${contextString}`
 
@@ -333,7 +336,7 @@ ${contextString}`
           temperature: 0.7,
           topK: 40,
           topP: 0.95,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         },
         safetySettings: [
           {
@@ -385,12 +388,19 @@ ${contextString}`
       )
     }
 
+    // Handle incomplete responses
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn('Response truncated due to MAX_TOKENS limit')
+    }
+
     const responseText =
       candidate?.content?.parts?.[0]?.text ||
       "I apologize, but I couldn't generate a response. Please try again."
 
     // 9. DETOKENIZE RESPONSE - Replace tokens with real names
+    console.log('Response before detokenization:', responseText.substring(0, 150))
     const detokenizedResponse = tokenizer.detokenize(responseText)
+    console.log('Response after detokenization:', detokenizedResponse.substring(0, 150))
 
     // 10. CLEAR TOKENIZER (security - don't keep mappings)
     tokenizer.clear()
