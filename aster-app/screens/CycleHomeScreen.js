@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Modal,
+  Pressable,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -86,6 +89,13 @@ const TODAY_CARDS = [
 
 const getDefaultSymptomCards = () => TODAY_CARDS.map((card) => ({ ...card }));
 
+const FLOW_OPTIONS = [
+  { key: 'none', label: 'None', drops: 0, color: '#E8D7E8' },
+  { key: 'light', label: 'Light', drops: 1, color: '#FDD7DF' },
+  { key: 'medium', label: 'Medium', drops: 2, color: '#F8A8BE' },
+  { key: 'heavy', label: 'Heavy', drops: 3, color: '#FB6887' },
+];
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const chunk = (array, size) => {
@@ -94,6 +104,21 @@ const chunk = (array, size) => {
     result.push(array.slice(i, i + size));
   }
   return result;
+};
+
+const toYMD = (date) => {
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const addDays = (date, days) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  d.setHours(0, 0, 0, 0);
+  return d;
 };
 
 function addMonths(date, value) {
@@ -123,6 +148,12 @@ const CycleHomeScreen = () => {
     return initial;
   });
   const [calendarExpanded, setCalendarExpanded] = useState(false);
+  const [dayModalVisible, setDayModalVisible] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [periodDay, setPeriodDay] = useState(1);
+  const [flowLevel, setFlowLevel] = useState('none'); // none | light | medium | heavy
+  const [savingDay, setSavingDay] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -377,6 +408,56 @@ const CycleHomeScreen = () => {
     navigation.navigate('SymptomLog');
   };
 
+  const handleDayPress = (date) => {
+    setSelectedDay(date);
+    setPeriodDay(1);
+    setFlowLevel('heavy');
+    setDayModalVisible(true);
+  };
+
+  const handleSaveDay = async () => {
+    if (!selectedDay) return;
+    setSavingDay(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Sign in required', 'Please sign in to log your period day.');
+        return;
+      }
+
+      const canonicalUserId = await getCanonicalUserId(user);
+      const startDate = addDays(selectedDay, -(periodDay - 1));
+      const endDate = addDays(startDate, Math.max(periodDay, 4)); // basic default duration
+
+      await supabase
+        .from('periods')
+        .upsert(
+          [{
+            user_id: canonicalUserId,
+            start_date: toYMD(startDate),
+            end_date: toYMD(endDate),
+          }],
+          { onConflict: 'user_id,start_date' },
+        );
+
+      try {
+        await updatePredictionsForUser(canonicalUserId);
+      } catch (err) {
+        console.log('Prediction refresh failed', err);
+      }
+
+      setDayModalVisible(false);
+      setToast('Period day saved');
+      setTimeout(() => setToast(null), 1800);
+      loadCycleData();
+    } catch (err) {
+      console.error('Save period day failed', err);
+      Alert.alert('Save failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingDay(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -401,7 +482,22 @@ const CycleHomeScreen = () => {
               <Ionicons name="person-outline" size={20} color="#4B117B" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Cycle</Text>
-            <View style={{ width: 32 }} />
+            <TouchableOpacity
+              style={styles.avatarButton}
+              activeOpacity={0.85}
+              onPress={() =>
+                navigation.navigate('PastAnalytics', {
+                  mode: 'cycle',
+                  cycleContext: {
+                    lastPeriodDate: cycleData?.lastPeriodDate,
+                    cycleLength: cycleData?.cycleLength,
+                    periodLength: cycleData?.periodLength,
+                  },
+                })
+              }
+            >
+              <Ionicons name="calendar-outline" size={20} color="#4B117B" />
+            </TouchableOpacity>
           </View>
 
           {calendarExpanded ? (
@@ -491,9 +587,14 @@ const CycleHomeScreen = () => {
                         }
 
                         return (
-                          <View key={day.key} style={dayStyles}>
+                          <TouchableOpacity
+                            key={day.key}
+                            style={dayStyles}
+                            activeOpacity={0.8}
+                            onPress={() => handleDayPress(day.date)}
+                          >
                             <Text style={textStyles}>{day.label}</Text>
-                          </View>
+                          </TouchableOpacity>
                         );
                       })}
                     </View>
@@ -566,9 +667,14 @@ const CycleHomeScreen = () => {
                       }
 
                       return (
-                        <View key={`compact-${day.key}`} style={dayStyles}>
+                        <TouchableOpacity
+                          key={`compact-${day.key}`}
+                          style={dayStyles}
+                          activeOpacity={0.8}
+                          onPress={() => handleDayPress(day.date)}
+                        >
                           <Text style={textStyles}>{day.label}</Text>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -658,6 +764,113 @@ const CycleHomeScreen = () => {
           </View>
         </ScrollView>
       </View>
+
+      {toast && (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{toast}</Text>
+        </View>
+      )}
+
+      <Modal
+        visible={dayModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDayModalVisible(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setDayModalVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Log period day</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedDay
+                    ? selectedDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : ''}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setDayModalVisible(false)}
+                style={styles.modalClose}
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={18} color="#4B117B" />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalLabel}>Period day</Text>
+              <View style={styles.stepperRow}>
+                <TouchableOpacity
+                  onPress={() => setPeriodDay((v) => Math.max(1, v - 1))}
+                  style={styles.stepperBtn}
+                >
+                  <Ionicons name="remove" size={18} color="#4B117B" />
+                </TouchableOpacity>
+                <Text style={styles.stepperValue}>{periodDay}</Text>
+                <TouchableOpacity
+                  onPress={() => setPeriodDay((v) => Math.min(10, v + 1))}
+                  style={styles.stepperBtn}
+                >
+                  <Ionicons name="add" size={18} color="#4B117B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.modalSection}>
+              <Text style={styles.modalLabel}>Flow</Text>
+              <View style={styles.flowRow}>
+                {FLOW_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[
+                      styles.flowPill,
+                      flowLevel === opt.key && { borderColor: opt.color, backgroundColor: '#FFF5F7' },
+                    ]}
+                    activeOpacity={0.85}
+                    onPress={() => setFlowLevel(opt.key)}
+                  >
+                    <View style={styles.flowIconRow}>
+                      {Array.from({ length: Math.max(1, opt.drops) }).map((_, idx) => (
+                        <Ionicons
+                          key={`${opt.key}-${idx}`}
+                          name="water"
+                          size={16}
+                          color={flowLevel === opt.key ? '#FB6887' : '#D4C4D4'}
+                          style={{ marginLeft: idx === 0 ? 0 : 2 }}
+                        />
+                      ))}
+                      {opt.drops === 0 && (
+                        <Ionicons name="water-outline" size={16} color="#D4C4D4" />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.flowLabel,
+                        flowLevel === opt.key && { color: '#4B117B', fontWeight: '700' },
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, savingDay && { opacity: 0.6 }]}
+              disabled={savingDay}
+              onPress={handleSaveDay}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryBtnText}>{savingDay ? 'Saving...' : 'Save'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.helperText}>
+              We backfill earlier days of this period based on the chosen day to keep predictions in sync.
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <BottomTaskbar activeKey="Cycle" />
     </SafeAreaView>
   );
@@ -1070,5 +1283,133 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#3A1F78',
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 100,
+    left: 24,
+    right: 24,
+    backgroundColor: '#3A1F78',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    shadowColor: '#3A1F78',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    padding: 18,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    gap: 14,
+    shadowColor: '#2F1E57',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3A1F78',
+  },
+  modalSubtitle: {
+    color: '#6A5A9B',
+    marginTop: 4,
+  },
+  modalClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F0EAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSection: {
+    gap: 8,
+  },
+  modalLabel: {
+    fontWeight: '700',
+    color: '#3A1F78',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D6C8F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F3FF',
+  },
+  stepperValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#3A1F78',
+    minWidth: 36,
+    textAlign: 'center',
+  },
+  flowRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  flowPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E6DFF1',
+    backgroundColor: '#FFFFFF',
+    gap: 6,
+  },
+  flowIconRow: {
+    flexDirection: 'row',
+  },
+  flowLabel: {
+    color: '#7A708C',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  primaryBtn: {
+    backgroundColor: '#4B117B',
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  helperText: {
+    color: '#6E6483',
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
   },
 });

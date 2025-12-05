@@ -11,11 +11,16 @@ import {
   Modal,
   Pressable,
   Animated,
+  TextInput,
+  Alert,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, Path, Defs, ClipPath, Rect, G } from 'react-native-svg';
+import Svg, { Circle, Path, Defs, ClipPath, Rect, G, LinearGradient, Stop } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
+import { ensureUserRecord, getCanonicalUserId } from '../utils/authUser';
 import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import BottomTaskbar from '../components/BottomTaskbar';
@@ -34,7 +39,15 @@ const CAL_ICON_PURPLE = '#6B7DF6';
 const ML_PER_OZ = 29.5735;
 const DATE_FORMAT_OPTIONS = { weekday: 'short', month: 'short', day: 'numeric' };
 
-const ProgressRing = ({ size = 140, strokeWidth = 10, progress, color, trackColor, children }) => {
+const ProgressRing = ({
+  size = 140,
+  strokeWidth = 10,
+  progress,
+  color,
+  trackColor,
+  gradient,
+  children,
+}) => {
   const clamped = Math.max(0, Math.min(progress, 1));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -43,6 +56,14 @@ const ProgressRing = ({ size = 140, strokeWidth = 10, progress, color, trackColo
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
       <Svg width={size} height={size}>
+        {gradient ? (
+          <Defs>
+            <LinearGradient id={gradient.id} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor={gradient.from} />
+              <Stop offset="100%" stopColor={gradient.to} />
+            </LinearGradient>
+          </Defs>
+        ) : null}
         <Circle
           stroke={trackColor}
           fill="none"
@@ -52,7 +73,7 @@ const ProgressRing = ({ size = 140, strokeWidth = 10, progress, color, trackColo
           strokeWidth={strokeWidth}
         />
         <Circle
-          stroke={color}
+          stroke={gradient ? `url(#${gradient.id})` : color}
           fill="none"
           cx={size / 2}
           cy={size / 2}
@@ -101,7 +122,10 @@ const MacroBar = ({ label, value, goal, color }) => {
     <View style={styles.macroRow}>
       <View style={styles.macroHeaderRow}>
         <Text style={styles.macroLabel}>{label}</Text>
-        <Text style={styles.macroGoal}>{`${goal}g`}</Text>
+        <View style={styles.macroGoalWrap}>
+          <GoalIcon size={12} />
+          <Text style={styles.macroGoal}>{`${goal}g`}</Text>
+        </View>
       </View>
       <View style={styles.macroBarTrack}>
         <View style={[styles.macroBarFill, { width: `${progress * 100}%`, backgroundColor: color }]} />
@@ -121,13 +145,32 @@ const FoodLogScreen = () => {
   const [lastWaterLog, setLastWaterLog] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mealPickerVisible, setMealPickerVisible] = useState(false);
+  const [waterModalVisible, setWaterModalVisible] = useState(false);
+  const [waterInput, setWaterInput] = useState('');
+  const [waterUnit, setWaterUnit] = useState('oz');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [draftGoals, setDraftGoals] = useState({
+    calories: '',
+    carbs: '',
+    protein: '',
+    fat: '',
+    water: '',
+  });
+  const [inlineError, setInlineError] = useState(null);
   const slideAnim = useMemo(() => new Animated.Value(300), []);
 
-  const dateKey = useMemo(() => selectedDate.toISOString().slice(0, 10), [selectedDate]);
+  const dateKey = useMemo(() => {
+    const d = new Date(selectedDate);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, [selectedDate]);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setInlineError(null);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setDaily(null);
@@ -135,42 +178,40 @@ const FoodLogScreen = () => {
         return;
       }
 
+      await ensureUserRecord(user);
+      const canonicalUserId = await getCanonicalUserId(user);
+
       const [dailyData, goalData] = await Promise.all([
-        fetchUserDailyLogs(user.id, dateKey),
-        getUserNutritionGoals(supabase, user.id),
+        fetchUserDailyLogs(canonicalUserId, dateKey),
+        getUserNutritionGoals(supabase, canonicalUserId),
       ]);
 
-      setDaily(dailyData);
-      setGoals(goalData);
-
-      let { data: logs, error: waterErr } = await supabase
+      // Fetch all water logs for the day to compute total + last log time
+      const { data: logs, error: waterFetchError } = await supabase
         .from('water_logs')
-        .select('water_intake_ml, amount_oz, created_at')
-        .eq('uid', user.id)
+        .select('water_intake_ml, created_at')
+        .eq('user_id', canonicalUserId)
         .eq('log_date', dateKey)
-        .order('created_at', { ascending: false })
-        .limit(1);
+        .order('created_at', { ascending: false });
 
-      if (waterErr || !logs || logs.length === 0) {
-        const fallback = await supabase
-          .from('water_logs')
-          .select('water_intake_ml, amount_oz, created_at')
-          .eq('user_id', user.id)
-          .eq('log_date', dateKey)
-          .order('created_at', { ascending: false })
-          .limit(1);
-        logs = fallback.data;
+      if (waterFetchError) {
+        setInlineError('Water data could not be refreshed. Pull to retry.');
       }
 
       const latest = logs?.[0];
-      if (latest) {
-        const oz = latest.amount_oz || (latest.water_intake_ml ? latest.water_intake_ml / ML_PER_OZ : 0);
-        setLastWaterLog({ ounces: oz, time: latest.created_at });
-      } else {
-        setLastWaterLog(null);
-      }
+      const totalMl = (logs || []).reduce((sum, row) => sum + (row.water_intake_ml || 0), 0);
+      const totalOz = totalMl ? totalMl / ML_PER_OZ : 0;
+      const mergedDaily = {
+        ...dailyData,
+        water: dailyData?.water ?? totalOz,
+      };
+
+      setDaily(mergedDaily);
+      setGoals(goalData);
+      setLastWaterLog(latest ? { ounces: (latest.water_intake_ml || 0) / ML_PER_OZ, time: latest.created_at } : null);
     } catch (err) {
       console.error('Error loading food log data:', err);
+      setInlineError('We could not refresh your nutrition data. Please pull to refresh or try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -189,6 +230,7 @@ const FoodLogScreen = () => {
 
   useEffect(() => {
     if (route?.params?.refreshData || route?.params?.timestamp) {
+      console.log('[FoodLog] Refresh triggered via navigation params');
       loadData();
     }
   }, [route?.params?.refreshData, route?.params?.timestamp, loadData]);
@@ -271,6 +313,81 @@ const FoodLogScreen = () => {
     [selectedDate]
   );
 
+  const handleLogWater = () => setWaterModalVisible(true);
+
+  const saveWaterLog = async () => {
+    const amount = parseFloat(waterInput);
+    if (Number.isNaN(amount) || amount <= 0) {
+      Alert.alert('Invalid amount', 'Please enter a valid water amount.');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const canonicalUserId = await getCanonicalUserId(user);
+
+      const amountOz = waterUnit === 'oz' ? amount : amount / ML_PER_OZ;
+      const amountMl = waterUnit === 'ml' ? amount : amount * ML_PER_OZ;
+      const nowIso = new Date().toISOString();
+
+      await supabase.from('water_logs').insert({
+        user_id: canonicalUserId,
+        log_date: dateKey,
+        water_intake_ml: amountMl,
+        created_at: nowIso,
+      });
+
+      setLastWaterLog({ ounces: amountOz, time: nowIso });
+      setDaily((prev) => ({
+        ...prev,
+        water: (prev?.water || 0) + amountOz,
+      }));
+      setWaterModalVisible(false);
+      setWaterInput('');
+      // Refresh after insert; keep UI optimistic even if RPC water is missing
+      loadData();
+    } catch (err) {
+      console.error('Error logging water:', err);
+      Alert.alert('Error', 'Could not save water log. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    if (goals) {
+      setDraftGoals({
+        calories: String(goals?.calories || ''),
+        carbs: String(goals?.carbs || ''),
+        protein: String(goals?.protein || ''),
+        fat: String(goals?.fat || ''),
+        water: String(goals?.water || ''),
+      });
+    }
+  }, [goals]);
+
+  const openEditGoals = () => {
+    setDraftGoals({
+      calories: String(goals?.calories || ''),
+      carbs: String(goals?.carbs || ''),
+      protein: String(goals?.protein || ''),
+      fat: String(goals?.fat || ''),
+      water: String(goals?.water || ''),
+    });
+    setEditModalVisible(true);
+  };
+
+  const saveEditGoals = () => {
+    const updated = {
+      calories: Number(draftGoals.calories) || 0,
+      carbs: Number(draftGoals.carbs) || 0,
+      protein: Number(draftGoals.protein) || 0,
+      fat: Number(draftGoals.fat) || 0,
+      water: Number(draftGoals.water) || 0,
+    };
+    setGoals(updated);
+    setEditModalVisible(false);
+  };
+
   const openMealPicker = () => {
     slideAnim.setValue(300);
     setMealPickerVisible(true);
@@ -293,14 +410,14 @@ const FoodLogScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.iconCircle}>
+        <TouchableOpacity
+          style={styles.iconCircle}
+          onPress={() => navigation.navigate('Settings')}
+        >
           <Ionicons name="person-outline" size={20} color={ACCENT_PURPLE} />
         </TouchableOpacity>
         <View style={styles.iconGroup}>
-          <TouchableOpacity style={styles.iconCircle}>
-            <Ionicons name="pie-chart-outline" size={18} color={ACCENT_PURPLE} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconCircle}>
+          <TouchableOpacity style={styles.iconCircle} onPress={openEditGoals}>
             <Ionicons name="create-outline" size={18} color={ACCENT_PURPLE} />
           </TouchableOpacity>
         </View>
@@ -323,6 +440,15 @@ const FoodLogScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={TEXT_PRIMARY} />}
       >
+        {inlineError && (
+          <View style={styles.noticeBanner}>
+            <Ionicons name="warning-outline" size={16} color="#8B1A1A" />
+            <Text style={styles.noticeText}>{inlineError}</Text>
+            <TouchableOpacity onPress={onRefresh} style={styles.noticeAction}>
+              <Text style={styles.noticeActionText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {loading ? (
           <View style={styles.loaderWrap}>
             <ActivityIndicator size="large" color={ACCENT_PURPLE} />
@@ -333,7 +459,7 @@ const FoodLogScreen = () => {
               <View style={styles.cardHeaderRow}>
                 <Text style={styles.cardTitle}>Calories</Text>
                 <View style={styles.goalChip}>
-                  <Ionicons name="flag" size={14} color={ACCENT_PURPLE} />
+                  <GoalIcon size={14} />
                   <Text style={styles.goalChipText}>{`${calorieGoal || '--'} goal`}</Text>
                 </View>
               </View>
@@ -351,9 +477,10 @@ const FoodLogScreen = () => {
                 <View style={styles.calorieRingWrap}>
                   <ProgressRing
                     size={188}
-                    strokeWidth={14}
+                    strokeWidth={10}
                     progress={calorieProgress}
                     color={ACCENT_PURPLE}
+                    gradient={{ id: 'calRingGradient', from: '#4B117B', to: '#7E5BAC' }}
                     trackColor="#F3F3F7"
                   >
                     <Text style={styles.calorieNumber}>{totalCalories.toLocaleString()}</Text>
@@ -428,7 +555,7 @@ const FoodLogScreen = () => {
               <TouchableOpacity
                 style={styles.logButton}
                 activeOpacity={0.85}
-                onPress={() => navigation.navigate('FoodLog')}
+                onPress={handleLogWater}
               >
                 <Text style={styles.logButtonText}>+ Log Water</Text>
               </TouchableOpacity>
@@ -437,6 +564,115 @@ const FoodLogScreen = () => {
         )}
       </ScrollView>
       <BottomTaskbar activeKey="Food" />
+
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setEditModalVisible(false)}>
+            <Pressable style={styles.editModalCard} onPress={(e) => e.stopPropagation()}>
+              <ScrollView
+                contentContainerStyle={styles.editModalContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalTitle}>Edit Targets</Text>
+                {[
+                  { key: 'calories', label: 'Calories (kcal)' },
+                  { key: 'carbs', label: 'Carbs (g)' },
+                  { key: 'protein', label: 'Protein (g)' },
+                  { key: 'fat', label: 'Fat (g)' },
+                  { key: 'water', label: 'Water (fl oz)' },
+                ].map((item) => (
+                  <View key={item.key} style={styles.modalInputGroup}>
+                    <Text style={styles.modalLabel}>{item.label}</Text>
+                    <TextInput
+                      value={draftGoals[item.key]}
+                      onChangeText={(text) =>
+                        setDraftGoals((prev) => ({ ...prev, [item.key]: text.replace(/[^0-9.]/g, '') }))
+                      }
+                      keyboardType="numeric"
+                      placeholder={`Enter ${item.label.toLowerCase()}`}
+                      style={styles.modalInput}
+                      placeholderTextColor={TEXT_MUTED}
+                      returnKeyType="done"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.modalActions}>
+                <Pressable style={styles.modalGhostButton} onPress={() => setEditModalVisible(false)}>
+                  <Text style={styles.modalGhostText}>Cancel</Text>
+                </Pressable>
+                <Pressable style={styles.modalPrimaryButton} onPress={saveEditGoals}>
+                  <Text style={styles.modalPrimaryText}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={waterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWaterModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setWaterModalVisible(false)}>
+            <Pressable style={styles.waterModalCard} onPress={(e) => e.stopPropagation()}>
+              <Text style={styles.modalTitle}>Log Water</Text>
+
+              <View style={styles.unitToggleRow}>
+                {['oz', 'ml'].map((unit) => (
+                  <Pressable
+                    key={unit}
+                    onPress={() => setWaterUnit(unit)}
+                    style={[
+                      styles.unitChip,
+                      waterUnit === unit && styles.unitChipActive,
+                    ]}
+                  >
+                    <Text style={[styles.unitChipText, waterUnit === unit && styles.unitChipTextActive]}>
+                      {unit === 'oz' ? 'fl oz' : 'ml'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <TextInput
+                placeholder={`Enter water in ${waterUnit === 'oz' ? 'fl oz' : 'ml'}`}
+                keyboardType="numeric"
+                value={waterInput}
+                onChangeText={setWaterInput}
+                style={styles.modalInput}
+                placeholderTextColor="#8A819F"
+              />
+
+              <View style={styles.modalActions}>
+                <Pressable onPress={() => setWaterModalVisible(false)} style={styles.modalGhostButton}>
+                  <Text style={styles.modalGhostText}>Cancel</Text>
+                </Pressable>
+                <Pressable onPress={saveWaterLog} style={styles.modalPrimaryButton}>
+                  <Text style={styles.modalPrimaryText}>Save</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <Modal
         visible={mealPickerVisible}
@@ -646,6 +882,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  macroGoalWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   macroLabel: {
     fontSize: 13,
     color: '#5A5A5A',
@@ -740,6 +981,35 @@ const styles = StyleSheet.create({
     marginTop: 80,
     alignItems: 'center',
   },
+  noticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FCECEC',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#F5B7B1',
+  },
+  noticeText: {
+    color: '#8B1A1A',
+    fontSize: 13,
+    flexShrink: 1,
+  },
+  noticeAction: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#F3D6D6',
+    borderRadius: 12,
+    marginLeft: 'auto',
+  },
+  noticeActionText: {
+    color: '#8B1A1A',
+    fontWeight: '700',
+    fontSize: 12,
+  },
   goalChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -754,10 +1024,111 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: ACCENT_PURPLE,
   },
+  waterModalCard: {
+    backgroundColor: CARD,
+    marginHorizontal: 16,
+    marginBottom: 32,
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#4B117B',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  unitToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  unitChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F1E9FF',
+    alignItems: 'center',
+  },
+  unitChipActive: {
+    backgroundColor: '#4B117B',
+  },
+  unitChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B117B',
+  },
+  unitChipTextActive: {
+    color: '#FFFFFF',
+  },
+  modalInput: {
+    backgroundColor: '#F7F4FF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: TEXT_PRIMARY,
+    borderWidth: 1,
+    borderColor: '#E3D8F5',
+    marginBottom: 12,
+  },
+  editModalContent: {
+    paddingBottom: 12,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_PRIMARY,
+    marginBottom: 12,
+  },
+  editModalCard: {
+    backgroundColor: CARD,
+    marginHorizontal: 16,
+    marginBottom: 32,
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+    shadowColor: '#4B117B',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  modalInputGroup: {
+    gap: 6,
+  },
+  modalLabel: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalGhostButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#F1EDF8',
+  },
+  modalGhostText: {
+    color: TEXT_PRIMARY,
+    fontWeight: '600',
+  },
+  modalPrimaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    backgroundColor: ACCENT_PURPLE,
+  },
+  modalPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.18)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   sheetWrapper: {
     width: '100%',

@@ -196,7 +196,7 @@ const NutritionSummaryScreen = () => {
           <Ionicons name="close" size={22} color="#4A4A4A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Nutrition Information</Text>
-        <View style={styles.circleBtn} />
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -227,6 +227,7 @@ const NutritionSummaryScreen = () => {
             </View>
           </View>
         </View>
+
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Macronutrients</Text>

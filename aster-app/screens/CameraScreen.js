@@ -19,6 +19,7 @@ const CameraScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const selectedDate = route.params?.selectedDate || new Date();
+  const initialMealType = route.params?.mealType;
 
   const [hasPermission, setHasPermission] = useState(null);
   const [showMealSelector, setShowMealSelector] = useState(false);
@@ -119,6 +120,13 @@ const CameraScreen = () => {
   };
 
   const handleManualEntry = () => {
+    if (initialMealType) {
+      navigation.navigate('AddFoodScreen', {
+        mealType: initialMealType,
+        selectedDate,
+      });
+      return;
+    }
     setShowMealSelector(true);
   };
 

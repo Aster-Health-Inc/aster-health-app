@@ -11,12 +11,13 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect, Stop, SvgXml } from 'react-native-svg';
 
 import { supabase } from '../lib/supabase';
 import BottomTaskbar from '../components/BottomTaskbar';
 import ChatbotModal from '../components/ChatBotModal';
 import { useFeatureFlags } from '../lib/FeatureFlag';
+import { ASTER_FLOWER_SVG } from '../assets/logoSvg';
 
 const BACKGROUND = '#EEE7FF';
 const CARD_RADIUS = 26;
@@ -326,8 +327,8 @@ const HomeScreen = () => {
   const formattedDate = useMemo(
     () =>
       today.toLocaleDateString('en-US', {
-        weekday: 'long',
-        month: 'long',
+        weekday: 'short',
+        month: 'short',
         day: 'numeric',
       }),
     [today],
@@ -376,6 +377,9 @@ const HomeScreen = () => {
             >
               <Ionicons name="person-outline" size={20} color="#3F2560" />
             </TouchableOpacity>
+            <View style={styles.logoInline}>
+              <SvgXml xml={ASTER_FLOWER_SVG} width={28} height={28} />
+            </View>
             <TouchableOpacity
               style={styles.iconButton}
               activeOpacity={0.85}
@@ -597,6 +601,12 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
+  },
+  logoInline: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   datePill: {
     alignSelf: 'center',

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
 } from 'react-native';
 import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -18,6 +19,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SvgXml } from 'react-native-svg';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord } from '../utils/authUser';
 import { error as logError, info as logInfo } from '../utils/CrashLogger';
@@ -27,7 +29,10 @@ let LinearGradientComponent;
 try {
   ({ LinearGradient: LinearGradientComponent } = require('expo-linear-gradient'));
 } catch (err) {
-  console.warn('expo-linear-gradient module unavailable, using solid background fallback.', err?.message || err);
+  console.warn(
+    'expo-linear-gradient module unavailable, using solid background fallback.',
+    err?.message || err
+  );
   LinearGradientComponent = ({ style, children, colors }) => (
     <View style={[{ backgroundColor: colors?.[0] || '#E9E4FF' }, style]}>{children}</View>
   );
@@ -82,10 +87,17 @@ const oauthProviders = [
 const getRedirectUri = () => {
   try {
     if (Platform.OS === 'web') {
-      const uri = Linking.createURL('auth/callback');
+      const uri = makeRedirectUri({ path: 'auth/callback' });
       return uri || FALLBACK_REDIRECT_URI;
     }
 
+    const isExpoGo = Constants.appOwnership === 'expo';
+    if (isExpoGo) {
+      // Use Expo proxy URL (matches Supabase allowed list)
+      return makeRedirectUri({ useProxy: true, path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
+    }
+
+    // Bare/standalone: use custom scheme
     const authSessionUri = makeRedirectUri({
       scheme: 'aster',
       path: 'auth/callback',
@@ -132,7 +144,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const navigation = useNavigation();
-  const [mode, setMode] = useState(initialMode === Mode.SIGN_IN ? Mode.SIGN_IN : Mode.SIGN_UP);
+  const [mode, setMode] = useState(
+    initialMode === Mode.SIGN_IN ? Mode.SIGN_IN : Mode.SIGN_UP
+  );
   const [stage, setStage] = useState(Stage.METHODS);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -140,6 +154,9 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(null);
+  const [anonModalVisible, setAnonModalVisible] = useState(false);
+  const [anonUsername, setAnonUsername] = useState('');
+  const [anonPassword, setAnonPassword] = useState('');
 
   const copy = modeCopy[mode];
   const redirectUri = useMemo(() => getRedirectUri(), []);
@@ -168,7 +185,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     }
   }, [stage]);
 
-  const emailValid = useMemo(() => emailRegex.test(email.trim().toLowerCase()), [email]);
+  const emailValid = useMemo(
+    () => emailRegex.test(email.trim().toLowerCase()),
+    [email]
+  );
   const passwordValid = password.trim().length >= 8;
 
   const showEmailError = stage !== Stage.METHODS && emailTouched && !emailValid;
@@ -182,68 +202,141 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
     logInfo('[OAuth] Starting', provider, 'redirect:', redirectUri);
+
     try {
+      // Web: let Supabase handle the PKCE callback in the URL
       if (Platform.OS === 'web') {
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
-          options: { redirectTo: redirectUri },
+          options: {
+            redirectTo: redirectUri,
+            queryParams: provider === 'apple' ? {} : { prompt: 'select_account' },
+          },
         });
+
         if (error) throw error;
-        logInfo('[OAuth] Web signInWithOAuth response', provider, 'url present:', Boolean(data?.url));
+
+        logInfo(
+          '[OAuth] Web signInWithOAuth response',
+          provider,
+          'url present:',
+          Boolean(data?.url)
+        );
+
         if (data?.url) {
           await Linking.openURL(data.url);
         }
+
         return;
       }
 
+      // Native: we handle the browser session manually
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: redirectUri,
           skipBrowserRedirect: true,
+          queryParams: provider === 'apple' ? {} : { prompt: 'select_account' },
         },
       });
 
       if (error) throw error;
-      logInfo('[OAuth] Native signInWithOAuth response', provider, 'url present:', Boolean(data?.url));
+
+      logInfo(
+        '[OAuth] Native signInWithOAuth response',
+        provider,
+        'url present:',
+        Boolean(data?.url)
+      );
+
       if (!data?.url) {
         throw new Error('Unable to open the authentication page.');
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
-      logInfo('[OAuth] WebBrowser result', provider, 'type:', result?.type);
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUri
+      );
+
+      logInfo(
+        '[OAuth] WebBrowser result',
+        provider,
+        'type:',
+        result?.type,
+        'url:',
+        result?.url
+      );
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
         throw new Error('Authentication cancelled');
       }
 
       if (result.type === 'locked') {
-        throw new Error('Authentication failed to start. Please unlock your device and try again.');
+        throw new Error(
+          'Authentication failed to start. Please unlock your device and try again.'
+        );
       }
 
       if (result.type === 'success' && result.url) {
         const parsed = Linking.parse(result.url);
         const queryParams = parsed?.queryParams ?? {};
-        const authCode = queryParams.code ?? queryParams.auth_code ?? null;
+        const rawCode = queryParams.code ?? queryParams.auth_code ?? null;
+        const authCode =
+          rawCode != null
+            ? String(Array.isArray(rawCode) ? rawCode[0] : rawCode)
+            : null;
+
+        logInfo('[OAuth] Parsed auth callback', provider, {
+          hasCode: Boolean(authCode),
+          queryParams,
+        });
 
         if (!authCode || typeof authCode !== 'string') {
-          throw new Error('Authentication response missing authorization code.');
+          throw new Error(
+            'Authentication response missing authorization code.'
+          );
         }
 
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession({
-          provider,
-          code: authCode,
-          redirectTo: redirectUri,
-        });
+        // IMPORTANT: pass only the string, not an object
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(authCode);
         if (exchangeError) throw exchangeError;
+
         logInfo('[OAuth] Session exchange complete', provider);
+
+        const { data: userResult, error: userError } =
+          await supabase.auth.getUser();
+        if (userError) throw userError;
+
+        const user = userResult?.user;
+        if (!user) {
+          throw new Error(
+            'Unable to fetch authenticated user after OAuth.'
+          );
+        }
+
+        await ensureUserRecord(user);
+        logInfo(
+          '[OAuth] Completed user session',
+          provider,
+          'userId:',
+          user.id
+        );
+
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'OnboardingRouter' }],
+        });
+
         return;
       }
 
       throw new Error('Authentication did not complete. Please try again.');
     } catch (err) {
-      const message = err?.message ?? 'Something went wrong while trying to authenticate.';
+      const message =
+        err?.message ?? 'Something went wrong while trying to authenticate.';
       logError('[OAuth] Authentication error', provider, err);
+
       if (message !== 'Authentication cancelled') {
         Alert.alert('Authentication error', message);
       }
@@ -252,23 +345,54 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     }
   };
 
-  const handleAnonymous = async () => {
+  const handleAnonymousSubmit = async () => {
+    if (!anonUsername.trim() || anonUsername.trim().length < 3) {
+      Alert.alert('Username required', 'Please enter a username (min 3 characters).');
+      return;
+    }
+    if (!anonPassword || anonPassword.length < 8) {
+      Alert.alert('Password required', 'Please enter a password (min 8 characters).');
+      return;
+    }
     setOauthLoading('anonymous');
     try {
+      logInfo('[Anon] Starting anonymous sign-in', { username: anonUsername.trim() });
       const { data, error } = await supabase.auth.signInAnonymously();
       if (error) throw error;
-      if (data?.user) {
-        await ensureUserRecord(data.user);
+      const user = data?.user;
+      if (user) {
+        const username = anonUsername.trim();
+        const passwordNote = `anon-pass-set-${Date.now()}`;
+        logInfo('[Anon] Signed in anonymous user', { userId: user.id, username });
+
+        try {
+          await supabase.auth.updateUser({
+            data: { username, is_anonymous: true, anon_password_note: passwordNote },
+          });
+          logInfo('[Anon] Updated user metadata with username/password note');
+        } catch (metaErr) {
+          logError('[Anon] Failed to update anonymous metadata', metaErr);
+        }
+
+        await ensureUserRecord({
+          ...user,
+          user_metadata: { ...(user.user_metadata || {}), username },
+        });
         navigation.reset({
           index: 0,
           routes: [{ name: 'OnboardingRouter' }],
         });
+      } else {
+        throw new Error('Anonymous session missing user');
       }
     } catch (err) {
       logError('[Auth] Anonymous login failed', err);
       Alert.alert('Anonymous login failed', err?.message ?? 'Please try again.');
     } finally {
       setOauthLoading(null);
+      setAnonModalVisible(false);
+      setAnonUsername('');
+      setAnonPassword('');
     }
   };
 
@@ -293,6 +417,12 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     setSubmitting(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
+      logInfo(
+        `[Auth] ${
+          mode === Mode.SIGN_UP ? 'Sign up' : 'Sign in'
+        } start`,
+        { email: normalizedEmail }
+      );
 
       if (mode === Mode.SIGN_UP) {
         const { data, error } = await supabase.auth.signUp({
@@ -300,19 +430,27 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           password,
         });
         if (error) throw error;
+        logInfo('[Auth] Email sign-up response', {
+          userId: data?.user?.id,
+          hasSession: Boolean(data?.session),
+        });
 
         let resolvedUser = data?.user ?? data?.session?.user ?? null;
 
         if (!data?.session) {
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          const {
+            data: signInData,
+            error: signInError,
+          } = await supabase.auth.signInWithPassword({
             email: normalizedEmail,
             password,
           });
 
           if (signInError) {
+            logError('[Auth] Post-signup sign-in failed', signInError);
             Alert.alert(
               'Confirm your email',
-              'Check your inbox to finish creating your account.',
+              'Check your inbox to finish creating your account.'
             );
             return;
           }
@@ -326,6 +464,9 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         }
 
         if (resolvedUser) {
+          logInfo('[Auth] Email sign-up completed', {
+            userId: resolvedUser.id,
+          });
           await ensureUserRecord(resolvedUser);
           navigation.reset({
             index: 0,
@@ -340,6 +481,9 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         if (error) throw error;
 
         const { data: userData } = await supabase.auth.getUser();
+        logInfo('[Auth] Email sign-in completed', {
+          userId: userData?.user?.id,
+        });
         if (userData?.user) {
           await ensureUserRecord(userData.user);
         }
@@ -380,10 +524,18 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
               <>
                 <Image
                   source={asset}
-                  style={[styles.providerIcon, isGoogle ? styles.googleIcon : styles.appleIcon]}
+                  style={[
+                    styles.providerIcon,
+                    isGoogle ? styles.googleIcon : styles.appleIcon,
+                  ]}
                   resizeMode="contain"
                 />
-                <Text style={[styles.methodLabel, isGoogle ? styles.googleLabel : styles.appleLabel]}>
+                <Text
+                  style={[
+                    styles.methodLabel,
+                    isGoogle ? styles.googleLabel : styles.appleLabel,
+                  ]}
+                >
                   {providerLabel}
                 </Text>
                 <View style={styles.iconPlaceholder} />
@@ -400,24 +552,39 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         disabled={Boolean(oauthLoading)}
       >
         <View style={styles.emailIconBadge}>
-          <MaterialCommunityIcons name="email-outline" size={20} color={COLORS.irisDark} />
+          <MaterialCommunityIcons
+            name="email-outline"
+            size={20}
+            color={COLORS.irisDark}
+          />
         </View>
-        <Text style={[styles.methodLabel, styles.emailLabel]}>{copy.emailCTA}</Text>
+        <Text style={[styles.methodLabel, styles.emailLabel]}>
+          {copy.emailCTA}
+        </Text>
         <View style={styles.emailPlaceholder} />
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.anonymousButton, oauthLoading === 'anonymous' && styles.anonymousButtonDisabled]}
+        style={[
+          styles.anonymousButton,
+          oauthLoading === 'anonymous' && styles.anonymousButtonDisabled,
+        ]}
         activeOpacity={0.9}
-        onPress={handleAnonymous}
+        onPress={() => setAnonModalVisible(true)}
         disabled={Boolean(oauthLoading)}
       >
         {oauthLoading === 'anonymous' ? (
           <ActivityIndicator color={COLORS.white} />
         ) : (
           <View style={styles.anonymousContent}>
-            <MaterialCommunityIcons name="incognito" size={20} color={COLORS.white} />
-            <Text style={styles.anonymousLabel}>Login as Anonymous</Text>
+            <MaterialCommunityIcons
+              name="incognito"
+              size={20}
+              color={COLORS.white}
+            />
+            <Text style={styles.anonymousLabel}>
+              Sign up/ Login Anonymously
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -427,9 +594,16 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const renderEmailStep = () => (
     <View style={styles.formWrap}>
       <Text style={styles.formTitle}>{copy.emailCTA}</Text>
-      <Text style={styles.formSubTitle}>We&apos;ll use your email to keep your data in sync.</Text>
+      <Text style={styles.formSubTitle}>
+        We&apos;ll use your email to keep your data in sync.
+      </Text>
 
-      <View style={[styles.inputWrapper, showEmailError && styles.inputWrapperError]}>
+      <View
+        style={[
+          styles.inputWrapper,
+          showEmailError && styles.inputWrapperError,
+        ]}
+      >
         <TextInput
           value={email}
           onChangeText={(text) => {
@@ -448,7 +622,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       ) : null}
 
       <TouchableOpacity
-        style={[styles.primaryButton, !emailValid && styles.primaryButtonDisabled]}
+        style={[
+          styles.primaryButton,
+          !emailValid && styles.primaryButtonDisabled,
+        ]}
         activeOpacity={0.85}
         disabled={!emailValid || isSubmitting}
         onPress={advanceFromEmail}
@@ -473,10 +650,16 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     <View style={styles.formWrap}>
       <Text style={styles.formTitle}>{copy.emailCTA}</Text>
       <Text style={styles.formSubTitle}>
-        Password must be at least 8 characters including atleast one uppercase, lowercase and a symbol.
+        Password must be at least 8 characters including atleast one uppercase,
+        lowercase and a symbol.
       </Text>
 
-      <View style={[styles.inputWrapper, showEmailError && styles.inputWrapperError]}>
+      <View
+        style={[
+          styles.inputWrapper,
+          showEmailError && styles.inputWrapperError,
+        ]}
+      >
         <TextInput
           value={email}
           onChangeText={(text) => {
@@ -494,7 +677,12 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         <Text style={styles.errorLabel}>Enter a valid email</Text>
       ) : null}
 
-      <View style={[styles.inputWrapper, showPasswordError && styles.inputWrapperError]}>
+      <View
+        style={[
+          styles.inputWrapper,
+          showPasswordError && styles.inputWrapperError,
+        ]}
+      >
         <TextInput
           value={password}
           onChangeText={(text) => {
@@ -508,13 +696,17 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         />
       </View>
       {showPasswordError ? (
-        <Text style={styles.errorLabel}>Password must be at least 6 characters</Text>
+        <Text style={styles.errorLabel}>
+          Password must be at least 8 characters including uppercase,
+          lowercase, number and symbol.
+        </Text>
       ) : null}
 
       <TouchableOpacity
         style={[
           styles.primaryButton,
-          (!emailValid || !passwordValid || isSubmitting) && styles.primaryButtonDisabled,
+          (!emailValid || !passwordValid || isSubmitting) &&
+            styles.primaryButtonDisabled,
         ]}
         activeOpacity={0.85}
         disabled={!emailValid || !passwordValid || isSubmitting}
@@ -527,7 +719,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.backButton} onPress={() => setStage(Stage.EMAIL)}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => setStage(Stage.EMAIL)}
+      >
         <Text style={styles.backButtonLabel}>Back</Text>
       </TouchableOpacity>
     </View>
@@ -573,20 +768,36 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
             <View style={styles.handle} />
             <View style={styles.tabBar}>
               <TouchableOpacity
-                style={[styles.tabButton, mode === Mode.SIGN_UP && styles.tabButtonActive]}
+                style={[
+                  styles.tabButton,
+                  mode === Mode.SIGN_UP && styles.tabButtonActive,
+                ]}
                 onPress={() => toggleMode(Mode.SIGN_UP)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.tabLabel, mode === Mode.SIGN_UP && styles.tabLabelActive]}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    mode === Mode.SIGN_UP && styles.tabLabelActive,
+                  ]}
+                >
                   {modeCopy[Mode.SIGN_UP].tabLabel}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.tabButton, mode === Mode.SIGN_IN && styles.tabButtonActive]}
+                style={[
+                  styles.tabButton,
+                  mode === Mode.SIGN_IN && styles.tabButtonActive,
+                ]}
                 onPress={() => toggleMode(Mode.SIGN_IN)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.tabLabel, mode === Mode.SIGN_IN && styles.tabLabelActive]}>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    mode === Mode.SIGN_IN && styles.tabLabelActive,
+                  ]}
+                >
                   {modeCopy[Mode.SIGN_IN].tabLabel}
                 </Text>
               </TouchableOpacity>
@@ -594,10 +805,15 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
             <View style={styles.headingWrap}>
               <Text style={styles.headline}>{copy.headline}</Text>
-              <TouchableOpacity onPress={handleSubtitlePress} activeOpacity={0.75}>
+              <TouchableOpacity
+                onPress={handleSubtitlePress}
+                activeOpacity={0.75}
+              >
                 <Text style={styles.subtitle}>
                   {copy.subtitle}{' '}
-                  <Text style={styles.subtitleAction}>{copy.subtitleAction}</Text>
+                  <Text style={styles.subtitleAction}>
+                    {copy.subtitleAction}
+                  </Text>
                 </Text>
               </TouchableOpacity>
             </View>
@@ -605,6 +821,66 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
             {renderStage()}
           </View>
         </ScrollView>
+        <Modal
+          visible={anonModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setAnonModalVisible(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Anonymous Login</Text>
+              <Text style={styles.modalSubtitle}>
+                Pick a username and password to continue.
+              </Text>
+
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={anonUsername}
+                  onChangeText={setAnonUsername}
+                  placeholder="Username"
+                  placeholderTextColor={COLORS.sub}
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+              </View>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  value={anonPassword}
+                  onChangeText={setAnonPassword}
+                  placeholder="Password (min 8 chars)"
+                  placeholderTextColor={COLORS.sub}
+                  autoCapitalize="none"
+                  secureTextEntry
+                  style={styles.input}
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalGhostButton}
+                  onPress={() => setAnonModalVisible(false)}
+                >
+                  <Text style={styles.modalGhostText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalPrimaryButton,
+                    oauthLoading === 'anonymous' && { opacity: 0.7 },
+                  ]}
+                  onPress={handleAnonymousSubmit}
+                  disabled={oauthLoading === 'anonymous'}
+                >
+                  {oauthLoading === 'anonymous' ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.modalPrimaryText}>Continue</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </GradientShell>
   );
@@ -804,6 +1080,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: COLORS.sub,
+    marginBottom: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  modalGhostButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.lilac,
+  },
+  modalGhostText: {
+    color: COLORS.irisDark,
+    fontWeight: '600',
+  },
+  modalPrimaryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.irisDark,
+  },
+  modalPrimaryText: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
   primaryButton: {
     backgroundColor: '#4B117B',
     paddingVertical: 16,
@@ -872,7 +1200,3 @@ const styles = StyleSheet.create({
     marginTop: -10,
   },
 });
-
-
-
-

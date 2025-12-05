@@ -219,21 +219,24 @@ const processDeepLink = async (rawUrl) => {
     return
   }
 
+  console.log('[oauth] Deep link detected', rawUrl)
   try {
     const { data, error } = await supabase.auth.getSessionFromUrl(rawUrl, {
       storeSession: true,
     })
     if (error) {
-      console.log('[warn] supabase getSessionFromUrl error:', error)
+      console.log('[oauth] getSessionFromUrl error:', error)
       return
     }
 
     if (data?.session) {
       // Supabase already stores the session via storeSession: true.
-      console.log('[info] Supabase session restored from deep link')
+      console.log('[oauth] Session restored from deep link for user', data.session.user?.id)
+    } else {
+      console.log('[oauth] getSessionFromUrl returned no session')
     }
   } catch (error) {
-    console.log('[warn] processDeepLink exception:', error)
+    console.log('[oauth] processDeepLink exception:', error)
   }
 }
 
@@ -241,11 +244,17 @@ if (!globalThis.__supabaseDeepLinkListenerSet) {
   globalThis.__supabaseDeepLinkListenerSet = true
 
   Linking.addEventListener('url', (event) => {
+    console.log('[oauth] Linking event url:', event?.url)
     processDeepLink(event?.url)
   })
 
   Linking.getInitialURL()
-    .then((url) => processDeepLink(url))
+    .then((url) => {
+      if (url) {
+        console.log('[oauth] Initial URL:', url)
+      }
+      return processDeepLink(url)
+    })
     .catch((error) => {
       console.log('[warn] getInitialURL failed:', error)
     })

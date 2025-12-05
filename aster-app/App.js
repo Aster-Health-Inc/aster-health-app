@@ -45,6 +45,8 @@ import SupportScreen from './screens/SupportScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import AccountDetailsScreen from './screens/AccountDetailsScreen';
 import PastAnalyticsScreen from './screens/PastAnalyticsScreen';
+import PastAnalyticsDetailScreen from './screens/PastAnalyticsDetailScreen';
+import PastCycleCalendarScreen from './screens/PastCycleCalendarScreen';
 
 // Storage test component
 
@@ -166,6 +168,8 @@ export default function App() {
               }}
             />
             <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
+            <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
+            <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
 
 
             {/* Food-related */}

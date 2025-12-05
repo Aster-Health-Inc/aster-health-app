@@ -22,6 +22,7 @@ const AddFoodScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { mealType, photoUri, analysisData, selectedDate } = route.params || {};
+  const resolvedMealType = mealType || 'Meal';
 
   const [foodName, setFoodName] = useState('');
   const [weight, setWeight] = useState('');
@@ -68,7 +69,7 @@ const AddFoodScreen = () => {
         protein: proteinNum,
         carbs: carbsNum,
         fat: fatNum,
-        mealType,
+        mealType: resolvedMealType,
         userId: user.id,
         userEmail: user.email
       });
@@ -114,7 +115,7 @@ const AddFoodScreen = () => {
       const { data: rpcResult, error: rpcError } = await supabase.rpc('insert_meal_data', {
         p_user_id: user.id,
         p_log_date: logDate,
-        p_meal_type: mealType,
+        p_meal_type: resolvedMealType,
         p_calories: caloriesNum,
         p_carbs: carbsNum,
         p_protein: proteinNum,
@@ -181,7 +182,7 @@ const AddFoodScreen = () => {
           .from('meals')
           .upsert({
             log_id: logId,
-            meal_type: mealType,
+            meal_type: resolvedMealType,
             calories: caloriesNum,
             protein: proteinNum,
             carbs: carbsNum,
@@ -200,7 +201,7 @@ const AddFoodScreen = () => {
         console.log('Successfully saved via RPC:', rpcResult);
       }
 
-      Alert.alert('Success!', `${foodName} has been added to your ${mealType} log`, [
+      Alert.alert('Success!', `${foodName} has been added to your ${resolvedMealType} log`, [
         {
           text: 'View Food Log',
           onPress: () => {
@@ -243,38 +244,36 @@ const AddFoodScreen = () => {
           <View style={styles.innerContainer}>
             {/* Header */}
             <View style={styles.header}>
-              <TouchableOpacity onPress={() => navigation.goBack()}>
-                <Ionicons name="close" size={28} color="black" />
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.circleButton}>
+                <Ionicons name="close" size={20} color="#4B117B" />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Add Food</Text>
-              <TouchableOpacity onPress={Keyboard.dismiss}>
-                <Text style={styles.doneButton}>Done</Text>
-              </TouchableOpacity>
+              <View style={styles.headerSpacer} />
             </View>
 
             <ScrollView 
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
+              showsVerticalScrollIndicator={false}
             >
-              {/* Food Name */}
-              <View style={styles.inputGroup}>
+              <View style={styles.inputCard}>
                 <Text style={styles.inputLabel}>Food Name</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Enter food name"
+                  placeholderTextColor="#B3A6C8"
                   value={foodName}
                   onChangeText={setFoodName}
                   returnKeyType="next"
                 />
               </View>
 
-              {/* Weight */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Weight (grams)</Text>
+              <View style={styles.inputCard}>
+                <Text style={styles.inputLabel}>Weight</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Ex. 100"
+                  placeholderTextColor="#B3A6C8"
                   value={weight}
                   onChangeText={setWeight}
                   keyboardType="numeric"
@@ -282,12 +281,12 @@ const AddFoodScreen = () => {
                 />
               </View>
 
-              {/* Calories */}
-              <View style={styles.inputGroup}>
+              <View style={styles.inputCard}>
                 <Text style={styles.inputLabel}>Calories</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="Ex. 100"
+                  placeholderTextColor="#B3A6C8"
                   value={calories}
                   onChangeText={setCalories}
                   keyboardType="numeric"
@@ -295,48 +294,26 @@ const AddFoodScreen = () => {
                 />
               </View>
 
-              {/* Macros Section */}
-              <View style={styles.macrosSection}>
-                <Text style={styles.sectionTitle}>Macros</Text>
-                
-                {/* Protein */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Protein (grams)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Ex. 25"
-                    value={protein}
-                    onChangeText={setProtein}
-                    keyboardType="numeric"
-                    returnKeyType="next"
-                  />
-                </View>
-
-                {/* Carbs */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Carbs (grams)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Ex. 30"
-                    value={carbs}
-                    onChangeText={setCarbs}
-                    keyboardType="numeric"
-                    returnKeyType="next"
-                  />
-                </View>
-
-                {/* Fats */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Fats (grams)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Ex. 15"
-                    value={fats}
-                    onChangeText={setFats}
-                    keyboardType="numeric"
-                    returnKeyType="done"
-                  />
-                </View>
+              <View style={styles.macrosCard}>
+                <Text style={styles.inputLabel}>Macros</Text>
+                {[
+                  { label: 'Protein', value: protein, setter: setProtein },
+                  { label: 'Carbs', value: carbs, setter: setCarbs },
+                  { label: 'Fats', value: fats, setter: setFats },
+                ].map((item, index) => (
+                  <View key={item.label} style={[styles.macroRow, index < 2 && styles.macroDivider]}>
+                    <Text style={styles.macroLabel}>{item.label}</Text>
+                    <TextInput
+                      style={styles.macroInput}
+                      placeholder="Ex. 100"
+                      placeholderTextColor="#B3A6C8"
+                      value={item.value}
+                      onChangeText={item.setter}
+                      keyboardType="numeric"
+                      returnKeyType={index === 2 ? 'done' : 'next'}
+                    />
+                  </View>
+                ))}
               </View>
               
               {/* Extra space for keyboard */}
@@ -370,7 +347,7 @@ export default AddFoodScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#E6DFF2',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -384,71 +361,112 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
+    backgroundColor: '#E6DFF2',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  doneButton: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FF6B9D',
+    color: '#3F2560',
+  },
+  circleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#D8CFEA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSpacer: {
+    width: 36,
   },
   scrollContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     paddingBottom: 120,
+    gap: 14,
   },
   extraSpace: {
     height: 100,
   },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
+  inputCard: {
+    backgroundColor: '#F5F1FB',
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    shadowColor: '#8A7AB8',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  macrosSection: {
-    marginTop: 8,
+  inputLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#3F2560',
+    marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 18,
+  textInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#3F2560',
+  },
+  macrosCard: {
+    backgroundColor: '#F5F1FB',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: '#8A7AB8',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  macroRow: {
+    paddingVertical: 10,
+  },
+  macroDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E3D8F5',
+  },
+  macroLabel: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
+    color: '#3F2560',
+    marginBottom: 6,
+  },
+  macroInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#3F2560',
   },
   addButton: {
     position: 'absolute',
     bottom: 20,
     left: 20,
     right: 20,
-    backgroundColor: '#FF6B9D',
+    backgroundColor: '#6B4CD9',
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center',
+    shadowColor: '#4B117B',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   addButtonDisabled: {
     backgroundColor: '#ccc',
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
   },
   savingContainer: {
     flexDirection: 'row',

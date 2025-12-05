@@ -16,12 +16,14 @@ import {
 } from "react-native";
 import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
 
 export default function ChatbotModal({ visible, onClose }) {
+  const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -313,13 +315,17 @@ const MarkdownBubble = ({ text }) => {
 
           <KeyboardAvoidingView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 24 + insets.top : 0}
           >
             <ScrollView
               ref={scrollRef}
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: 120 + insets.bottom },
+              ]}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               <View style={styles.suggestionWrap}>
                 {['When will my next period be?', 'What foods should I be avoiding right now?', 'What is the Luteal Phase?', 'Why is my estrogen higher than usual?'].map(
@@ -375,7 +381,15 @@ const MarkdownBubble = ({ text }) => {
               )}
             </ScrollView>
 
-            <View style={styles.composer}>
+            <View
+              style={[
+                styles.composer,
+                {
+                  paddingBottom: 8 + insets.bottom * 0.6,
+                  marginBottom: Math.max(8, insets.bottom / 2),
+                },
+              ]}
+            >
               <Ionicons name="search" size={18} color="#807499" style={styles.leadingIcon} />
               <TextInput
                 value={input}

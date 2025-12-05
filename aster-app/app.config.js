@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 export default ({ config }) => ({
   ...config,
+  scheme: 'aster',
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealth.app',

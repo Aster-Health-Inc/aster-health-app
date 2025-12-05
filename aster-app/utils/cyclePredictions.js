@@ -28,22 +28,40 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
       }
     }
 
+    let avgCycleLength = null;
+    let fallbackUsed = false;
+
     if (cycleLengths.length === 0) {
+      // Fallback: single period entry. Use stored average_cycle_length or default 28.
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('average_cycle_length')
+        .eq('id', userId)
+        .maybeSingle();
+
+      avgCycleLength = Number(userRow?.average_cycle_length) || 28;
+      fallbackUsed = true;
+    } else {
+      // Calculate average cycle length from data
+      avgCycleLength = Math.round(
+        cycleLengths.reduce((sum, length) => sum + length, 0) / cycleLengths.length
+      );
+    }
+
+    if (!avgCycleLength || Number.isNaN(avgCycleLength)) {
       return null;
     }
 
-    // Calculate average cycle length
-    const avgCycleLength = Math.round(
-      cycleLengths.reduce((sum, length) => sum + length, 0) / cycleLengths.length
-    );
+    // Calculate confidence based on consistency (or conservative if fallback)
+    let confidence = 0.5;
+    if (!fallbackUsed && cycleLengths.length) {
+      const variance = cycleLengths.reduce((sum, length) =>
+        sum + Math.pow(length - avgCycleLength, 2), 0
+      ) / cycleLengths.length;
 
-    // Calculate confidence based on consistency
-    const variance = cycleLengths.reduce((sum, length) => 
-      sum + Math.pow(length - avgCycleLength, 2), 0
-    ) / cycleLengths.length;
-    
-    const standardDeviation = Math.sqrt(variance);
-    const confidence = Math.max(0.1, Math.min(1.0, 1 - (standardDeviation / avgCycleLength)));
+      const standardDeviation = Math.sqrt(variance);
+      confidence = Math.max(0.1, Math.min(1.0, 1 - (standardDeviation / avgCycleLength)));
+    }
 
     // Predict next period
     const lastPeriodStart = new Date(periods[0].start_date);
@@ -59,7 +77,11 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
       predicted_ovulation_date: ovulationDate.toISOString().split('T')[0],
       predicted_cycle_length: avgCycleLength,
       confidence_score: Math.round(confidence * 100) / 100,
-      prediction_method: cycleLengths.length >= 3 ? 'trend' : 'average'
+      prediction_method: fallbackUsed
+        ? 'fallback_single_period'
+        : cycleLengths.length >= 3
+          ? 'trend'
+          : 'average'
     };
   } catch (error) {
     console.error('Error calculating predictions:', error);
