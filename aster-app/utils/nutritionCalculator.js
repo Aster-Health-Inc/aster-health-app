@@ -147,6 +147,24 @@ export function calculateNutritionGoals(userProfile) {
  */
 export async function getUserNutritionGoals(supabase, userId) {
   try {
+    // 1) If user has explicit goals saved, use them
+    const { data: savedGoals, error: goalsError } = await supabase
+      .from('nutrition_goals')
+      .select('calories, protein, carbs, fat, water')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (savedGoals && !goalsError) {
+      return {
+        calories: Number(savedGoals.calories) || 0,
+        protein: Number(savedGoals.protein) || 0,
+        carbs: Number(savedGoals.carbs) || 0,
+        fat: Number(savedGoals.fat) || 0,
+        water: Number(savedGoals.water) || 0,
+      };
+    }
+
+    // 2) Otherwise derive from profile
     const { data: profile, error } = await supabase
       .from('user_profiles')
       .select('*')

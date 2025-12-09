@@ -161,12 +161,10 @@ export const fetchUserDailyLogs = async (user_id, date) => {
   let resultMealItems = rpcData?.mealItems || [];
   let resultDailyTotals = rpcData?.dailyTotals || {};
 
-  const hasRpcMeals =
-    (resultMeals && resultMeals.length > 0) ||
-    (resultDailyTotals && Object.keys(resultDailyTotals || {}).length > 0);
+  const rpcHasMeals = Array.isArray(resultMeals) && resultMeals.length > 0;
 
-  if (!hasRpcMeals || rpcError) {
-    console.log('🔍 RPC missing/empty, falling back to direct queries...');
+  if (!rpcHasMeals || rpcError) {
+    console.log('🔍 RPC missing meals, falling back to direct queries...');
 
     const { data: mealLog, error: mealLogErr } = await supabase
       .from('meal_logs')

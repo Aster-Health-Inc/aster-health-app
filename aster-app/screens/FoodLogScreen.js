@@ -315,43 +315,77 @@ const FoodLogScreen = () => {
 
   const handleLogWater = () => setWaterModalVisible(true);
 
-  const saveWaterLog = async () => {
-    const amount = parseFloat(waterInput);
-    if (Number.isNaN(amount) || amount <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid water amount.');
+const saveWaterLog = async () => {
+  const amount = parseFloat(waterInput);
+  if (Number.isNaN(amount) || amount <= 0) {
+    Alert.alert('Invalid amount', 'Please enter a valid water amount.');
+    return;
+  }
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const canonicalUserId = await getCanonicalUserId(user);
+
+    const amountOz = waterUnit === 'oz' ? amount : amount / ML_PER_OZ;
+    const amountMl = waterUnit === 'ml' ? amount : amount * ML_PER_OZ;
+
+    const amountMlRounded = Math.round(amountMl);
+    const nowIso = new Date().toISOString();
+
+    // Add to existing total (table is unique on user_id + log_date)
+    const { data: existing } = await supabase
+      .from('water_logs')
+      .select('water_intake_ml, created_at')
+      .eq('user_id', canonicalUserId)
+      .eq('log_date', dateKey)
+      .maybeSingle();
+
+    const newTotalMl = (existing?.water_intake_ml || 0) + amountMlRounded;
+    const { data, error } = await supabase
+      .from('water_logs')
+      .upsert(
+        {
+          user_id: canonicalUserId,
+          log_date: dateKey, // 'YYYY-MM-DD'
+          water_intake_ml: newTotalMl,
+          created_at: existing?.created_at || nowIso,
+        },
+        { onConflict: ['user_id', 'log_date'] }
+      )
+      .select('water_intake_ml, created_at')
+      .single();
+
+    if (error) {
+      console.error('Supabase water insert error:', error);
+      Alert.alert('Error', 'Could not save water log on the server.');
       return;
     }
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const canonicalUserId = await getCanonicalUserId(user);
+    const totalMl = data.water_intake_ml || 0;
+    const totalOz = totalMl / ML_PER_OZ;
 
-      const amountOz = waterUnit === 'oz' ? amount : amount / ML_PER_OZ;
-      const amountMl = waterUnit === 'ml' ? amount : amount * ML_PER_OZ;
-      const nowIso = new Date().toISOString();
+    setLastWaterLog({
+      ounces: amountOz,
+      time: nowIso,
+    });
 
-      await supabase.from('water_logs').insert({
-        user_id: canonicalUserId,
-        log_date: dateKey,
-        water_intake_ml: amountMl,
-        created_at: nowIso,
-      });
+    setDaily((prev) => ({
+      ...prev,
+      water: (prev?.water || 0) + amountOz,
+    }));
 
-      setLastWaterLog({ ounces: amountOz, time: nowIso });
-      setDaily((prev) => ({
-        ...prev,
-        water: (prev?.water || 0) + amountOz,
-      }));
-      setWaterModalVisible(false);
-      setWaterInput('');
-      // Refresh after insert; keep UI optimistic even if RPC water is missing
-      loadData();
-    } catch (err) {
-      console.error('Error logging water:', err);
-      Alert.alert('Error', 'Could not save water log. Please try again.');
-    }
-  };
+    setWaterModalVisible(false);
+    setWaterInput('');
+
+    // Optional: you can keep this or remove it once confident
+    loadData();
+  } catch (err) {
+    console.error('Error logging water:', err);
+    Alert.alert('Error', 'Could not save water log. Please try again.');
+  }
+};
 
   useEffect(() => {
     if (goals) {
@@ -376,7 +410,7 @@ const FoodLogScreen = () => {
     setEditModalVisible(true);
   };
 
-  const saveEditGoals = () => {
+  const saveEditGoals = async () => {
     const updated = {
       calories: Number(draftGoals.calories) || 0,
       carbs: Number(draftGoals.carbs) || 0,
@@ -384,8 +418,33 @@ const FoodLogScreen = () => {
       fat: Number(draftGoals.fat) || 0,
       water: Number(draftGoals.water) || 0,
     };
-    setGoals(updated);
-    setEditModalVisible(false);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const canonicalUserId = await getCanonicalUserId(user);
+
+      await supabase
+        .from('nutrition_goals')
+        .upsert(
+          {
+            user_id: canonicalUserId,
+            calories: updated.calories,
+            protein: updated.protein,
+            carbs: updated.carbs,
+            fat: updated.fat,
+            water: updated.water,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+
+      setGoals(updated);
+      setEditModalVisible(false);
+    } catch (err) {
+      console.error('Error saving goals:', err);
+      Alert.alert('Error', 'Could not save your goals. Please try again.');
+    }
   };
 
   const openMealPicker = () => {

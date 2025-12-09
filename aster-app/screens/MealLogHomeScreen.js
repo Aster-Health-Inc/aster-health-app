@@ -80,7 +80,7 @@ export default function MealLogHomeScreen() {
       const { data: logs } = await supabase
         .from('water_logs')
         .select('water_intake_ml, created_at')
-        .eq('uid', user.id)
+        .eq('user_id', user.id)
         .eq('log_date', dateStr)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -94,7 +94,7 @@ export default function MealLogHomeScreen() {
       const { data: goalRows } = await supabase
         .from('water_goals')
         .select('goal_oz, goal_ml')
-        .eq('uid', user.id)
+        .eq('user_id', user.id)
         .limit(1);
 
       if (goalRows && goalRows.length > 0) {
@@ -359,15 +359,42 @@ export default function MealLogHomeScreen() {
                       return;
                     }
 
-                    await supabase.from('water_logs').insert({
-                      uid: user.id,
-                      log_date: formatDateKey(new Date()),
-                      water_intake_ml: intake,
-                      created_at: new Date().toISOString(),
-                    });
+                    const todayKey = formatDateKey(new Date());
+                    const nowIso = new Date().toISOString();
 
-                    setWaterOz((prev) => prev + intake / ML_PER_OZ);
-                    setLastLog({ amount: intake, time: new Date().toISOString() });
+                    const { data: existing } = await supabase
+                      .from('water_logs')
+                      .select('water_intake_ml, created_at')
+                      .eq('user_id', user.id)
+                      .eq('log_date', todayKey)
+                      .maybeSingle();
+
+                    const newTotalMl = (existing?.water_intake_ml || 0) + intake;
+
+                    const { data: upserted, error } = await supabase
+                      .from('water_logs')
+                      .upsert(
+                        {
+                          user_id: user.id,
+                          log_date: todayKey,
+                          water_intake_ml: newTotalMl,
+                          created_at: existing?.created_at || nowIso,
+                        },
+                        { onConflict: ['user_id', 'log_date'] }
+                      )
+                      .select('water_intake_ml, created_at')
+                      .single();
+
+                    if (error) {
+                      console.error('Error logging water:', error);
+                      Alert.alert('Error', 'Could not save water log. Please try again.');
+                      return;
+                    }
+
+                    const totalMl = upserted?.water_intake_ml || newTotalMl;
+
+                    setWaterOz(totalMl / ML_PER_OZ);
+                    setLastLog({ amount: totalMl, time: nowIso });
                     setWaterDraft('');
                     setWaterModalVisible(false);
                   } catch (err) {
@@ -424,12 +451,12 @@ export default function MealLogHomeScreen() {
                       .from('water_goals')
                       .upsert(
                         {
-                          uid: user.id,
+                          user_id: user.id,
                           goal_ml: ml,
                           goal_oz: oz,
                           updated_at: new Date().toISOString(),
                         },
-                        { onConflict: 'uid' },
+                        { onConflict: 'user_id' },
                       );
 
                     setWaterGoal(Math.round(oz));
