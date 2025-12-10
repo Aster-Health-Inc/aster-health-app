@@ -133,19 +133,25 @@ export default function ReminderScreen() {
 
       // Build period payload (current + history)
       const periodPayload = [];
+      const periodKeys = new Set();
+      const addPeriod = (entry) => {
+        if (!entry.start_date) return;
+        const key = `${entry.user_id}-${entry.start_date}`;
+        if (periodKeys.has(key)) return;
+        periodKeys.add(key);
+        periodPayload.push(entry);
+      };
       if (lastPeriodYmd) {
-        periodPayload.push({ user_id: canonicalUserId, start_date: lastPeriodYmd });
+        addPeriod({ user_id: canonicalUserId, start_date: lastPeriodYmd });
       }
       if (periodHistory?.length) {
         periodHistory.forEach((p) => {
           const start = toYMD(p.start);
-          if (start) {
-            periodPayload.push({
-              user_id: canonicalUserId,
-              start_date: start,
-              end_date: toYMD(p.end),
-            });
-          }
+          addPeriod({
+            user_id: canonicalUserId,
+            start_date: start,
+            end_date: toYMD(p.end),
+          });
         });
       }
 
@@ -159,6 +165,19 @@ export default function ReminderScreen() {
 
       // Persist in one go
       const reminderTime = checkinEnabled ? to24HourString(selectedTime) : null;
+      const reminderDays = checkinEnabled
+        ? (() => {
+            const rawDays = Array.isArray(state.reminder.days) ? state.reminder.days : DAILY_DAYS;
+            const uniqueDays = Array.from(
+              new Set(
+                rawDays.filter(
+                  (d) => Number.isInteger(d) && d >= 0 && d <= 6,
+                ),
+              ),
+            );
+            return uniqueDays.length ? uniqueDays : DAILY_DAYS;
+          })()
+        : [];
 
       // Avoid email uniqueness explosions: if another user owns this email, skip setting it here
       let emailForUpsert = resolvedEmail ?? existingUserRow?.email ?? null;
@@ -232,7 +251,7 @@ export default function ReminderScreen() {
               {
                 user_id: user.id,
                 reminder_time: reminderTime,
-                reminder_days: checkinEnabled ? DAILY_DAYS : [],
+                reminder_days: reminderDays,
                 checkin_enabled: checkinEnabled,
               },
             ],

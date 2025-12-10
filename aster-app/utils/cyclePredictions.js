@@ -2,7 +2,9 @@ import { supabase } from '../lib/supabase';
 
 export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
   try {
-    const candidateIds = [userId, ...(extraUserIds || [])].filter(Boolean);
+    const candidateIds = Array.from(
+      new Set([userId, ...(extraUserIds || [])].filter(Boolean)),
+    );
     if (!candidateIds.length) return null;
 
     // Get user's period history
@@ -96,20 +98,19 @@ export const saveCyclePrediction = async (userId, prediction) => {
       .from('users')
       .upsert([{ id: userId }], { onConflict: 'id' });
 
-    // Mark previous predictions as inactive
-    await supabase
-      .from('cycle_predictions')
-      .update({ is_active: false })
-      .eq('user_id', userId);
-
-    // Insert new prediction
+    // Upsert the active prediction for this user
     const { data, error } = await supabase
       .from('cycle_predictions')
-      .insert([{
-        user_id: userId,
-        ...prediction,
-        is_active: true
-      }])
+      .upsert(
+        [
+          {
+            user_id: userId,
+            ...prediction,
+            is_active: true,
+          },
+        ],
+        { onConflict: 'user_id' },
+      )
       .select();
 
     if (error) {

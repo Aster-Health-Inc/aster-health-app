@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -10,11 +10,13 @@ import {
   Modal,
   Pressable,
   Alert,
+  Linking,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
@@ -98,6 +100,61 @@ const FLOW_OPTIONS = [
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
+const FIRST_OPEN_KEY = 'aster_first_open_at';
+const RATING_DONE_KEY = 'aster_rating_done';
+const APP_STORE_URL = 'https://apps.apple.com';
+
+const AsterPetalIcon = ({ filled }) => (
+  <Svg width={34} height={34} viewBox="0 0 33 33" fill="none">
+    <Path
+      d="M17.1848 16.9584C17.1848 16.9584 23.1539 16.0091 25.8631 17.4694C27.9866 18.6141 28.8775 19.8137 29.8503 21.6851C30.8231 23.5566 30.8658 23.6014 30.9643 25.5177C31.0535 27.2525 30.9643 29.2865 29.8503 30.053C28.1409 31.2291 27.0357 31.1389 24.5729 30.6917C21.773 30.1834 20.5196 28.7699 19.0024 26.1565C17.2356 23.113 18.1816 15.8086 18.1816 15.8086"
+      stroke="url(#aster_grad_1)"
+      strokeWidth={4}
+      fill={filled ? 'url(#aster_grad_fill)' : 'none'}
+    />
+    <Path
+      d="M18.2315 17.1905C18.2315 17.1905 17.3687 10.6225 18.6959 7.64156C19.7362 5.30495 20.8264 4.3247 22.5272 3.25433C24.228 2.18396 24.2688 2.13693 26.0104 2.0285C27.587 1.93035 29.4355 2.02855 30.1321 3.25433C31.201 5.13519 31.119 6.3513 30.7126 9.06113C30.2506 12.1419 28.9661 13.5211 26.5909 15.1905C23.8249 17.1346 17.1865 16.0936 17.1865 16.0936"
+      stroke="url(#aster_grad_2)"
+      strokeWidth={4}
+      fill={filled ? 'url(#aster_grad_fill)' : 'none'}
+    />
+    <Path
+      d="M17.186 16.0416C17.186 16.0416 10.62 16.9909 7.63989 15.5306C5.30397 14.3859 4.32401 13.1863 3.25395 11.3149C2.1839 9.44343 2.13689 9.39857 2.02849 7.48226C1.93037 5.74753 2.02854 3.71354 3.25395 2.94702C5.13426 1.77085 6.35001 1.86112 9.05903 2.30825C12.1389 2.8166 13.5177 4.23006 15.1866 6.8435C17.1301 9.88704 16.0895 17.1914 16.0895 17.1914"
+      stroke="url(#aster_grad_3)"
+      strokeWidth={4}
+      fill={filled ? 'url(#aster_grad_fill)' : 'none'}
+    />
+    <Path
+      d="M16.0371 15.8095C16.0371 15.8095 16.9861 22.3775 15.5262 25.3584C14.3819 27.695 13.1826 28.6753 11.3117 29.7457C9.44085 30.816 9.396 30.8631 7.48027 30.9715C5.74605 31.0697 3.71266 30.9715 2.94637 29.7457C1.77056 27.8648 1.86079 26.6487 2.30779 23.9389C2.81599 20.8581 4.22903 19.4789 6.84169 17.8095C9.88433 15.8654 17.1865 16.9064 17.1865 16.9064"
+      stroke="url(#aster_grad_4)"
+      strokeWidth={4}
+      fill={filled ? 'url(#aster_grad_fill)' : 'none'}
+    />
+    <Defs>
+      <LinearGradient id="aster_grad_1" x1="30.9902" y1="23.4038" x2="17.1848" y2="23.4038">
+        <Stop stopColor="#400B6B" />
+        <Stop offset="1" stopColor="#CB52AD" />
+      </LinearGradient>
+      <LinearGradient id="aster_grad_2" x1="24.0892" y1="2" x2="24.0892" y2="17.1905">
+        <Stop stopColor="#400B6B" />
+        <Stop offset="1" stopColor="#CB52AD" />
+      </LinearGradient>
+      <LinearGradient id="aster_grad_3" x1="2" y1="9.59617" x2="17.186" y2="9.59617">
+        <Stop stopColor="#400B6B" />
+        <Stop offset="1" stopColor="#CB52AD" />
+      </LinearGradient>
+      <LinearGradient id="aster_grad_4" x1="9.59354" y1="31" x2="9.59354" y2="15.8095">
+        <Stop stopColor="#400B6B" />
+        <Stop offset="1" stopColor="#CB52AD" />
+      </LinearGradient>
+      <LinearGradient id="aster_grad_fill" x1="5" y1="5" x2="27" y2="27">
+        <Stop stopColor="#52147A" />
+        <Stop offset="1" stopColor="#CB52AD" />
+      </LinearGradient>
+    </Defs>
+  </Svg>
+);
+
 const chunk = (array, size) => {
   const result = [];
   for (let i = 0; i < array.length; i += size) {
@@ -154,8 +211,33 @@ const CycleHomeScreen = () => {
   const [flowLevel, setFlowLevel] = useState('none'); // none | light | medium | heavy
   const [savingDay, setSavingDay] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingValue, setRatingValue] = useState(0);
+  const [ratingFollowUp, setRatingFollowUp] = useState(null); // 'low' | 'high' | null
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   const today = useMemo(() => new Date(), []);
+
+  useEffect(() => {
+    const checkRatingPrompt = async () => {
+      try {
+        const now = Date.now();
+        const storedFirstOpen = await AsyncStorage.getItem(FIRST_OPEN_KEY);
+        const firstOpenTs = storedFirstOpen ? Number(storedFirstOpen) : now;
+        if (!storedFirstOpen) {
+          await AsyncStorage.setItem(FIRST_OPEN_KEY, String(firstOpenTs));
+        }
+        const done = await AsyncStorage.getItem(RATING_DONE_KEY);
+        const fortyEightHours = 48 * 60 * 60 * 1000;
+        if (!done && now - firstOpenTs >= fortyEightHours) {
+          setShowRatingModal(true);
+        }
+      } catch (err) {
+        console.log('Rating prompt check failed', err);
+      }
+    };
+    checkRatingPrompt();
+  }, []);
 
   const loadCycleData = useCallback(async () => {
     setLoading(true);
@@ -455,6 +537,63 @@ const CycleHomeScreen = () => {
       Alert.alert('Save failed', err?.message ?? 'Please try again.');
     } finally {
       setSavingDay(false);
+    }
+  };
+
+  const closeRatingModal = () => {
+    setShowRatingModal(false);
+    setRatingFollowUp(null);
+  };
+
+  const submitRating = useCallback(
+    async (value) => {
+      setSubmittingRating(true);
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        const payload = {
+          rating: value,
+          source: 'cycle_home_prompt',
+        };
+
+        if (user?.id) {
+          payload.user_id = await getCanonicalUserId(user);
+        }
+
+        await supabase.from('app_ratings').insert(payload);
+      } catch (err) {
+        console.log('Rating submit failed', err);
+      } finally {
+        await AsyncStorage.setItem(RATING_DONE_KEY, '1');
+        setSubmittingRating(false);
+      }
+    },
+    [],
+  );
+
+  const handleSelectRating = (value) => {
+    setRatingValue(value);
+    setRatingFollowUp(value <= 2 ? 'low' : 'high');
+    submitRating(value);
+  };
+
+  const handleFeedbackPress = () => {
+    closeRatingModal();
+    navigation.navigate('Feedback');
+  };
+
+  const handleAppStorePress = async () => {
+    try {
+      const supported = await Linking.canOpenURL(APP_STORE_URL);
+      if (supported) {
+        await Linking.openURL(APP_STORE_URL);
+      }
+    } catch (err) {
+      console.log('Open app store failed', err);
+    } finally {
+      closeRatingModal();
     }
   };
 
@@ -867,6 +1006,53 @@ const CycleHomeScreen = () => {
             <Text style={styles.helperText}>
               We backfill earlier days of this period based on the chosen day to keep predictions in sync.
             </Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showRatingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRatingModal}
+      >
+        <Pressable style={styles.ratingOverlay} onPress={closeRatingModal}>
+          <Pressable style={styles.ratingCard} onPress={(e) => e.stopPropagation()}>
+            {ratingFollowUp ? (
+              <>
+                <Text style={styles.ratingTitle}>
+                  {ratingFollowUp === 'low'
+                    ? "We're sorry to hear that. Can you tell us what went wrong?"
+                    : 'Happy to hear! Would you mind sharing this on the App Store?'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.ratingCta}
+                  activeOpacity={0.88}
+                  onPress={ratingFollowUp === 'low' ? handleFeedbackPress : handleAppStorePress}
+                >
+                  <Text style={styles.ratingCtaText}>
+                    {ratingFollowUp === 'low' ? 'Give Feedback' : 'Go to the Apple Store'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.ratingTitle}>How’re you liking Aster? Rate us!</Text>
+                <View style={styles.ratingRow}>
+                  {[1, 2, 3, 4, 5].map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={styles.ratingIconWrap}
+                      activeOpacity={0.85}
+                      onPress={() => handleSelectRating(value)}
+                      disabled={submittingRating}
+                    >
+                      <AsterPetalIcon filled={value <= ratingValue} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1411,5 +1597,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     textAlign: 'center',
+  },
+  ratingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  ratingCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 26,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
+  },
+  ratingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F103B',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  ratingIconWrap: {
+    padding: 6,
+  },
+  ratingCta: {
+    marginTop: 4,
+    backgroundColor: '#4B117B',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  ratingCtaText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

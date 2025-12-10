@@ -64,11 +64,11 @@ const AdditionalInfoScreen = ({ navigation }) => {
       conditionsText,
     })
     setSubmitting(false)
-    navigation.navigate('HealthAppAccess')
+    navigation.navigate('ReminderSetup')
   }
 
   const handleSkip = () => {
-    navigation.navigate('HealthAppAccess')
+    navigation.navigate('ReminderSetup')
   }
 
   const goBack = () => {

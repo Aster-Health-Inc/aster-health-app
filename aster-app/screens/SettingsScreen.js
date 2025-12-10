@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  Modal,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
-import { requestHealthPermissions } from '../lib/healthkit';
 
 const BACKGROUND = '#EEE7FF';
 const SURFACE = '#FFFFFF';
@@ -27,13 +27,6 @@ const SETTINGS_ITEMS = [
   { key: 'logout', label: 'Log Out', action: 'logout' },
 ];
 
-const HEALTH_PERMISSIONS = [
-  { identifier: 'HKQuantityTypeIdentifierStepCount', read: true },
-  { identifier: 'HKQuantityTypeIdentifierActiveEnergyBurned', read: true },
-  { identifier: 'HKQuantityTypeIdentifierDistanceWalkingRunning', read: true },
-  { identifier: 'HKWorkoutTypeIdentifier', read: true },
-];
-
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const [userProfile, setUserProfile] = useState({
@@ -41,8 +34,8 @@ const SettingsScreen = () => {
     plan: 'Premium Member',
     avatar_url: null,
   });
-  const [syncingHealth, setSyncingHealth] = useState(false);
-  const [healthStatus, setHealthStatus] = useState(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -75,30 +68,36 @@ const SettingsScreen = () => {
     return parts.map((part) => part.charAt(0).toUpperCase()).join('');
   }, [userProfile.name]);
 
-  const handleHealthConnect = async () => {
-    if (syncingHealth) return;
-    setSyncingHealth(true);
-    try {
-      const res = await requestHealthPermissions(HEALTH_PERMISSIONS);
-      setHealthStatus(res.ok ? 'Connected to Apple Health' : res.reason || 'Unable to connect');
-    } catch (err) {
-      setHealthStatus(err?.message || 'Unable to connect to Apple Health');
-    } finally {
-      setSyncingHealth(false);
-    }
-  };
-
-  const handleItemPress = async (item) => {
+  const handleItemPress = (item) => {
     if (item.action === 'logout') {
-      await supabase.auth.signOut();
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Welcome' }],
-      });
+      setShowLogoutConfirm(true);
       return;
     }
     if (item.navigateTo) {
       navigation.navigate(item.navigateTo);
+    }
+  };
+
+  const confirmLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Logout failed', err);
+      setLoggingOut(false);
+      return;
+    }
+    setShowLogoutConfirm(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Welcome' }],
+    });
+  };
+
+  const closeLogoutModal = () => {
+    if (!loggingOut) {
+      setShowLogoutConfirm(false);
     }
   };
 
@@ -138,35 +137,6 @@ const SettingsScreen = () => {
             </View>
           </LinearGradient>
 
-          <View style={styles.healthCard}>
-            <View style={styles.healthCardRow}>
-              <View style={styles.healthIcon}>
-                <Ionicons name="heart" size={18} color="#E45471" />
-              </View>
-              <View style={styles.healthInfo}>
-                <Text style={styles.healthTitle}>Connect to Apple Health</Text>
-                {healthStatus ? (
-                  <Text style={styles.healthStatus} numberOfLines={1}>
-                    {healthStatus}
-                  </Text>
-                ) : (
-                  <Text style={styles.healthStatusMuted}>Sync your workouts and activity data</Text>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.healthAction}
-                onPress={handleHealthConnect}
-                activeOpacity={0.85}
-              >
-                {syncingHealth ? (
-                  <Ionicons name="sync-outline" size={20} color="#3F2560" />
-                ) : (
-                  <Ionicons name="chevron-forward" size={20} color="#3F2560" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
           <View style={styles.listCard}>
             {SETTINGS_ITEMS.map((item, index) => (
               <TouchableOpacity
@@ -193,6 +163,38 @@ const SettingsScreen = () => {
           </View>
         </ScrollView>
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showLogoutConfirm}
+        onRequestClose={closeLogoutModal}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={closeLogoutModal}
+            disabled={loggingOut}
+          />
+          <View style={styles.logoutModalCard}>
+            <Text style={styles.logoutModalText}>Are you sure you want to log out?</Text>
+            <TouchableOpacity
+              style={[
+                styles.logoutModalButton,
+                loggingOut && styles.logoutModalButtonDisabled,
+              ]}
+              activeOpacity={0.88}
+              onPress={confirmLogout}
+              disabled={loggingOut}
+            >
+              <Text style={styles.logoutModalButtonText}>
+                {loggingOut ? 'Logging Out...' : 'Log Out'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -289,57 +291,6 @@ const styles = StyleSheet.create({
     color: SURFACE,
     opacity: 0.85,
   },
-  healthCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 26,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    shadowColor: '#B8A6E8',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
-  healthCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 18,
-  },
-  healthIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FDE5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  healthInfo: {
-    flex: 1,
-  },
-  healthTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#3F2560',
-  },
-  healthStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4B117B',
-    marginTop: 2,
-  },
-  healthStatusMuted: {
-    fontSize: 12,
-    color: '#9D96B9',
-    marginTop: 2,
-  },
-  healthAction: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F5F1FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   listCard: {
     backgroundColor: '#E2D6FF',
     borderRadius: 30,
@@ -369,5 +320,48 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: '#D84A4A',
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  logoutModalCard: {
+    width: '100%',
+    borderRadius: 24,
+    backgroundColor: SURFACE,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
+    alignItems: 'center',
+  },
+  logoutModalText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F103B',
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  logoutModalButton: {
+    backgroundColor: '#4B117B',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  logoutModalButtonDisabled: {
+    opacity: 0.7,
+  },
+  logoutModalButtonText: {
+    color: SURFACE,
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

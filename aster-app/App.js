@@ -22,7 +22,6 @@ import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen';
 import AdditionalInfoScreen from './screens/AdditionalInfoScreen';
 import ReminderScreen from './screens/ReminderScreen';
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
-import HealthAppAccessScreen from './screens/HealthAppAccessScreen';
 import HomeScreen from './screens/HomeScreen';
 import AnonymousUpgradeScreen from './screens/AnonymousUpgradeScreen';
 import AuthScreenBase from './screens/AuthScreenBase';
@@ -157,7 +156,6 @@ export default function App() {
             <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
             <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
             <Stack.Screen name="Reminder" component={ReminderScreen} />
-            <Stack.Screen name="HealthAppAccess" component={HealthAppAccessScreen} />
             <Stack.Screen
               name="SymptomLog"
               component={SymptomLogScreen}
