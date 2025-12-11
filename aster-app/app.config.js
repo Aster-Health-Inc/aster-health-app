@@ -5,7 +5,7 @@ export default ({ config }) => ({
   scheme: 'aster',
   ios: {
     ...(config.ios ?? {}),
-    bundleIdentifier: 'com.asterhealth.app',
+    bundleIdentifier: 'com.aster.healthapp.dev',
     usesAppleSignIn: true,
     infoPlist: {
       NSHealthShareUsageDescription:
@@ -17,7 +17,7 @@ export default ({ config }) => ({
   },
   extra: {
     ...(config.extra ?? {}),
-    eas: { projectId: 'c7848903-1c4b-4c4a-a8da-b10c04c2d0a6' }
+    eas: { projectId: 'c220f578-b1ce-41ff-971c-88e90f13c7e5' }
   },
   plugins: [
     ...(config.plugins ?? []),

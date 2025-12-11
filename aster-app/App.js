@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { supabase } from './lib/supabase';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import { OnboardingProvider } from './src/context/OnboardingContext';
+import ConnectivityOverlay from './components/ConnectivityOverlay';
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
@@ -187,6 +188,7 @@ export default function App() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <ConnectivityOverlay />
     </FeatureFlagsProvider>
     </OnboardingProvider>
   );
