@@ -1,21 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  Modal,
-  Pressable,
-  Animated,
-  TextInput,
-  Alert,
-  Platform,
-  KeyboardAvoidingView,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, RefreshControl, Modal, Pressable, Animated, TextInput, Alert, Platform, KeyboardAvoidingView } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Defs, ClipPath, Rect, G, LinearGradient, Stop } from 'react-native-svg';
@@ -25,6 +9,7 @@ import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import BottomTaskbar from '../components/BottomTaskbar';
 import { BlurView } from 'expo-blur';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BACKGROUND = '#E9E2F4';
 const CARD = '#FFFFFF';

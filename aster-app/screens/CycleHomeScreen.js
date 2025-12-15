@@ -1,22 +1,11 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  RefreshControl,
-  Modal,
-  Pressable,
-  Alert,
-  Linking,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Modal, Pressable, Alert, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';

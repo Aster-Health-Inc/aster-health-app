@@ -1,17 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop, SvgXml } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 import BottomTaskbar from '../components/BottomTaskbar';

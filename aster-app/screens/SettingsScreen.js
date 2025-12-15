@@ -1,17 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Modal,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 

@@ -1,14 +1,8 @@
 import React, { useMemo } from 'react';
-import {
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  FlatList,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const getPreviousMonths = (count = 6) => {
   const now = new Date();

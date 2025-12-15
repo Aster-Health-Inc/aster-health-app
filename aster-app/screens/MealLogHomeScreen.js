@@ -1,25 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Modal,
-  Pressable,
-  Platform,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Modal, Pressable, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomTaskbar from '../components/BottomTaskbar';
-import {
-  fetchUserDailyLogs,
-} from '../utils/meallogger';
+import { fetchUserDailyLogs } from '../utils/meallogger';
 import { supabase } from '../lib/supabase';
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];

@@ -1,19 +1,10 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { upsertMealLog, upsertDailyCalorie } from '../utils/meallogger';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BACKGROUND = '#E6E0F3';
 const SURFACE = '#FFFFFF';
@@ -227,7 +218,6 @@ const NutritionSummaryScreen = () => {
             </View>
           </View>
         </View>
-
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Macronutrients</Text>

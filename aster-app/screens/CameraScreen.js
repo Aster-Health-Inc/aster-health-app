@@ -1,19 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  Image,
-  Platform,
-  Modal,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CameraScreen = () => {
   const navigation = useNavigation();
@@ -137,8 +127,6 @@ const CameraScreen = () => {
       selectedDate: selectedDate
     });
   };
-
-
 
   if (hasPermission === null) {
     return (

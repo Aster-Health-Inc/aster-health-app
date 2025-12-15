@@ -1,17 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Platform,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import BottomTaskbar from '../components/BottomTaskbar';
 import {

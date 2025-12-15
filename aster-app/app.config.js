@@ -20,6 +20,7 @@ export default ({ config }) => ({
     eas: { projectId: 'c220f578-b1ce-41ff-971c-88e90f13c7e5' }
   },
   plugins: [
+    "expo-localization",
     ...(config.plugins ?? []),
     'expo-web-browser'
   ]

@@ -1,21 +1,9 @@
 import React, { useRef, useState } from 'react'
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  Keyboard,
-  View,
-} from 'react-native'
+import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, FlatList, Keyboard, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useNavigation } from '@react-navigation/native'
 import { Ionicons } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'

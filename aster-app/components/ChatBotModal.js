@@ -9,14 +9,13 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   ScrollView,
   TouchableOpacity,
 } from "react-native";
 import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
@@ -292,7 +291,16 @@ const MarkdownBubble = ({ text }) => {
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView
+        style={[
+          styles.safeArea,
+          {
+            paddingTop: insets.top,
+            paddingBottom: Math.max(12, insets.bottom),
+          },
+        ]}
+        edges={['top', 'bottom']}
+      >
         <View style={styles.container}>
           <Svg width="100%" height="100%" style={styles.waves} preserveAspectRatio="none">
             {waveOffsets.map((offset) => (
@@ -316,12 +324,13 @@ const MarkdownBubble = ({ text }) => {
           <KeyboardAvoidingView
             style={{ flex: 1 }}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 24 + insets.top : 0}
+            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 24 : 0}
           >
             <ScrollView
               ref={scrollRef}
               contentContainerStyle={[
                 styles.scrollContent,
+                { flexGrow: 1 },
                 { paddingBottom: 120 + insets.bottom },
               ]}
               showsVerticalScrollIndicator={false}

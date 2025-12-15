@@ -1,18 +1,8 @@
 import React, { useRef, useState } from 'react'
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { Alert, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { Ionicons } from '@expo/vector-icons'
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 import { useOnboarding } from '../src/context/OnboardingContext'

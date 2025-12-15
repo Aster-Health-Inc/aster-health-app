@@ -1,18 +1,9 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeFood } from '../services/geminiService';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BACKGROUND = '#E6E0F3';
 const SURFACE = '#FFFFFF';

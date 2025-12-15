@@ -1,23 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Modal,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, Animated, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const THUMB_SIZE = 28;
 

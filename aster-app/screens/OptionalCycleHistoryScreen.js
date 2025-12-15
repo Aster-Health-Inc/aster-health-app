@@ -1,15 +1,9 @@
 import React, { useMemo, useState } from 'react'
-import {
-  Alert,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'
 import { useOnboarding } from '../src/context/OnboardingContext'
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // local YYYY-MM-DD to avoid timezone shifts
 const ymd = (d) => {
@@ -167,7 +161,6 @@ const handleContinue = async () => {
   setPeriodHistory(payload)
   navigation.navigate('AdditionalInfo')
 }
-
 
   const handleSkip = () => {
     setPeriodHistory([])

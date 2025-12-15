@@ -1,14 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  Alert,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useOnboardingGuard } from '../utils/useOnboardingGuard';
 import { useOnboarding } from '../src/context/OnboardingContext';

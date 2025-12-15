@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from './lib/supabase';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import { OnboardingProvider } from './src/context/OnboardingContext';
@@ -48,10 +49,10 @@ import PastAnalyticsScreen from './screens/PastAnalyticsScreen';
 import PastAnalyticsDetailScreen from './screens/PastAnalyticsDetailScreen';
 import PastCycleCalendarScreen from './screens/PastCycleCalendarScreen';
 
-// Storage test component
-
 // ✅ import your logger utilities
 import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLogger';
+// ✅ import PostHog client + provider
+import { PostHogProvider, PostHog } from 'posthog-react-native';
 
 const Stack = createStackNavigator();
 
@@ -93,6 +94,16 @@ export default function App() {
     // error('This is a test error log');
   }, []);
 
+  // PostHog client created once; screen capture handled manually to avoid navigation hook errors
+  const posthogClient = useMemo(
+    () =>
+      new PostHog('phc_bb786hqaz5EACriYfwC1qUDn1NOWNW24IqNAnJzUA8o', {
+        host: 'https://us.i.posthog.com',
+        enableSessionReplay: true,
+      }),
+    []
+  );
+
   // 5) Early return AFTER all hooks
   if (loading) {
     return (
@@ -105,92 +116,99 @@ export default function App() {
   console.log('App render - Session:', session, 'User:', session?.user);
 
   return (
-    <OnboardingProvider>
-    <FeatureFlagsProvider>
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <Stack.Navigator
-        screenOptions={{ headerShown: false }}
+    <SafeAreaProvider>
+      <NavigationContainer
         onStateChange={(state) => {
-          console.log('Navigation state changed:', state?.routes?.map(r => r.name));
+          const routeNames = state?.routes?.map((r) => r.name) || [];
+          console.log('Navigation state changed:', routeNames);
+          // Manually track screens to avoid PostHog navigation hook warnings
+          const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
+          if (currentRoute?.name) {
+            posthogClient?.screen(currentRoute.name, currentRoute.params);
+          }
         }}
       >
-        {!session || !session.user ? (
-          <>
-            <Stack.Screen name="Welcome" component={WelcomeScreen} />
-            <Stack.Screen name="Consent" component={ConsentScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-            <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+        <PostHogProvider
+          client={posthogClient}
+          autocapture={{ captureScreens: false }}
+        >
+          <OnboardingProvider>
+            <FeatureFlagsProvider>
+              <StatusBar style="auto" />
+              <Stack.Navigator screenOptions={{ headerShown: false }}>
+                {!session || !session.user ? (
+                  <>
+                    <Stack.Screen name="Welcome" component={WelcomeScreen} />
+                    <Stack.Screen name="Consent" component={ConsentScreen} />
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="SignUp" component={SignUpScreen} />
+                    <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
 
-            {/* Food testing routes */}
-            <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
-            <Stack.Screen name="MealLog" component={MealLogScreen} />
-            <Stack.Screen name="Camera" component={CameraScreen} />
-            <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
-            <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
-            <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
-            <Stack.Screen name="FoodLog" component={FoodLogScreen} />
-          {/*  <Stack.Screen name="Test" component={TestScreen} />
-            <Stack.Screen name="StorageTest" component={StorageTest} /> */}
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-            <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen} />
-            <Stack.Screen name="Feedback" component={FeedbackScreen} />
-            <Stack.Screen name="ReportBug" component={ReportBugScreen} />
-            <Stack.Screen name="Support" component={SupportScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
-            <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
-            <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
-            <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
-            <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
-            <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
-            <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
-            <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
-            <Stack.Screen name="Reminder" component={ReminderScreen} />
-            <Stack.Screen
-              name="SymptomLog"
-              component={SymptomLogScreen}
-              options={{
-                presentation: 'transparentModal',
-                cardStyle: { backgroundColor: 'transparent' },
-                animationEnabled: true,
-              }}
-            />
-            <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
-            <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
-            <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
+                    {/* Food testing routes */}
+                    <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+                    <Stack.Screen name="MealLog" component={MealLogScreen} />
+                    <Stack.Screen name="Camera" component={CameraScreen} />
+                    <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+                    <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+                    <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+                    <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+                  </>
+                ) : (
+                  <>
+                    <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+                    <Stack.Screen name="SignUp" component={SignUpScreen} />
+                    <Stack.Screen name="Home" component={HomeScreen} />
+                    <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
+                    <Stack.Screen name="Settings" component={SettingsScreen} />
+                    <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen} />
+                    <Stack.Screen name="Feedback" component={FeedbackScreen} />
+                    <Stack.Screen name="ReportBug" component={ReportBugScreen} />
+                    <Stack.Screen name="Support" component={SupportScreen} />
+                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
+                    <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
+                    <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
+                    <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
+                    <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
+                    <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
+                    <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
+                    <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
+                    <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
+                    <Stack.Screen name="Reminder" component={ReminderScreen} />
+                    <Stack.Screen
+                      name="SymptomLog"
+                      component={SymptomLogScreen}
+                      options={{
+                        presentation: 'transparentModal',
+                        cardStyle: { backgroundColor: 'transparent' },
+                        animationEnabled: true,
+                      }}
+                    />
+                    <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
+                    <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
+                    <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
 
-
-            {/* Food-related */}
-            <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
-            <Stack.Screen name="MealLog" component={MealLogScreen} />
-            <Stack.Screen name="Camera" component={CameraScreen} />
-            <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
-            <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
-            <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
-            <Stack.Screen name="FoodLog" component={FoodLogScreen} />
-            <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
-           {/* <Stack.Screen name="Test" component={TestScreen} />
-            <Stack.Screen name="StorageTest" component={StorageTest} /> */}
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
-    <ConnectivityOverlay />
-    </FeatureFlagsProvider>
-    </OnboardingProvider>
+                    {/* Food-related */}
+                    <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+                    <Stack.Screen name="MealLog" component={MealLogScreen} />
+                    <Stack.Screen name="Camera" component={CameraScreen} />
+                    <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+                    <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+                    <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+                    <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+                    <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
+                  </>
+                )}
+              </Stack.Navigator>
+              <ConnectivityOverlay />
+            </FeatureFlagsProvider>
+          </OnboardingProvider>
+        </PostHogProvider>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

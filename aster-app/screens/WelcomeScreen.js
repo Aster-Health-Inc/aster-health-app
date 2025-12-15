@@ -1,7 +1,8 @@
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { LOGO_SVG } from '../assets/logoSvg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const WelcomeScreen = ({ navigation }) => (
   <SafeAreaView style={styles.container}>
