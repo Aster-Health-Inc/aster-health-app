@@ -12,7 +12,7 @@ import { log, error as logError } from './CrashLogger';
 export class HealthGuardrails {
   // Medical advice patterns that should trigger blocks
   static MEDICAL_ADVICE_PATTERNS = [
-    /should i (take|stop|start).*(medication|medicine|pill)/i,
+    /should i (take|stop|start).*(medication|medicine|pill|birth control|contraceptive)/i,
     /diagnose (me|myself) with/i,
     /prescribe/i,
     /instead of (seeing|consulting) (a |my )?doctor/i,
@@ -27,6 +27,7 @@ export class HealthGuardrails {
     /abort|terminate pregnancy/i,
     /home remedy (instead|rather than)/i,
     /(dangerous|unsafe) (but|to)/i,
+    /unsafe (method|approach|practice)/i,
     /self.*(medicate|treat|diagnose)/i,
   ];
 
@@ -66,8 +67,11 @@ export class HealthGuardrails {
     const messageLower = message.toLowerCase();
 
     // 1. Check for medical advice requests
+    const medicalAdviceKeywords = ['diagnose me', 'diagnose myself', 'prescribe', 'skip my doctor'];
+    const matchesAdviceKeyword = medicalAdviceKeywords.some((kw) => messageLower.includes(kw));
+
     for (const pattern of this.MEDICAL_ADVICE_PATTERNS) {
-      if (pattern.test(message)) {
+      if (pattern.test(message) || matchesAdviceKeyword) {
         checks.passed = false;
         checks.violations.push({
           type: 'MEDICAL_ADVICE_REQUEST',
@@ -76,6 +80,7 @@ export class HealthGuardrails {
           pattern: pattern.toString(),
         });
         checks.severity = 'HIGH';
+        break;
       }
     }
 
@@ -230,6 +235,14 @@ export class HealthGuardrails {
       'therapy',
       'surgery',
       'prescription',
+      // Pain/relief keywords to ensure disclaimers on common health guidance
+      'cramp',
+      'pain',
+      'bleeding',
+      'symptom',
+      'ibuprofen',
+      'acetaminophen',
+      'naproxen',
     ];
 
     const needsDisclaimer = medicalTopics.some(
@@ -249,7 +262,9 @@ export class HealthGuardrails {
 
     // 4. Factual accuracy checks (basic)
     // Check for cycle length claims
-    const cycleLengthMatch = response.match(/(\d+)\s*day.*cycle/i);
+    // Support phrases where the number appears before or after "cycle"
+    const cycleLengthMatch =
+      response.match(/(\d+)\s*day.*cycle/i) || response.match(/cycle[^\d]*(\d+)\s*day/i);
     if (cycleLengthMatch) {
       const days = parseInt(cycleLengthMatch[1]);
       if (days < 15 || days > 60) {
@@ -365,6 +380,7 @@ export class HealthGuardrails {
    */
   static async validateComplete(userInput, aiResponse, userContext = null) {
     const startTime = Date.now();
+    // Track elapsed time and avoid returning zero for ultra-fast synchronous runs
 
     // Run all validation layers
     const inputCheck = this.validateUserInput(userInput);
@@ -384,6 +400,8 @@ export class HealthGuardrails {
 
     const shouldBlock = criticalViolations.length > 0;
 
+    const processingTimeMs = Math.max(1, Date.now() - startTime);
+
     const result = {
       passed: !shouldBlock,
       blockResponse: shouldBlock,
@@ -393,7 +411,7 @@ export class HealthGuardrails {
       outputCheck,
       contextCheck,
       metadata: {
-        processingTimeMs: Date.now() - startTime,
+        processingTimeMs,
         totalViolations: allViolations.length,
         criticalCount: criticalViolations.length,
         highCount: highViolations.length,

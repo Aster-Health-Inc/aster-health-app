@@ -1,44 +1,77 @@
-﻿export const calculateCyclePhase = (lastPeriodDate, cycleLength = 28) => {
+﻿const MS_IN_DAY = 1000 * 60 * 60 * 24;
+
+// Normalize a date (Date or string) to UTC midnight so math is consistent across timezones
+export const toUtcMidnight = (value) => {
+  if (!value) return null;
+  const d = typeof value === 'string' ? new Date(value) : new Date(value);
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+};
+
+export const parseYMD = (value) => {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map((v) => Number.parseInt(v, 10));
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+};
+
+const addDaysUtc = (date, days) => {
+  const copy = new Date(date);
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+};
+
+const diffDaysUtc = (a, b) => Math.floor((a.getTime() - b.getTime()) / MS_IN_DAY);
+
+export const calculateCyclePhase = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
 
-  const today = new Date();
-  const lastPeriod = new Date(lastPeriodDate);
-  const daysSinceLastPeriod = Math.floor((today - lastPeriod) / (1000 * 60 * 60 * 24));
+  const today = toUtcMidnight(new Date());
+  const lastPeriod = parseYMD(lastPeriodDate) || toUtcMidnight(lastPeriodDate);
+  if (!lastPeriod) return null;
+
+  const daysSinceLastPeriod = diffDaysUtc(today, lastPeriod);
+  if (daysSinceLastPeriod < 0) return null;
   const currentCycleDay = (daysSinceLastPeriod % cycleLength) + 1;
 
   let phase;
   let phaseDay;
   let nextPhase;
-  let daysUntilNext;
+  let daysUntilNextPhase;
 
   if (currentCycleDay <= 5) {
     phase = 'menstrual';
     phaseDay = currentCycleDay;
     nextPhase = 'follicular';
-    daysUntilNext = 6 - currentCycleDay;
+    daysUntilNextPhase = 6 - currentCycleDay;
   } else if (currentCycleDay <= 13) {
     phase = 'follicular';
     phaseDay = currentCycleDay - 5;
     nextPhase = 'ovulation';
-    daysUntilNext = 14 - currentCycleDay;
+    daysUntilNextPhase = 14 - currentCycleDay;
   } else if (currentCycleDay <= 16) {
     phase = 'ovulation';
     phaseDay = currentCycleDay - 13;
     nextPhase = 'luteal';
-    daysUntilNext = 17 - currentCycleDay;
+    daysUntilNextPhase = 17 - currentCycleDay;
   } else {
     phase = 'luteal';
     phaseDay = currentCycleDay - 16;
     nextPhase = 'menstrual';
-    daysUntilNext = (cycleLength + 1) - currentCycleDay;
+    daysUntilNextPhase = (cycleLength + 1) - currentCycleDay;
   }
+
+  const daysUntilNextPeriod = Math.max(0, cycleLength - currentCycleDay);
+  const nextPeriodDate = addDaysUtc(today, daysUntilNextPeriod);
 
   return {
     phase,
     phaseDay,
     currentCycleDay,
     nextPhase,
-    daysUntilNext,
+    daysUntilNext: daysUntilNextPhase, // kept for existing components
+    daysUntilNextPhase,
+    daysUntilNextPeriod,
+    nextPeriodDate: nextPeriodDate.toISOString().split('T')[0],
     cycleLength,
     progress: (currentCycleDay / cycleLength) * 100,
   };
@@ -126,12 +159,13 @@ export const getPhaseInfo = (phase) => {
 export const calculateNextPeriod = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
 
-  const lastPeriod = new Date(lastPeriodDate);
-  const nextPeriod = new Date(lastPeriod);
-  nextPeriod.setDate(lastPeriod.getDate() + cycleLength);
+  const today = toUtcMidnight(new Date());
+  const lastPeriod = parseYMD(lastPeriodDate) || toUtcMidnight(lastPeriodDate);
+  if (!lastPeriod) return null;
 
-  const today = new Date();
-  const daysUntilPeriod = Math.ceil((nextPeriod - today) / (1000 * 60 * 60 * 24));
+  const cyclesElapsed = Math.max(0, Math.floor(diffDaysUtc(today, lastPeriod) / cycleLength));
+  const nextPeriod = addDaysUtc(lastPeriod, (cyclesElapsed + 1) * cycleLength);
+  const daysUntilPeriod = Math.max(0, diffDaysUtc(nextPeriod, today));
 
   return {
     date: nextPeriod,
@@ -142,13 +176,13 @@ export const calculateNextPeriod = (lastPeriodDate, cycleLength = 28) => {
 export const getFertilityWindow = (lastPeriodDate, cycleLength = 28) => {
   if (!lastPeriodDate) return null;
 
-  const lastPeriod = new Date(lastPeriodDate);
-  const ovulationDay = cycleLength - 14;
-  const fertileStart = new Date(lastPeriod);
-  fertileStart.setDate(lastPeriod.getDate() + ovulationDay - 5);
+  const lastPeriod = parseYMD(lastPeriodDate) || toUtcMidnight(lastPeriodDate);
+  if (!lastPeriod) return null;
 
-  const fertileEnd = new Date(lastPeriod);
-  fertileEnd.setDate(lastPeriod.getDate() + ovulationDay + 1);
+  const ovulationDay = cycleLength - 14;
+  const fertileStart = addDaysUtc(lastPeriod, ovulationDay - 5);
+
+  const fertileEnd = addDaysUtc(lastPeriod, ovulationDay + 1);
 
   return {
     start: fertileStart,

@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
-import { calculateCyclePhase, getPhaseInfo } from '../utils/cycleCalculations';
+import { calculateCyclePhase, getPhaseInfo, parseYMD, toUtcMidnight } from '../utils/cycleCalculations';
 import { getCanonicalUserId } from '../utils/authUser';
 import { updatePredictionsForUser } from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
@@ -308,13 +308,13 @@ const CycleHomeScreen = () => {
       if (periodRows?.length) {
         const cycleLength = userData?.average_cycle_length ?? 28;
         const periodLength = userData?.average_period_length ?? 5;
-        const lastPeriodDate = periodRows[0].start_date;
-        const info = calculateCyclePhase(lastPeriodDate, cycleLength);
+      const lastPeriodDate = periodRows[0].start_date;
+      const info = calculateCyclePhase(lastPeriodDate, cycleLength);
 
-        if (info) {
-          computedCycleData = {
-            ...info,
-            periodLength,
+      if (info) {
+        computedCycleData = {
+          ...info,
+          periodLength,
             lastPeriodDate,
           };
         }
@@ -388,20 +388,20 @@ const CycleHomeScreen = () => {
     (date) => {
       if (!cycleData?.lastPeriodDate) return 'default';
 
-      const targetDate = new Date(date);
-      targetDate.setHours(0, 0, 0, 0);
-
-      const lastPeriod = new Date(cycleData.lastPeriodDate);
-      lastPeriod.setHours(0, 0, 0, 0);
+      const targetDate = toUtcMidnight(date);
+      const lastPeriod = parseYMD(cycleData.lastPeriodDate) || toUtcMidnight(cycleData.lastPeriodDate);
+      if (!targetDate || !lastPeriod) return 'default';
 
       const diff = Math.floor((targetDate.getTime() - lastPeriod.getTime()) / MS_IN_DAY);
       if (diff < 0) return 'default';
 
       const cycleDay = (diff % cycleData.cycleLength) + 1;
 
+      const daysUntilNextPeriod = Math.max(0, cycleData.cycleLength - cycleDay);
+
       if (cycleDay <= cycleData.periodLength) return 'menstrual';
       if (cycleDay >= 13 && cycleDay <= 16) return 'fertile';
-      if (cycleDay >= cycleData.cycleLength - 5) return 'pms';
+      if (daysUntilNextPeriod <= 5) return 'pms';
       return 'default';
     },
     [cycleData],
@@ -456,10 +456,10 @@ const CycleHomeScreen = () => {
   const progressPercent = cycleData ? clamp(cycleData.progress, 0, 100) : 0;
   const dashOffset = CIRC * (1 - progressPercent / 100);
 
-  const nextPeriodDays = cycleData?.daysUntilNext ?? null;
+  const nextPeriodDays = cycleData?.daysUntilNextPeriod ?? cycleData?.daysUntilNext ?? null;
   const nextPeriodCopy = (() => {
     if (nextPeriodDays == null) return 'Track your cycle to see predictions';
-    if (nextPeriodDays === 0) return 'Next period starts tomorrow';
+    if (nextPeriodDays === 0) return 'Next period starts today';
     if (nextPeriodDays === 1) return 'Next period in 1 day';
     return `Next period in ${nextPeriodDays} days`;
   })();
