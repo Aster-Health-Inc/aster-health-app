@@ -12,6 +12,11 @@ jest.mock('react-native-gesture-handler', () => {
   return mock;
 });
 
+// AsyncStorage mock for React Native
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
 // Global supabase mock to prevent network calls in unit tests
 jest.mock('./lib/supabase', () => {
   const noop = jest.fn();

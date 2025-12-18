@@ -193,7 +193,7 @@ const CycleHomeScreen = () => {
     initial.setHours(0, 0, 0, 0);
     return initial;
   });
-  const [calendarExpanded, setCalendarExpanded] = useState(false);
+  const [calendarExpanded, setCalendarExpanded] = useState(true);
   const [dayModalVisible, setDayModalVisible] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
   const [periodDay, setPeriodDay] = useState(1);
