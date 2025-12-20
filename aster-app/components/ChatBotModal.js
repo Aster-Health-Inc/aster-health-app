@@ -179,6 +179,17 @@ const MarkdownBubble = ({ text }) => {
   );
 };
 
+  /**
+   * Clear conversation and start fresh
+   */
+  const handleEndChat = () => {
+    setMessages([]);
+    setInput("");
+    setHasShownWelcome(false);
+    // Reload user data to show fresh welcome message
+    loadUserData();
+  };
+
   const sendMessage = async (overrideText) => {
     const text = (overrideText ?? input).trim();
     if (!text || sending) return;
@@ -319,6 +330,10 @@ const MarkdownBubble = ({ text }) => {
             <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
               <Ionicons name="close" size={22} color="#3F2560" />
             </Pressable>
+            <Pressable onPress={handleEndChat} style={styles.endChatBtn} accessibilityRole="button">
+              <Ionicons name="refresh" size={20} color="#3F2560" />
+              <Text style={styles.endChatText}>New Chat</Text>
+            </Pressable>
           </View>
 
           <KeyboardAvoidingView
@@ -437,7 +452,8 @@ const styles = StyleSheet.create({
   waves: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 6,
@@ -454,6 +470,25 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
+  },
+  endChatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: '#F6F2FF',
+    shadowColor: '#B8A6E8',
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  endChatText: {
+    color: '#3F2560',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   scrollContent: {
     paddingHorizontal: 16,

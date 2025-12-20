@@ -99,7 +99,8 @@ export default function App() {
     () =>
       new PostHog('phc_bb786hqaz5EACriYfwC1qUDn1NOWNW24IqNAnJzUA8o', {
         host: 'https://us.i.posthog.com',
-        enableSessionReplay: true,
+        enableSessionReplay: false,  // Disabled: Causes 413 errors with camera/photo screens
+        autocapture: false,  // Disabled: Autocapture sends large payloads with photo data
       }),
     []
   );
@@ -124,13 +125,14 @@ export default function App() {
           // Manually track screens to avoid PostHog navigation hook warnings
           const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
           if (currentRoute?.name) {
-            posthogClient?.screen(currentRoute.name, currentRoute.params);
+            // Don't send params to avoid large payloads (e.g., photo data)
+            posthogClient?.screen(currentRoute.name);
           }
         }}
       >
         <PostHogProvider
           client={posthogClient}
-          autocapture={{ captureScreens: false }}
+          autocapture={false}
         >
           <OnboardingProvider>
             <FeatureFlagsProvider>

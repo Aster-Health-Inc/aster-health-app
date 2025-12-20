@@ -205,8 +205,19 @@ Provide realistic nutritional estimates based on typical serving sizes for the f
       throw new Error('No response from Gemini API')
     }
 
-    // Extract JSON from response (in case there's extra text)
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    console.log('Raw Gemini response:', responseText)
+
+    // Extract JSON from response - handle multiple formats
+    let jsonText = responseText
+
+    // Remove markdown code blocks if present (```json ... ``` or ``` ... ```)
+    const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1].trim()
+    }
+
+    // Extract JSON object from the text
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       console.error('No JSON found in Gemini response:', responseText)
       throw new Error('Invalid response format from AI')
