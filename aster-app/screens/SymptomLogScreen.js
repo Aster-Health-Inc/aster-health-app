@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Pressable, ActivityIndicator, Alert, Animated, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Animated, PanResponder, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,11 +34,11 @@ const MOOD_ORDER = [
 ];
 
 const ENERGY_STOPS = [
-  { label: 'Low', value: 1 },
-  { label: '', value: 2 },
-  { label: 'Medium', value: 3 },
-  { label: '', value: 4 },
-  { label: 'High', value: 5 },
+  { label: 'Low', percent: 0 },
+  { label: '', percent: 25 },
+  { label: 'Medium', percent: 50 },
+  { label: '', percent: 75 },
+  { label: 'High', percent: 100 },
 ];
 
 const BatteryIcon = ({ width = 28, height = 12 }) => (
@@ -85,6 +85,13 @@ const groupedSymptoms = [
   },
 ];
 
+const ALL_SYMPTOM_NAMES = Array.from(
+  new Set([
+    ...SYMPTOM_ORDER,
+    ...groupedSymptoms.flatMap((group) => group.items),
+  ]),
+);
+
 const groupedMoods = [
   {
     title: 'Positive/Neutral Moods',
@@ -128,6 +135,17 @@ const groupedMoods = [
   },
 ];
 
+const ALL_MOOD_NAMES = Array.from(
+  new Set([
+    ...MOOD_ORDER,
+    ...groupedMoods.flatMap((group) => group.items),
+  ]),
+);
+
+const isUuid = (value) =>
+  typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 const SymptomLogScreen = () => {
   const navigation = useNavigation();
   const slideAnim = useRef(new Animated.Value(120)).current;
@@ -136,7 +154,7 @@ const SymptomLogScreen = () => {
   const [moodOptions, setMoodOptions] = useState([]);
   const [selectedSymptoms, setSelectedSymptoms] = useState([]);
   const [selectedMoods, setSelectedMoods] = useState([]);
-  const [selectedEnergyIndex, setSelectedEnergyIndex] = useState(2);
+  const [selectedEnergyPercent, setSelectedEnergyPercent] = useState(50);
   const [notes, setNotes] = useState('');
   const [trackWidth, setTrackWidth] = useState(0);
   const [initializing, setInitializing] = useState(true);
@@ -156,19 +174,75 @@ const SymptomLogScreen = () => {
     });
   }, []);
 
-  const filteredSymptoms = useMemo(() => {
-    const base =
-      symptomOptions && symptomOptions.length
-        ? symptomOptions
-        : SYMPTOM_ORDER.map((name, idx) => ({ id: `sym-${idx}`, name }));
-    if (!searchValue.trim()) return base;
-    const query = searchValue.trim().toLowerCase();
-    return base.filter((option) => option.name.toLowerCase().includes(query));
-  }, [symptomOptions, searchValue]);
+  const searchQuery = searchValue.trim().toLowerCase();
+  const normalizeName = useCallback((name) => (name || '').trim().toLowerCase(), []);
+  const localIdFromName = useCallback((name) => `local-${normalizeName(name)}`, [normalizeName]);
+  const createLocalOption = useCallback(
+    (name) => ({ id: localIdFromName(name), name, isLocal: true }),
+    [localIdFromName],
+  );
 
-  const thumbCenter = trackWidth
-    ? (selectedEnergyIndex / (ENERGY_STOPS.length - 1 || 1)) * trackWidth
-    : 0;
+  const symptomMap = useMemo(() => {
+    const map = new Map();
+    symptomOptions.forEach((opt) => {
+      const key = normalizeName(opt.name);
+      if (!map.has(key)) map.set(key, opt);
+    });
+    return map;
+  }, [normalizeName, symptomOptions]);
+
+  const moodMap = useMemo(() => {
+    const map = new Map();
+    moodOptions.forEach((opt) => {
+      const key = normalizeName(opt.name);
+      if (!map.has(key)) map.set(key, opt);
+    });
+    return map;
+  }, [moodOptions, normalizeName]);
+
+  const primarySymptoms = useMemo(
+    () => symptomOptions.filter((option) => SYMPTOM_ORDER.includes(option.name)),
+    [symptomOptions],
+  );
+
+  const primaryMoods = useMemo(
+    () => moodOptions.filter((option) => MOOD_ORDER.includes(option.name)),
+    [moodOptions],
+  );
+
+  const filterByQuery = useCallback(
+    (items) => {
+      if (!searchQuery) return items;
+      return items.filter((option) => option.name.toLowerCase().includes(searchQuery));
+    },
+    [searchQuery],
+  );
+
+  const filteredSymptoms = useMemo(() => {
+    const base = moreVisible || searchQuery ? symptomOptions : primarySymptoms;
+    return filterByQuery(base);
+  }, [filterByQuery, moreVisible, primarySymptoms, searchQuery, symptomOptions]);
+
+  const filteredMoods = useMemo(() => {
+    const base = moreMoodsVisible || searchQuery ? moodOptions : primaryMoods;
+    return filterByQuery(base);
+  }, [filterByQuery, moreMoodsVisible, moodOptions, primaryMoods, searchQuery]);
+
+  const clampedEnergyPercent = Math.max(0, Math.min(100, selectedEnergyPercent));
+  const thumbCenter = trackWidth ? (clampedEnergyPercent / 100) * trackWidth : 0;
+
+  const nearestEnergyStopIndex = useMemo(() => {
+    let closest = 0;
+    let smallestDiff = Infinity;
+    ENERGY_STOPS.forEach((stop, idx) => {
+      const diff = Math.abs(stop.percent - clampedEnergyPercent);
+      if (diff < smallestDiff) {
+        smallestDiff = diff;
+        closest = idx;
+      }
+    });
+    return closest;
+  }, [clampedEnergyPercent]);
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -192,14 +266,10 @@ const SymptomLogScreen = () => {
       const [symptomRes, moodRes, logRes] = await Promise.all([
         supabase
           .from('symptom_categories')
-          .select('id, name')
-          .in('name', SYMPTOM_ORDER)
-          .eq('is_active', true),
+          .select('id, name'),
         supabase
           .from('mood_categories')
-          .select('id, name')
-          .in('name', MOOD_ORDER)
-          .eq('is_active', true),
+          .select('id, name'),
         supabase
           .from('daily_logs')
           .select('id, notes, energy_level')
@@ -215,18 +285,34 @@ const SymptomLogScreen = () => {
       const symptomData = symptomRes.data ?? [];
       const moodData = moodRes.data ?? [];
 
-      const orderedSymptoms = SYMPTOM_ORDER.map((name) =>
-        symptomData.find((entry) => entry.name === name),
-      ).filter(Boolean);
-      const orderedMoods = MOOD_ORDER.map((name) =>
-        moodData.find((entry) => entry.name === name),
-      ).filter(Boolean);
+      const symptomMapByName = new Map(symptomData.map((entry) => [normalizeName(entry.name), entry]));
+      const moodMapByName = new Map(moodData.map((entry) => [normalizeName(entry.name), entry]));
 
-      setSymptomOptions(orderedSymptoms.length ? orderedSymptoms : symptomData);
-      setMoodOptions(orderedMoods.length ? orderedMoods : moodData);
+      const buildOrderedList = (orderNames, sourceMap, sourceData) => {
+        const ordered = orderNames
+          .map((name) => {
+            const found = sourceMap.get(normalizeName(name));
+            return found || createLocalOption(name);
+          })
+          .filter((item, idx, arr) => idx === arr.findIndex((n) => normalizeName(n.name) === normalizeName(item.name)));
+        const extras = sourceData
+          .filter((entry) => !orderNames.some((name) => normalizeName(name) === normalizeName(entry.name)))
+          .map((entry) => ({
+            id: entry.id ?? localIdFromName(entry.name),
+            name: entry.name,
+            isLocal: !entry.id,
+          }));
+        return [...ordered, ...extras];
+      };
+
+      const sortedSymptoms = buildOrderedList(ALL_SYMPTOM_NAMES, symptomMapByName, symptomData);
+      const sortedMoods = buildOrderedList(ALL_MOOD_NAMES, moodMapByName, moodData);
+
+      setSymptomOptions(sortedSymptoms);
+      setMoodOptions(sortedMoods);
       setSelectedSymptoms([]);
       setSelectedMoods([]);
-      setSelectedEnergyIndex(1);
+      setSelectedEnergyPercent(50);
       setNotes('');
 
       const existingLog = logRes.data ?? null;
@@ -235,16 +321,12 @@ const SymptomLogScreen = () => {
       if (existingLog) {
         setNotes(existingLog.notes ?? '');
         if (typeof existingLog.energy_level === 'number') {
-          const energyIndex = ENERGY_STOPS.findIndex(
-            (stop) => stop.value === existingLog.energy_level,
-          );
-          if (energyIndex >= 0) {
-            setSelectedEnergyIndex(energyIndex);
-          } else if (existingLog.energy_level <= 2) {
-            setSelectedEnergyIndex(0);
-          } else if (existingLog.energy_level >= 4) {
-            setSelectedEnergyIndex(2);
-          }
+          const raw = existingLog.energy_level;
+          const percent =
+            raw > 5
+              ? Math.max(0, Math.min(100, Math.round(raw)))
+              : Math.max(0, Math.min(100, Math.round(((raw - 1) / 4) * 100)));
+          setSelectedEnergyPercent(percent);
         }
 
         if (existingLog.id) {
@@ -265,10 +347,11 @@ const SymptomLogScreen = () => {
           const symptomIds = symptomSelRes.data?.map((row) => row.symptom_id) ?? [];
           const moodIds = moodSelRes.data?.map((row) => row.mood_id) ?? [];
 
-          setSelectedSymptoms(
-            orderedSymptoms.filter((option) => symptomIds.includes(option.id)),
-          );
-          setSelectedMoods(orderedMoods.filter((option) => moodIds.includes(option.id)));
+          const symptomsById = new Map(symptomData.map((item) => [item.id, item]));
+          const moodsById = new Map(moodData.map((item) => [item.id, item]));
+
+          setSelectedSymptoms(symptomIds.map((id) => symptomsById.get(id)).filter(Boolean));
+          setSelectedMoods(moodIds.map((id) => moodsById.get(id)).filter(Boolean));
         }
       }
     } catch (error) {
@@ -308,13 +391,30 @@ const SymptomLogScreen = () => {
     });
   }, []);
 
-  const handleTrackPress = (event) => {
-    if (!trackWidth) return;
-    const clickX = event.nativeEvent.locationX;
-    const ratio = clickX / trackWidth;
-    const index = Math.round(ratio * (ENERGY_STOPS.length - 1));
-    setSelectedEnergyIndex(Math.max(0, Math.min(ENERGY_STOPS.length - 1, index)));
-  };
+  const updateEnergyFromGesture = useCallback(
+    (xPosition, { snap } = { snap: false }) => {
+      if (!trackWidth) return;
+      const ratio = Math.max(0, Math.min(1, xPosition / trackWidth));
+      const precise = ratio * 100;
+      const percent = snap ? Math.round(precise / 5) * 5 : precise;
+      setSelectedEnergyPercent(percent);
+    },
+    [trackWidth],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 4,
+        onPanResponderGrant: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
+        onPanResponderMove: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
+        onPanResponderRelease: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
+        onPanResponderTerminate: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
+      }),
+    [updateEnergyFromGesture],
+  );
 
   const handleSave = useCallback(async () => {
     if (!userIdRef.current || saving) return;
@@ -322,7 +422,8 @@ const SymptomLogScreen = () => {
       setSaving(true);
       const userId = userIdRef.current;
       const todayISO = new Date().toISOString().split('T')[0];
-      const energyValue = ENERGY_STOPS[selectedEnergyIndex]?.value ?? null;
+      const snappedPercent = Math.round(Math.max(0, Math.min(100, selectedEnergyPercent)) / 5) * 5;
+      const energyValue = Math.max(1, Math.min(5, Math.round((snappedPercent / 100) * 4) + 1));
       const sanitizedNotes = notes.trim().length ? notes.trim() : null;
 
       const { data: upsertedLog, error: upsertError } = await supabase
@@ -352,15 +453,19 @@ const SymptomLogScreen = () => {
       if (deleteSymptomsError) throw deleteSymptomsError;
 
       if (selectedSymptoms.length) {
-        const symptomPayload = selectedSymptoms.map((option) => ({
-          user_id: userId,
-          daily_log_id: dailyLogId,
-          symptom_id: option.id,
-        }));
-        const { error: insertSymptomsError } = await supabase
-          .from('user_symptoms')
-          .insert(symptomPayload);
-        if (insertSymptomsError) throw insertSymptomsError;
+        const symptomPayload = selectedSymptoms
+          .filter((option) => option.id && !option.isLocal && isUuid(option.id))
+          .map((option) => ({
+            user_id: userId,
+            daily_log_id: dailyLogId,
+            symptom_id: option.id,
+          }));
+        if (symptomPayload.length) {
+          const { error: insertSymptomsError } = await supabase
+            .from('user_symptoms')
+            .insert(symptomPayload);
+          if (insertSymptomsError) throw insertSymptomsError;
+        }
       }
 
       const { error: deleteMoodsError } = await supabase
@@ -370,16 +475,20 @@ const SymptomLogScreen = () => {
       if (deleteMoodsError) throw deleteMoodsError;
 
       if (selectedMoods.length) {
-        const moodPayload = selectedMoods.map((option) => ({
-          user_id: userId,
-          daily_log_id: dailyLogId,
-          mood_id: option.id,
-          intensity: 3,
-        }));
-        const { error: insertMoodsError } = await supabase
-          .from('user_moods')
-          .insert(moodPayload);
-        if (insertMoodsError) throw insertMoodsError;
+        const moodPayload = selectedMoods
+          .filter((option) => option.id && !option.isLocal && isUuid(option.id))
+          .map((option) => ({
+            user_id: userId,
+            daily_log_id: dailyLogId,
+            mood_id: option.id,
+            intensity: 3,
+          }));
+        if (moodPayload.length) {
+          const { error: insertMoodsError } = await supabase
+            .from('user_moods')
+            .insert(moodPayload);
+          if (insertMoodsError) throw insertMoodsError;
+        }
       }
 
       navigation.goBack();
@@ -389,11 +498,9 @@ const SymptomLogScreen = () => {
     } finally {
       setSaving(false);
     }
-  }, [navigation, notes, selectedEnergyIndex, selectedMoods, selectedSymptoms, saving]);
+  }, [navigation, notes, selectedEnergyPercent, selectedMoods, selectedSymptoms, saving]);
 
   const handleClose = () => navigation.goBack();
-  const handleMoreClose = () => setMoreVisible(false);
-  const handleMoodMoreClose = () => setMoreMoodsVisible(false);
 
   if (initializing) {
     return (
@@ -448,52 +555,117 @@ const SymptomLogScreen = () => {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Symptoms</Text>
-              {filteredSymptoms.length ? (
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>Symptoms</Text>
+                {!searchQuery && (
+                  <TouchableOpacity
+                    style={[styles.sectionToggle, styles.symptomToggle]}
+                    onPress={() => setMoreVisible((prev) => !prev)}
+                  >
+                    <Ionicons
+                      name={moreVisible ? 'remove' : 'add'}
+                      size={16}
+                      color="#4B4B4B"
+                    />
+                    <Text style={styles.sectionToggleText}>{moreVisible ? 'Less' : 'More'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {!moreVisible && !searchQuery && filteredSymptoms.length ? (
                 <View style={styles.chipGrid}>
                   {filteredSymptoms.map((option) => {
                     const isSelected = selectedSymptoms.some((item) => item.id === option.id);
                     return (
                       <TouchableOpacity
-                        key={option.id}
-                        style={[styles.chip, isSelected && styles.chipSelected]}
+                        key={option.id || option.name}
+                        style={[styles.chip, isSelected && styles.chipSelectedSymptom]}
                         onPress={() => toggleSymptom(option)}
                       >
-                        <View style={[styles.chipDot, isSelected && styles.chipDotSelected]} />
-                        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                        <View style={[styles.chipDot, isSelected && styles.chipDotSelectedSymptom]} />
+                        <Text style={[styles.chipText, isSelected && styles.chipTextSelectedSymptom]}>
                           {option.name}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                  <TouchableOpacity style={styles.chip} onPress={() => setMoreVisible(true)}>
-                    <Ionicons name="add" size={16} color="#444" />
-                    <Text style={styles.chipText}>More</Text>
-                  </TouchableOpacity>
                 </View>
-              ) : (
+              ) : null}
+
+              {(moreVisible || searchQuery) && (
+                <View style={styles.moreList}>
+                  {groupedSymptoms.map((group) => {
+                    const allGroupItems = group.items.map((name) => symptomMap.get(name) || createLocalOption(name));
+                    const groupItems = searchQuery
+                      ? allGroupItems.filter((option) =>
+                          option.name.toLowerCase().includes(searchQuery),
+                        )
+                      : allGroupItems;
+                    if (!groupItems.length) return null;
+                    return (
+                      <View key={group.title} style={styles.moreSection}>
+                        <Text style={styles.moreSectionTitle}>{group.title}</Text>
+                        <View style={styles.chipGrid}>
+                          {groupItems.map((option) => {
+                            const isSelected = selectedSymptoms.some((item) => item.id === option.id);
+                            return (
+                              <TouchableOpacity
+                                key={option.id || option.name}
+                                style={[styles.chip, isSelected && styles.chipSelectedSymptom]}
+                                onPress={() => toggleSymptom(option)}
+                              >
+                                <View style={[styles.chipDot, isSelected && styles.chipDotSelectedSymptom]} />
+                                <Text style={[styles.chipText, isSelected && styles.chipTextSelectedSymptom]}>
+                                  {option.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {!filteredSymptoms.length && !searchQuery && (
                 <Text style={styles.emptyStateText}>No symptoms match your search.</Text>
               )}
             </View>
 
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Moods</Text>
-              {moodOptions.length ? (
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionLabel}>Moods</Text>
+                {!searchQuery && (
+                  <TouchableOpacity
+                    style={[styles.sectionToggle, styles.moodToggle]}
+                    onPress={() => setMoreMoodsVisible((prev) => !prev)}
+                  >
+                    <Ionicons
+                      name={moreMoodsVisible ? 'remove' : 'add'}
+                      size={16}
+                      color="#4B4B4B"
+                    />
+                    <Text style={styles.sectionToggleText}>{moreMoodsVisible ? 'Less' : 'More'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {!moreMoodsVisible && !searchQuery && filteredMoods.length ? (
                 <View style={styles.chipGrid}>
-                  {moodOptions.map((option) => {
+                  {filteredMoods.map((option) => {
                     const isSelected = selectedMoods.some((item) => item.id === option.id);
                     return (
                       <TouchableOpacity
-                        key={option.id}
-                        style={[styles.chip, styles.moodChip, isSelected && styles.chipSelected]}
+                        key={option.id || option.name}
+                        style={[styles.chip, styles.moodChip, isSelected && styles.chipSelectedMood]}
                         onPress={() => toggleMood(option)}
                       >
-                        <View style={[styles.chipDot, styles.moodDot, isSelected && styles.chipDotSelected]} />
+                        <View style={[styles.chipDot, styles.moodDot, isSelected && styles.chipDotSelectedMood]} />
                         <Text
                           style={[
                             styles.chipText,
                             styles.moodText,
-                            isSelected && styles.chipTextSelected,
+                            isSelected && styles.chipTextSelectedMood,
                           ]}
                         >
                           {option.name}
@@ -501,13 +673,48 @@ const SymptomLogScreen = () => {
                       </TouchableOpacity>
                     );
                   })}
-                  <TouchableOpacity style={[styles.chip, styles.moodChip]} onPress={() => setMoreMoodsVisible(true)}>
-                    <Ionicons name="add" size={16} color="#444" />
-                    <Text style={[styles.chipText, styles.moodText]}>More</Text>
-                  </TouchableOpacity>
                 </View>
-              ) : (
-                <Text style={styles.emptyStateText}>No moods available.</Text>
+              ) : null}
+              {(moreMoodsVisible || searchQuery) && (
+                <View style={styles.moreList}>
+                  {groupedMoods.map((group) => {
+                    const allGroupItems = group.items.map((name) => moodMap.get(name) || createLocalOption(name));
+                    const groupItems = searchQuery
+                      ? allGroupItems.filter((option) =>
+                          option.name.toLowerCase().includes(searchQuery),
+                        )
+                      : allGroupItems;
+                    if (!groupItems.length) return null;
+                    return (
+                      <View key={group.title} style={styles.moreSection}>
+                        <Text style={styles.moreSectionTitle}>{group.title}</Text>
+                        <View style={styles.chipGrid}>
+                          {groupItems.map((option) => {
+                            const isSelected = selectedMoods.some((item) => item.id === option.id);
+                            return (
+                              <TouchableOpacity
+                                key={option.id || option.name}
+                                style={[styles.chip, styles.moodChip, isSelected && styles.chipSelectedMood]}
+                                onPress={() => toggleMood(option)}
+                              >
+                                <View style={[styles.chipDot, styles.moodDot, isSelected && styles.chipDotSelectedMood]} />
+                                <Text
+                                  style={[
+                                    styles.chipText,
+                                    styles.moodText,
+                                    isSelected && styles.chipTextSelectedMood,
+                                  ]}
+                                >
+                                  {option.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </View>
 
@@ -519,7 +726,7 @@ const SymptomLogScreen = () => {
                     key={`label-${index}`}
                     style={[
                       styles.energyLabel,
-                      index === selectedEnergyIndex && styles.energyLabelActive,
+                      index === nearestEnergyStopIndex && styles.energyLabelActive,
                     ]}
                   >
                     {stop.label}
@@ -528,16 +735,16 @@ const SymptomLogScreen = () => {
               </View>
               <Pressable
                 style={styles.energyTrackWrapper}
-                onPress={handleTrackPress}
                 onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+                onPress={(event) => updateEnergyFromGesture(event.nativeEvent.locationX, { snap: true })}
+                hitSlop={{ top: 6, bottom: 6 }}
+                {...panResponder.panHandlers}
               >
                 <View style={styles.energyTrackBackground} />
                 <View style={[styles.energyFill, { width: thumbCenter }]} />
                 {ENERGY_STOPS.map((stop, index) => {
-                  const isActive = index <= selectedEnergyIndex;
-                  const position = trackWidth
-                    ? (index / (ENERGY_STOPS.length - 1 || 1)) * trackWidth
-                    : 0;
+                  const isActive = stop.percent <= clampedEnergyPercent;
+                  const position = trackWidth ? (stop.percent / 100) * trackWidth : 0;
                   return (
                     <View
                       key={`tick-${index}`}
@@ -575,99 +782,6 @@ const SymptomLogScreen = () => {
         </View>
       </Animated.View>
 
-      <Modal
-        visible={moreVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleMoreClose}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={handleMoreClose}>
-          <View style={styles.moreSheet}>
-            <View style={styles.moreHeader}>
-              <Text style={styles.moreTitle}>More Symptoms</Text>
-              <TouchableOpacity onPress={handleMoreClose}>
-                <Ionicons name="close" size={20} color="#4B4B4B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.moreContent} showsVerticalScrollIndicator={false}>
-              {groupedSymptoms.map((group) => (
-                <View key={group.title} style={styles.moreSection}>
-                  <Text style={styles.moreSectionTitle}>{group.title}</Text>
-                  <View style={styles.chipGrid}>
-                    {group.items.map((name) => {
-                      const option =
-                        symptomOptions.find((o) => o.name === name) ||
-                        { id: `local-${name}`, name };
-                      const isSelected = selectedSymptoms.some((item) => item.id === option.id);
-                      return (
-                        <TouchableOpacity
-                          key={option.id}
-                          style={[styles.chip, isSelected && styles.chipSelected]}
-                          onPress={() => toggleSymptom(option)}
-                        >
-                          <View style={[styles.chipDot, isSelected && styles.chipDotSelected]} />
-                          <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                            {option.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-
-      <Modal
-        visible={moreMoodsVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={handleMoodMoreClose}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={handleMoodMoreClose}>
-          <View style={styles.moreSheet}>
-            <View style={styles.moreHeader}>
-              <Text style={styles.moreTitle}>More Moods</Text>
-              <TouchableOpacity onPress={handleMoodMoreClose}>
-                <Ionicons name="close" size={20} color="#4B4B4B" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.moreContent} showsVerticalScrollIndicator={false}>
-              {groupedMoods.map((group) => (
-                <View key={group.title} style={styles.moreSection}>
-                  <Text style={styles.moreSectionTitle}>{group.title}</Text>
-                  <View style={styles.chipGrid}>
-                    {group.items.map((name) => {
-                      const option = moodOptions.find((o) => o.name === name) || { id: `local-${name}`, name };
-                      const isSelected = selectedMoods.some((item) => item.id === option.id);
-                      return (
-                        <TouchableOpacity
-                          key={option.id}
-                          style={[styles.chip, styles.moodChip, isSelected && styles.chipSelected]}
-                          onPress={() => toggleMood(option)}
-                        >
-                          <View style={[styles.chipDot, styles.moodDot, isSelected && styles.chipDotSelected]} />
-                          <Text
-                            style={[
-                              styles.chipText,
-                              styles.moodText,
-                              isSelected && styles.chipTextSelected,
-                            ]}
-                          >
-                            {option.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -743,7 +857,35 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 3,
   },
-  sectionLabel: { fontSize: 16, fontWeight: '700', color: '#1F1F1F', marginBottom: 14 },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionLabel: { fontSize: 16, fontWeight: '700', color: '#1F1F1F' },
+  sectionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: '#F9F7FB',
+    borderWidth: 1,
+    borderColor: '#EBE6F2',
+    gap: 6,
+    minWidth: 88,
+    justifyContent: 'center',
+  },
+  symptomToggle: {
+    backgroundColor: '#F9F7FB',
+    borderColor: '#EBE6F2',
+  },
+  moodToggle: {
+    backgroundColor: '#F6F4FB',
+    borderColor: '#EBE6F2',
+  },
+  sectionToggleText: { color: '#4B4B4B', fontWeight: '700', fontSize: 13 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, rowGap: 10 },
   chip: {
     flexDirection: 'row',
@@ -757,11 +899,14 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 38,
   },
-  chipSelected: { backgroundColor: '#EDE3FF', borderColor: '#CBB6F6' },
+  chipSelectedSymptom: { backgroundColor: '#FBE4ED', borderColor: '#F3B7D0' },
+  chipSelectedMood: { backgroundColor: '#EDE3FF', borderColor: '#CBB6F6' },
   chipDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#F1D9E4' },
-  chipDotSelected: { backgroundColor: '#CBB6F6' },
+  chipDotSelectedSymptom: { backgroundColor: '#F08AB5' },
+  chipDotSelectedMood: { backgroundColor: '#CBB6F6' },
   chipText: { fontSize: 13, fontWeight: '700', color: '#4B4B4B' },
-  chipTextSelected: { color: '#2D1B4E' },
+  chipTextSelectedSymptom: { color: '#B8326A' },
+  chipTextSelectedMood: { color: '#2D1B4E' },
   moodChip: { backgroundColor: '#F6F4FB', borderColor: '#EBE6F2' },
   moodDot: { backgroundColor: '#D9D1F0' },
   moodText: { color: '#3A3A3A' },
@@ -801,40 +946,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2DEEC',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    justifyContent: 'flex-end',
-  },
-  moreSheet: {
-    maxHeight: '75%',
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 12,
-  },
-  moreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  moreTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F1F1F',
-  },
-  moreContent: {
-    paddingBottom: 12,
-    gap: 14,
-  },
+  moreList: { marginTop: 12, gap: 12 },
   moreSection: {
     backgroundColor: '#F9F7FB',
     borderRadius: 18,

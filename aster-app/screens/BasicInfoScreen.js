@@ -11,6 +11,7 @@ import { useOnboarding } from '../src/context/OnboardingContext'
 
 const DEFAULT_BIRTHDATE = new Date('2000-01-01')
 const MAX_DATE = new Date()
+const PICKER_TEXT_COLOR = '#2E1C4F'
 const DEFAULT_HEIGHT = { feet: 5, inches: 6 }
 const HEIGHT_ITEM_HEIGHT = 44
 const HEIGHT_VISIBLE_ROWS = 5
@@ -408,6 +409,8 @@ export default function BasicInfoScreen() {
                 display="spinner"
                 maximumDate={MAX_DATE}
                 onChange={handleBirthdateChange}
+                themeVariant="light"
+                textColor={PICKER_TEXT_COLOR}
                 style={styles.datePicker}
               />
               <View style={styles.modalActions}>

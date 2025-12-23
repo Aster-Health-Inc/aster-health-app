@@ -349,14 +349,19 @@ const CycleHomeScreen = () => {
         const updatedCards = getDefaultSymptomCards();
 
         if (symptomNames.length) {
-          updatedCards[0].label = symptomNames.join(', ');
+          const [first, ...rest] = symptomNames;
+          updatedCards[0].label = rest.length ? `${first} + ${rest.length}` : first;
         }
         if (moodNames.length) {
-          updatedCards[1].label = moodNames.join(', ');
+          const [first, ...rest] = moodNames;
+          updatedCards[1].label = rest.length ? `${first} + ${rest.length}` : first;
         }
         if (typeof logData.energy_level === 'number') {
-          const bounded = Math.min(Math.max(logData.energy_level, 1), 5);
-          const percent = Math.round(((bounded - 1) / 4) * 100);
+          const rawEnergy = logData.energy_level;
+          const percent =
+            rawEnergy > 5
+              ? Math.max(0, Math.min(100, Math.round(rawEnergy)))
+              : Math.round(((Math.min(Math.max(rawEnergy, 1), 5) - 1) / 4) * 100);
           updatedCards[2].label = `${percent}%`;
         }
 
@@ -864,9 +869,11 @@ const CycleHomeScreen = () => {
             </View>
             <View style={styles.symptomRow}>
               {symptomCards.map((item) => (
-                <View
+                <TouchableOpacity
                   key={item.key}
                   style={[styles.symptomCard, { backgroundColor: item.background }]}
+                  activeOpacity={0.85}
+                  onPress={handleLogSymptoms}
                 >
                   <View style={[styles.symptomIcon, { backgroundColor: item.iconBackground }]}>
                     {item.icon(item.tint)}
@@ -878,7 +885,7 @@ const CycleHomeScreen = () => {
                   >
                     {item.label}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
             <TouchableOpacity

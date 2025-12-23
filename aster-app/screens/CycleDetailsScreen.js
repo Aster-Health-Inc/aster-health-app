@@ -9,6 +9,7 @@ import { useOnboarding } from '../src/context/OnboardingContext'
 
 const DEFAULT_LAST_PERIOD = new Date()
 const MAX_DATE = new Date()
+const PICKER_TEXT_COLOR = '#1F103B'
 
 const formatDate = (date) =>
   date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -203,6 +204,8 @@ const CycleDetailsScreen = ({ navigation }) => {
                 maximumDate={MAX_DATE}
                 value={tempLastPeriod}
                 onChange={handleDateChange}
+                themeVariant="light"
+                textColor={PICKER_TEXT_COLOR}
                 style={styles.datePicker}
               />
               <View style={styles.modalActions}>
