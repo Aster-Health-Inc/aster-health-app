@@ -7,8 +7,6 @@ import Svg, { Path } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const THUMB_SIZE = 28;
-
 const SYMPTOM_ORDER = [
   'Cramps',
   'Backache',
@@ -32,23 +30,6 @@ const MOOD_ORDER = [
   'Fluctuating',
   'Moody',
 ];
-
-const ENERGY_STOPS = [
-  { label: 'Low', percent: 0 },
-  { label: '', percent: 25 },
-  { label: 'Medium', percent: 50 },
-  { label: '', percent: 75 },
-  { label: 'High', percent: 100 },
-];
-
-const BatteryIcon = ({ width = 28, height = 12 }) => (
-  <Svg width={width} height={height} viewBox="0 0 35 16" fill="none">
-    <Path
-      d="M6.24609 15.8555C4.25391 15.8555 2.56641 15.668 1.37109 14.4727C0.175781 13.2773 0 11.6133 0 9.60938V6.21094C0 4.25391 0.175781 2.57812 1.37109 1.38281C2.56641 0.1875 4.25391 0 6.22266 0H24.668C26.6719 0 28.3594 0.1875 29.5547 1.38281C30.75 2.57812 30.9258 4.24219 30.9258 6.24609V9.60938C30.9258 11.6133 30.75 13.2773 29.5547 14.4727C28.3594 15.668 26.6719 15.8555 24.668 15.8555H6.24609ZM5.92969 13.9688H24.9961C26.2031 13.9688 27.4688 13.8047 28.1719 13.1016C28.8867 12.3867 29.0391 11.1328 29.0391 9.92578V5.91797C29.0391 4.71094 28.8867 3.46875 28.1719 2.75391C27.4688 2.05078 26.2031 1.88672 24.9961 1.88672H5.96484C4.73438 1.88672 3.45703 2.03906 2.74219 2.75391C2.03906 3.46875 1.88672 4.72266 1.88672 5.95312V9.92578C1.88672 11.1328 2.03906 12.3867 2.74219 13.1016C3.45703 13.8047 4.72266 13.9688 5.92969 13.9688ZM5.30859 12.6094C4.51172 12.6094 4.03125 12.4922 3.70312 12.1641C3.375 11.8359 3.25781 11.3672 3.25781 10.5586V5.32031C3.25781 4.5 3.375 4.01953 3.70312 3.69141C4.01953 3.36328 4.5 3.24609 5.34375 3.24609H13.4062C14.2031 3.24609 14.6836 3.36328 15.0117 3.69141C15.3398 4.01953 15.4688 4.48828 15.4688 5.29688V10.5586C15.4688 11.3672 15.3398 11.8359 15.0117 12.1641C14.6836 12.4922 14.2148 12.6094 13.4062 12.6094H5.30859ZM32.5195 10.957V4.89844C33.4453 4.95703 34.6875 6.14062 34.6875 7.92188C34.6875 9.71484 33.4453 10.8984 32.5195 10.957Z"
-      fill="#E6B366"
-    />
-  </Svg>
-);
 
 const groupedSymptoms = [
   {
@@ -145,6 +126,25 @@ const ALL_MOOD_NAMES = Array.from(
 const isUuid = (value) =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const THUMB_SIZE = 28;
+
+const ENERGY_STOPS = [
+  { label: 'Low', percent: 0 },
+  { label: '', percent: 25 },
+  { label: 'Medium', percent: 50 },
+  { label: '', percent: 75 },
+  { label: 'High', percent: 100 },
+];
+
+const BatteryIcon = ({ width = 28, height = 12 }) => (
+  <Svg width={width} height={height} viewBox="0 0 35 16" fill="none">
+    <Path
+      d="M6.24609 15.8555C4.25391 15.8555 2.56641 15.668 1.37109 14.4727C0.175781 13.2773 0 11.6133 0 9.60938V6.21094C0 4.25391 0.175781 2.57812 1.37109 1.38281C2.56641 0.1875 4.25391 0 6.22266 0H24.668C26.6719 0 28.3594 0.1875 29.5547 1.38281C30.75 2.57812 30.9258 4.24219 30.9258 6.24609V9.60938C30.9258 11.6133 30.75 13.2773 29.5547 14.4727C28.3594 15.668 26.6719 15.8555 24.668 15.8555H6.24609ZM5.92969 13.9688H24.9961C26.2031 13.9688 27.4688 13.8047 28.1719 13.1016C28.8867 12.3867 29.0391 11.1328 29.0391 9.92578V5.91797C29.0391 4.71094 28.8867 3.46875 28.1719 2.75391C27.4688 2.05078 26.2031 1.88672 24.9961 1.88672H5.96484C4.73438 1.88672 3.45703 2.03906 2.74219 2.75391C2.03906 3.46875 1.88672 4.72266 1.88672 5.95312V9.92578C1.88672 11.1328 2.03906 12.3867 2.74219 13.1016C3.45703 13.8047 4.72266 13.9688 5.92969 13.9688ZM5.30859 12.6094C4.51172 12.6094 4.03125 12.4922 3.70312 12.1641C3.375 11.8359 3.25781 11.3672 3.25781 10.5586V5.32031C3.25781 4.5 3.375 4.01953 3.70312 3.69141C4.01953 3.36328 4.5 3.24609 5.34375 3.24609H13.4062C14.2031 3.24609 14.6836 3.36328 15.0117 3.69141C15.3398 4.01953 15.4688 4.48828 15.4688 5.29688V10.5586C15.4688 11.3672 15.3398 11.8359 15.0117 12.1641C14.6836 12.4922 14.2148 12.6094 13.4062 12.6094H5.30859ZM32.5195 10.957V4.89844C33.4453 4.95703 34.6875 6.14062 34.6875 7.92188C34.6875 9.71484 33.4453 10.8984 32.5195 10.957Z"
+      fill="#E6B366"
+    />
+  </Svg>
+);
 
 const SymptomLogScreen = () => {
   const navigation = useNavigation();
@@ -243,6 +243,31 @@ const SymptomLogScreen = () => {
     });
     return closest;
   }, [clampedEnergyPercent]);
+
+  const updateEnergyFromGesture = useCallback(
+    (x, { snap }) => {
+      if (!trackWidth) return;
+      const clampedX = Math.max(0, Math.min(trackWidth, x));
+      const percent = (clampedX / trackWidth) * 100;
+      const snappedPercent = snap ? Math.round(percent / 5) * 5 : percent;
+      setSelectedEnergyPercent(snappedPercent);
+    },
+    [trackWidth],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 4,
+        onPanResponderGrant: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
+        onPanResponderMove: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
+        onPanResponderRelease: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
+        onPanResponderTerminate: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
+      }),
+    [updateEnergyFromGesture],
+  );
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -390,31 +415,6 @@ const SymptomLogScreen = () => {
       return [...prev, option];
     });
   }, []);
-
-  const updateEnergyFromGesture = useCallback(
-    (xPosition, { snap } = { snap: false }) => {
-      if (!trackWidth) return;
-      const ratio = Math.max(0, Math.min(1, xPosition / trackWidth));
-      const precise = ratio * 100;
-      const percent = snap ? Math.round(precise / 5) * 5 : precise;
-      setSelectedEnergyPercent(percent);
-    },
-    [trackWidth],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 4,
-        onPanResponderGrant: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
-        onPanResponderMove: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
-        onPanResponderRelease: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
-        onPanResponderTerminate: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
-      }),
-    [updateEnergyFromGesture],
-  );
 
   const handleSave = useCallback(async () => {
     if (!userIdRef.current || saving) return;

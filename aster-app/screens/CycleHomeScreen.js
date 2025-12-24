@@ -87,6 +87,24 @@ const FLOW_OPTIONS = [
   { key: 'heavy', label: 'Heavy', drops: 3, color: '#FB6887' },
 ];
 
+const roundTo5 = (value) => Math.round(value / 5) * 5;
+const parseEnergyPercent = (raw) => {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'low') return 20;
+    if (normalized === 'medium') return 50;
+    if (normalized === 'high') return 80;
+  }
+  const numeric = Number(raw);
+  if (Number.isNaN(numeric)) return null;
+  if (numeric <= 5) {
+    const legacy = Math.round(((Math.min(Math.max(numeric, 1), 5) - 1) / 4) * 100);
+    return roundTo5(Math.max(0, Math.min(100, legacy)));
+  }
+  return roundTo5(Math.max(0, Math.min(100, Math.round(numeric))));
+};
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const FIRST_OPEN_KEY = 'aster_first_open_at';
@@ -357,12 +375,10 @@ const CycleHomeScreen = () => {
           updatedCards[1].label = rest.length ? `${first} + ${rest.length}` : first;
         }
         if (typeof logData.energy_level === 'number') {
-          const rawEnergy = logData.energy_level;
-          const percent =
-            rawEnergy > 5
-              ? Math.max(0, Math.min(100, Math.round(rawEnergy)))
-              : Math.round(((Math.min(Math.max(rawEnergy, 1), 5) - 1) / 4) * 100);
-          updatedCards[2].label = `${percent}%`;
+          const percent = parseEnergyPercent(logData.energy_level);
+          if (percent != null) {
+            updatedCards[2].label = `${percent}%`;
+          }
         }
 
         setSymptomCards(updatedCards);

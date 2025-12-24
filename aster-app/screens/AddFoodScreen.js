@@ -5,6 +5,14 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Keyboa
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+
+const formatLocalDateKey = (inputDate) => {
+  const d = new Date(inputDate || new Date());
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 const AddFoodScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
@@ -40,9 +48,7 @@ const AddFoodScreen = () => {
         return;
       }
 
-      const logDate = selectedDate
-        ? new Date(selectedDate).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+      const logDate = formatLocalDateKey(selectedDate || new Date());
       
       // Extract numeric values
       const caloriesNum = parseFloat(calories) || 0;
@@ -192,10 +198,8 @@ const AddFoodScreen = () => {
         {
           text: 'View Food Log',
           onPress: () => {
-            navigation.navigate('FoodLog', { 
-              refreshData: true,
-              timestamp: Date.now()
-            });
+            const params = { refreshData: true, timestamp: Date.now() };
+            navigation.replace('FoodLog', params);
           }
         },
         {

@@ -24,7 +24,7 @@ export const createSupabaseMock = (overrides = {}) => {
         { id: 'mood-1', name: 'Calm', is_active: true },
         { id: 'mood-2', name: 'Happy', is_active: true },
       ],
-    daily_logs: overrides.dailyLog ?? { id: 'log-1', notes: '', energy_level: 3 },
+    daily_logs: overrides.dailyLog ?? { id: 'log-1', notes: '', energy_level: 50 },
     users: overrides.userRow ?? null,
     ...overrides.dataByTable,
   };

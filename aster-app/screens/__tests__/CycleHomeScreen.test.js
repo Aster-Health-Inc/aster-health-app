@@ -55,7 +55,7 @@ const makeSupabase = () => {
     select: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     maybeSingle: jest.fn().mockResolvedValue({
-      data: { id: 'log-1', energy_level: 'medium' },
+      data: { id: 'log-1', energy_level: 50 },
       error: null,
     }),
   };

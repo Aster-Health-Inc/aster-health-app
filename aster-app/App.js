@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { CardStyleInterpolators, createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { supabase } from './lib/supabase';
@@ -137,7 +137,18 @@ export default function App() {
           <OnboardingProvider>
             <FeatureFlagsProvider>
               <StatusBar style="auto" />
-              <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Navigator
+                screenOptions={({ route }) => {
+                  const tabDirection = route?.params?.tabTransition?.direction;
+                  const isRtl = tabDirection === 'rtl';
+                  return {
+                    headerShown: false,
+                    gestureDirection: isRtl ? 'horizontal-inverted' : 'horizontal',
+                    // Use stable built-in interpolator; flip gesture direction for RTL moves
+                    cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                  };
+                }}
+              >
                 {!session || !session.user ? (
                   <>
                     <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -185,6 +196,8 @@ export default function App() {
                         presentation: 'transparentModal',
                         cardStyle: { backgroundColor: 'transparent' },
                         animationEnabled: true,
+                        gestureDirection: 'vertical',
+                        cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
                       }}
                     />
                     <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />

@@ -62,11 +62,25 @@ const DEFAULT_ITEMS = [
 function BottomTaskbar({ activeKey, items = DEFAULT_ITEMS, style, onTabPress }) {
   const navigation = useNavigation();
 
+  const tabOrder = useMemo(() => items.map((item) => item.key), [items]);
+  const activeIndex = useMemo(() => tabOrder.indexOf(activeKey), [activeKey, tabOrder]);
+
   const renderedItems = useMemo(
     () =>
       items.map((item) => {
         const isActive = item.key === activeKey;
         const isCenter = Boolean(item.isCenter);
+        const targetIndex = tabOrder.indexOf(item.key);
+        const tabTransition =
+          activeIndex >= 0 && targetIndex >= 0
+            ? {
+                from: activeKey,
+                to: item.key,
+                fromIndex: activeIndex,
+                toIndex: targetIndex,
+                direction: targetIndex < activeIndex ? 'rtl' : 'ltr',
+              }
+            : null;
 
         const handlePress = () => {
           if (onTabPress) onTabPress(item);
@@ -75,10 +89,11 @@ function BottomTaskbar({ activeKey, items = DEFAULT_ITEMS, style, onTabPress }) 
             return;
           }
           if (!item.route) return;
+          const params = tabTransition ? { tabTransition } : undefined;
           if (item.key === 'Chat') {
-            navigation.navigate('Home', { openChatbot: Date.now() });
+            navigation.navigate('Home', { openChatbot: Date.now(), ...params });
           } else {
-            navigation.navigate(item.route);
+            navigation.navigate(item.route, params);
           }
         };
 
