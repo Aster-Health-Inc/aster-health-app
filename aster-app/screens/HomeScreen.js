@@ -16,11 +16,10 @@ const BACKGROUND = '#EEE7FF';
 const CARD_RADIUS = 26;
 const CHART_HEIGHT = 180;
 const H_PADDING = 24;
-const OPTIMIZATION_TIPS = [
-  'Try going to bed 30 minutes earlier on weekdays',
-  'Schedule important tasks between 10-11 AM when your energy typically peaks',
-  'Consider a 10-minute walk after lunch to maintain afternoon energy',
-];
+
+// Minimum data points required to show insights
+const MIN_DATA_DAYS = 7;
+const MIN_DATA_FOR_WEEKEND_COMPARISON = 14;
 
 // Generate cycle-phase aware insight cards
 const getCyclePhaseInsights = (phase) => {
@@ -138,19 +137,241 @@ const getCyclePhaseInsights = (phase) => {
   return insights[phase] || insights.Unknown;
 };
 
-const CHART_POINTS = [
-  { label: 'Jun', value: 122 },
-  { label: 'Jul', value: 135 },
-  { label: 'Aug', value: 152 },
-  { label: 'Sep', value: 184 },
-  { label: 'Oct', value: 148 },
-];
+// Helper function to calculate insights from energy data
+const calculateEnergyInsights = (energyLogs) => {
+  if (!energyLogs || energyLogs.length < MIN_DATA_DAYS) {
+    return null;
+  }
 
-const SUMMARY_METRICS = [
-  { label: 'Avg Energy', value: '64%', color: '#E4B02A' },
-  { label: 'Weekend Boost', value: '+23%', color: '#43C765' },
-  { label: 'Peak Energy', value: '10-11 AM', color: '#5140CF' },
-];
+  const validLogs = energyLogs.filter(log => log.energy_level != null);
+  if (validLogs.length < MIN_DATA_DAYS) {
+    return null;
+  }
+
+  // Calculate average energy (convert 1-5 scale to percentage)
+  const avgEnergy = validLogs.reduce((sum, log) => sum + log.energy_level, 0) / validLogs.length;
+  const avgEnergyPercent = Math.round((avgEnergy / 5) * 100);
+
+  // Weekend vs weekday comparison (need at least 14 days)
+  let weekendBoost = null;
+  let weekendComparison = null;
+  if (validLogs.length >= MIN_DATA_FOR_WEEKEND_COMPARISON) {
+    const weekdayLogs = validLogs.filter(log => {
+      const dayOfWeek = new Date(log.date).getDay();
+      return dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
+    });
+    const weekendLogs = validLogs.filter(log => {
+      const dayOfWeek = new Date(log.date).getDay();
+      return dayOfWeek === 0 || dayOfWeek === 6; // Saturday and Sunday
+    });
+
+    if (weekdayLogs.length > 0 && weekendLogs.length > 0) {
+      const weekdayAvg = weekdayLogs.reduce((sum, log) => sum + log.energy_level, 0) / weekdayLogs.length;
+      const weekendAvg = weekendLogs.reduce((sum, log) => sum + log.energy_level, 0) / weekendLogs.length;
+      const boost = ((weekendAvg - weekdayAvg) / weekdayAvg) * 100;
+      weekendBoost = Math.round(boost);
+      weekendComparison = { weekdayAvg, weekendAvg, boost };
+    }
+  }
+
+  // Calculate chart data (last 5 months or available data)
+  const chartData = [];
+  const now = new Date();
+  const months = [];
+  for (let i = 4; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      label: date.toLocaleDateString('en-US', { month: 'short' }),
+      month: date.getMonth(),
+      year: date.getFullYear(),
+    });
+  }
+
+  months.forEach(({ label, month, year }) => {
+    const monthLogs = validLogs.filter(log => {
+      const logDate = new Date(log.date);
+      return logDate.getMonth() === month && logDate.getFullYear() === year;
+    });
+    if (monthLogs.length > 0) {
+      const monthAvg = monthLogs.reduce((sum, log) => sum + log.energy_level, 0) / monthLogs.length;
+      // Convert to a scale similar to the original (multiply by ~30 to get similar range)
+      chartData.push({ label, value: Math.round(monthAvg * 30) });
+    }
+  });
+
+  // Calculate actual months of data based on date range
+  const sortedDates = validLogs.map(log => new Date(log.date)).sort((a, b) => a - b);
+  const firstDate = sortedDates[0];
+  const lastDate = sortedDates[sortedDates.length - 1];
+  const daysDiff = Math.floor((lastDate - firstDate) / (1000 * 60 * 60 * 24));
+  const monthsOfData = Math.max(0.1, Math.round((daysDiff / 30) * 10) / 10); // At least 0.1 months
+
+  // Peak energy time (this would require time-of-day data, which we don't have)
+  // For now, we'll skip this or use a placeholder
+  const peakEnergy = null;
+
+  return {
+    avgEnergy: avgEnergyPercent,
+    weekendBoost,
+    weekendComparison,
+    chartData: chartData.length > 0 ? chartData : null,
+    peakEnergy,
+    dataPoints: validLogs.length,
+    monthsOfData,
+  };
+};
+
+// Generate personalized optimization tips based on actual data
+const generateOptimizationTips = (insights) => {
+  if (!insights) return [];
+
+  const tips = [];
+
+  if (insights.weekendComparison) {
+    if (insights.weekendBoost > 10) {
+      tips.push('Your energy is significantly higher on weekends. Consider adjusting your weekday sleep schedule to match your weekend routine.');
+    } else if (insights.weekendBoost < -10) {
+      tips.push('You have lower energy on weekends. Try maintaining a consistent sleep schedule throughout the week.');
+    }
+  }
+
+  if (insights.avgEnergy < 50) {
+    tips.push('Your average energy levels are on the lower side. Focus on getting adequate sleep and maintaining a balanced diet.');
+  }
+
+  // Generic helpful tips that are always relevant
+  if (tips.length === 0) {
+    tips.push('Maintain a consistent sleep schedule for better energy levels');
+    tips.push('Stay hydrated throughout the day to maintain energy');
+    tips.push('Regular light exercise can help boost your energy levels');
+  }
+
+  return tips.slice(0, 3); // Limit to 3 tips
+};
+
+// Generate helpful empty state content for Energy Optimization
+const getEnergyOptimizationEmptyContent = (cyclePhase) => {
+  const phaseBasedTips = {
+    Menstrual: {
+      title: 'Energy Tips for Your Period',
+      description: 'During your period, your body needs extra rest. Here are some ways to support your energy:',
+      tips: [
+        'Prioritize 7-9 hours of sleep to help your body recover',
+        'Include iron-rich foods like spinach and lean meats to combat fatigue',
+        'Gentle movement like walking or yoga can actually boost energy',
+      ],
+    },
+    Follicular: {
+      title: 'Building Your Energy',
+      description: 'Your energy is naturally rising during this phase. Here\'s how to maximize it:',
+      tips: [
+        'This is a great time to try new workouts or activities',
+        'Maintain consistent sleep to support rising energy levels',
+        'Stay hydrated to keep your energy stable throughout the day',
+      ],
+    },
+    Ovulation: {
+      title: 'Peak Energy Phase',
+      description: 'You\'re at your energetic peak! Make the most of it:',
+      tips: [
+        'Schedule important tasks and social activities during this time',
+        'Stay hydrated as your body temperature rises slightly',
+        'Listen to your body and rest when needed, even at peak energy',
+      ],
+    },
+    Luteal: {
+      title: 'Managing Energy in Luteal Phase',
+      description: 'Energy may fluctuate as your cycle progresses. Support yourself with:',
+      tips: [
+        'Complex carbs and magnesium-rich foods can help stabilize energy',
+        'Practice stress-reducing activities like meditation or gentle exercise',
+        'Maintain a consistent sleep schedule to support mood and energy',
+      ],
+    },
+    'Late Cycle': {
+      title: 'Supporting Your Energy',
+      description: 'Your cycle is longer than usual. Here are ways to maintain energy:',
+      tips: [
+        'Stress management techniques can help regulate your cycle and energy',
+        'Ensure you\'re getting adequate sleep and rest',
+        'Stay hydrated and maintain a balanced diet',
+      ],
+    },
+    Unknown: {
+      title: 'Energy Optimization Tips',
+      description: 'Track your energy levels to discover personalized patterns. In the meantime, here are general tips:',
+      tips: [
+        'Aim for 7-9 hours of consistent sleep each night',
+        'Stay hydrated throughout the day (aim for 8 glasses of water)',
+        'Regular light exercise like walking can boost energy levels',
+      ],
+    },
+  };
+
+  return phaseBasedTips[cyclePhase] || phaseBasedTips.Unknown;
+};
+
+// Generate helpful empty state content for Health Patterns
+const getHealthPatternsEmptyContent = (cyclePhase) => {
+  const phaseBasedContent = {
+    Menstrual: {
+      title: 'Understanding Your Health Patterns',
+      description: 'Tracking your energy, symptoms, and cycle together helps reveal patterns unique to your body. During your period, you might notice:',
+      insights: [
+        'Energy levels often dip during menstruation',
+        'Symptoms like cramps and fatigue are common',
+        'Rest and iron-rich foods can help support recovery',
+      ],
+    },
+    Follicular: {
+      title: 'Your Health Journey',
+      description: 'As you track your data, you\'ll discover how your cycle affects your energy and wellness. In your follicular phase:',
+      insights: [
+        'Energy typically increases as estrogen rises',
+        'This is often a great time for new activities',
+        'Tracking helps you identify your personal patterns',
+      ],
+    },
+    Ovulation: {
+      title: 'Discovering Your Patterns',
+      description: 'Tracking helps you understand your body\'s unique rhythms. During ovulation:',
+      insights: [
+        'Many people experience peak energy and mood',
+        'Body temperature may rise slightly',
+        'Staying hydrated becomes especially important',
+      ],
+    },
+    Luteal: {
+      title: 'Learning Your Body\'s Patterns',
+      description: 'Every body is unique. Tracking helps you understand yours. In the luteal phase:',
+      insights: [
+        'Energy and mood may fluctuate as hormones change',
+        'PMS symptoms can vary from cycle to cycle',
+        'Self-care and stress management are especially valuable',
+      ],
+    },
+    'Late Cycle': {
+      title: 'Building Your Health Profile',
+      description: 'The more you track, the more insights you\'ll unlock. While waiting for your period:',
+      insights: [
+        'Stress and lifestyle factors can affect cycle length',
+        'Tracking symptoms helps identify patterns',
+        'Consistent logging reveals your personal health trends',
+      ],
+    },
+    Unknown: {
+      title: 'Start Your Health Tracking Journey',
+      description: 'Track your energy levels, symptoms, and cycle to discover personalized insights about your body. You\'ll learn:',
+      insights: [
+        'How your energy fluctuates throughout your cycle',
+        'Patterns between your symptoms and cycle phases',
+        'Personalized tips based on your unique data',
+      ],
+    },
+  };
+
+  return phaseBasedContent[cyclePhase] || phaseBasedContent.Unknown;
+};
 
 // Generate personalized messages based on cycle phase
 const getCyclePhaseInsight = (phase, daysSince) => {
@@ -180,6 +401,9 @@ const HomeScreen = () => {
     activitiesCompleted: 0,
     totalActivities: 4,
   });
+  const [energyInsights, setEnergyInsights] = useState(null);
+  const [energyChartData, setEnergyChartData] = useState(null);
+  const [optimizationTips, setOptimizationTips] = useState([]);
   const navigation = useNavigation();
   const route = useRoute();
   const { flags } = useFeatureFlags();
@@ -297,6 +521,35 @@ const HomeScreen = () => {
           activitiesCompleted: activitiesCount,
         }));
       }
+
+      // Fetch energy level data for insights
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const threeMonthsAgoISO = threeMonthsAgo.toISOString().split('T')[0];
+
+      const { data: energyLogs, error: energyError } = await supabase
+        .from('daily_logs')
+        .select('date, energy_level')
+        .eq('user_id', user.id)
+        .gte('date', threeMonthsAgoISO)
+        .not('energy_level', 'is', null)
+        .order('date', { ascending: true });
+
+      if (!energyError && energyLogs) {
+        const insights = calculateEnergyInsights(energyLogs);
+        setEnergyInsights(insights);
+        
+        if (insights?.chartData) {
+          setEnergyChartData(insights.chartData);
+        }
+        
+        const tips = generateOptimizationTips(insights);
+        setOptimizationTips(tips);
+      } else {
+        setEnergyInsights(null);
+        setEnergyChartData(null);
+        setOptimizationTips([]);
+      }
     }
 
     fetchUserData();
@@ -329,23 +582,24 @@ const HomeScreen = () => {
 
   const chartWidth = useMemo(() => Dimensions.get('window').width - H_PADDING * 2 - 20, []);
 
-  const { areaPath, linePath, minValue, maxValue } = useMemo(() => {
-    if (!CHART_POINTS.length) {
-      return { areaPath: '', linePath: '', minValue: 0, maxValue: 1 };
+  const { areaPath, linePath, minValue, maxValue, chartPoints } = useMemo(() => {
+    const points = energyChartData || [];
+    if (!points.length) {
+      return { areaPath: '', linePath: '', minValue: 0, maxValue: 1, chartPoints: [] };
     }
-    const maxVal = Math.max(...CHART_POINTS.map((point) => point.value));
-    const minVal = Math.min(...CHART_POINTS.map((point) => point.value));
+    const maxVal = Math.max(...points.map((point) => point.value));
+    const minVal = Math.min(...points.map((point) => point.value));
     const verticalPadding = 24;
     const height = CHART_HEIGHT - verticalPadding;
     const domain = maxVal - minVal || 1;
     const mapY = (value) =>
       CHART_HEIGHT - verticalPadding / 2 - ((value - minVal) / domain) * height;
-    const stepX = chartWidth / (CHART_POINTS.length - 1 || 1);
+    const stepX = chartWidth / (points.length - 1 || 1);
 
-    let area = `M 0 ${CHART_HEIGHT} L 0 ${mapY(CHART_POINTS[0].value).toFixed(2)}`;
-    let line = `M 0 ${mapY(CHART_POINTS[0].value).toFixed(2)}`;
+    let area = `M 0 ${CHART_HEIGHT} L 0 ${mapY(points[0].value).toFixed(2)}`;
+    let line = `M 0 ${mapY(points[0].value).toFixed(2)}`;
 
-    CHART_POINTS.forEach((point, index) => {
+    points.forEach((point, index) => {
       const x = index * stepX;
       const y = mapY(point.value);
       area += ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
@@ -354,8 +608,8 @@ const HomeScreen = () => {
 
     area += ` L ${chartWidth.toFixed(2)} ${CHART_HEIGHT} Z`;
 
-    return { areaPath: area, linePath: line, minValue: minVal, maxValue: maxVal };
-  }, [chartWidth]);
+    return { areaPath: area, linePath: line, minValue: minVal, maxValue: maxVal, chartPoints: points };
+  }, [chartWidth, energyChartData]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -444,67 +698,161 @@ const HomeScreen = () => {
             </View>
           </View>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Energy Optimization</Text>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusText}>Doing good!</Text>
+          {energyInsights && energyInsights.dataPoints >= MIN_DATA_DAYS ? (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Energy Optimization</Text>
+                {energyInsights.avgEnergy >= 60 ? (
+                  <View style={styles.statusPill}>
+                    <Text style={styles.statusText}>Doing good!</Text>
+                  </View>
+                ) : null}
               </View>
-            </View>
-            <Text style={styles.cardBodyText}>
-              Based on 3 months of data, your energy levels are 23% higher on weekends, likely due to
-              better sleep patterns.
-            </Text>
-
-            <View style={styles.tipCard}>
-              <View style={styles.tipHeader}>
-                <Ionicons name="sparkles-outline" size={18} color="#4B117B" />
-                <Text style={styles.tipTitle}>Optimize Your Weekday Routine</Text>
-              </View>
-              {OPTIMIZATION_TIPS.map((tip) => (
-                <View key={tip} style={styles.tipRow}>
-                  <View style={styles.tipBullet} />
-                  <Text style={styles.tipText}>{tip}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Your Health Patterns</Text>
-            <Text style={styles.cardBodyTextSecondary}>
-              Energy levels vs predictions for this week
-            </Text>
-            <View style={styles.chartWrapper}>
-              <Svg width={chartWidth} height={CHART_HEIGHT}>
-                <Defs>
-                  <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                    <Stop offset="0%" stopColor="#7052FF" stopOpacity="0.28" />
-                    <Stop offset="100%" stopColor="#7052FF" stopOpacity="0.04" />
-                  </LinearGradient>
-                </Defs>
-                <Rect x="0" y="0" width={chartWidth} height={CHART_HEIGHT} rx={22} fill="#F5F0FF" />
-                <Path d={areaPath} fill="url(#chartGradient)" />
-                <Path d={linePath} fill="none" stroke="#7052FF" strokeWidth={3.5} strokeLinecap="round" />
-              </Svg>
-            </View>
-            <View style={styles.chartLabels}>
-              {CHART_POINTS.map((point) => (
-                <Text key={point.label} style={styles.chartLabelText}>
-                  {point.label}
+              {energyInsights.weekendBoost != null ? (
+                <Text style={styles.cardBodyText}>
+                  Based on {energyInsights.monthsOfData} {energyInsights.monthsOfData === 1 ? 'month' : 'months'} of data, your energy levels are {Math.abs(energyInsights.weekendBoost)}% {energyInsights.weekendBoost > 0 ? 'higher' : 'lower'} on weekends{energyInsights.weekendBoost > 0 ? ', likely due to better sleep patterns' : ''}.
                 </Text>
-              ))}
-            </View>
+              ) : (
+                <Text style={styles.cardBodyText}>
+                  Based on {energyInsights.dataPoints} days of data, your average energy level is {energyInsights.avgEnergy}%. Keep tracking to unlock more personalized insights!
+                </Text>
+              )}
 
-            <View style={styles.metricRow}>
-              {SUMMARY_METRICS.map((metric) => (
-                <View key={metric.label} style={styles.metricItem}>
-                  <Text style={[styles.metricValue, { color: metric.color }]}>{metric.value}</Text>
-                  <Text style={styles.metricLabel}>{metric.label}</Text>
+              {optimizationTips.length > 0 && (
+                <View style={styles.tipCard}>
+                  <View style={styles.tipHeader}>
+                    <Ionicons name="sparkles-outline" size={18} color="#4B117B" />
+                    <Text style={styles.tipTitle}>Optimize Your Routine</Text>
+                  </View>
+                  {optimizationTips.map((tip, index) => (
+                    <View key={index} style={styles.tipRow}>
+                      <View style={styles.tipBullet} />
+                      <Text style={styles.tipText}>{tip}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
             </View>
-          </View>
+          ) : (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Energy Optimization</Text>
+              </View>
+              {(() => {
+                const emptyContent = getEnergyOptimizationEmptyContent(healthData.cyclePhase);
+                return (
+                  <>
+                    <Text style={styles.cardBodyText}>
+                      {emptyContent.description}
+                    </Text>
+                    <View style={styles.tipCard}>
+                      <View style={styles.tipHeader}>
+                        <Ionicons name="bulb-outline" size={18} color="#4B117B" />
+                        <Text style={styles.tipTitle}>{emptyContent.title}</Text>
+                      </View>
+                      {emptyContent.tips.map((tip, index) => (
+                        <View key={index} style={styles.tipRow}>
+                          <View style={styles.tipBullet} />
+                          <Text style={styles.tipText}>{tip}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.emptyStateFooter}>
+                      <Ionicons name="trending-up-outline" size={16} color="#7D7396" />
+                      <Text style={styles.emptyStateFooterText}>
+                        Log your energy levels daily to unlock personalized insights
+                      </Text>
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          )}
+
+          {energyInsights && energyChartData && energyChartData.length > 0 ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Your Health Patterns</Text>
+              <Text style={styles.cardBodyTextSecondary}>
+                Energy levels over the past {energyChartData.length} {energyChartData.length === 1 ? 'month' : 'months'}
+              </Text>
+              <View style={styles.chartWrapper}>
+                <Svg width={chartWidth} height={CHART_HEIGHT}>
+                  <Defs>
+                    <LinearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                      <Stop offset="0%" stopColor="#7052FF" stopOpacity="0.28" />
+                      <Stop offset="100%" stopColor="#7052FF" stopOpacity="0.04" />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect x="0" y="0" width={chartWidth} height={CHART_HEIGHT} rx={22} fill="#F5F0FF" />
+                  {areaPath && <Path d={areaPath} fill="url(#chartGradient)" />}
+                  {linePath && <Path d={linePath} fill="none" stroke="#7052FF" strokeWidth={3.5} strokeLinecap="round" />}
+                </Svg>
+              </View>
+              <View style={styles.chartLabels}>
+                {chartPoints.map((point) => (
+                  <Text key={point.label} style={styles.chartLabelText}>
+                    {point.label}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={styles.metricRow}>
+                <View style={styles.metricItem}>
+                  <Text style={[styles.metricValue, { color: '#E4B02A' }]}>{energyInsights.avgEnergy}%</Text>
+                  <Text style={styles.metricLabel}>Avg Energy</Text>
+                </View>
+                {energyInsights.weekendBoost != null ? (
+                  <View style={styles.metricItem}>
+                    <Text style={[styles.metricValue, { color: energyInsights.weekendBoost > 0 ? '#43C765' : '#E4B02A' }]}>
+                      {energyInsights.weekendBoost > 0 ? '+' : ''}{energyInsights.weekendBoost}%
+                    </Text>
+                    <Text style={styles.metricLabel}>Weekend {energyInsights.weekendBoost > 0 ? 'Boost' : 'Change'}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.metricItem}>
+                    <Text style={[styles.metricValue, { color: '#5140CF' }]}>{energyInsights.dataPoints}</Text>
+                    <Text style={styles.metricLabel}>Days Tracked</Text>
+                  </View>
+                )}
+                <View style={styles.metricItem}>
+                  <Text style={[styles.metricValue, { color: '#5140CF' }]}>
+                    {energyInsights.monthsOfData} {energyInsights.monthsOfData === 1 ? 'mo' : 'mos'}
+                  </Text>
+                  <Text style={styles.metricLabel}>Data Period</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Your Health Patterns</Text>
+              {(() => {
+                const emptyContent = getHealthPatternsEmptyContent(healthData.cyclePhase);
+                return (
+                  <>
+                    <Text style={styles.cardBodyTextSecondary}>
+                      {emptyContent.description}
+                    </Text>
+                    <View style={styles.emptyInsightsContainer}>
+                      {emptyContent.insights.map((insight, index) => (
+                        <View key={index} style={styles.emptyInsightItem}>
+                          <View style={styles.emptyInsightIcon}>
+                            <Ionicons name="checkmark-circle" size={20} color="#7052FF" />
+                          </View>
+                          <Text style={styles.emptyInsightText}>{insight}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={styles.emptyStateFooter}>
+                      <Ionicons name="analytics-outline" size={16} color="#7D7396" />
+                      <Text style={styles.emptyStateFooterText}>
+                        Start tracking to see your personalized health patterns
+                      </Text>
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          )}
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>
@@ -858,5 +1206,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#4B117B',
+  },
+  emptyStateFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(125, 115, 150, 0.15)',
+  },
+  emptyStateFooterText: {
+    fontSize: 12,
+    color: '#7D7396',
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  emptyInsightsContainer: {
+    marginTop: 12,
+    marginBottom: 16,
+    gap: 12,
+  },
+  emptyInsightItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  emptyInsightIcon: {
+    marginTop: 2,
+  },
+  emptyInsightText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#5F5478',
   },
 });
