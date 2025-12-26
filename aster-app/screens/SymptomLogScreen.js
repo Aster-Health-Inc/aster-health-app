@@ -149,6 +149,7 @@ const BatteryIcon = ({ width = 28, height = 12 }) => (
 const SymptomLogScreen = () => {
   const navigation = useNavigation();
   const slideAnim = useRef(new Animated.Value(120)).current;
+  const trackRef = useRef(null);
   const [searchValue, setSearchValue] = useState('');
   const [symptomOptions, setSymptomOptions] = useState([]);
   const [moodOptions, setMoodOptions] = useState([]);
@@ -245,9 +246,9 @@ const SymptomLogScreen = () => {
   }, [clampedEnergyPercent]);
 
   const updateEnergyFromGesture = useCallback(
-    (x, { snap }) => {
+    (rawX, { snap }) => {
       if (!trackWidth) return;
-      const clampedX = Math.max(0, Math.min(trackWidth, x));
+      const clampedX = Math.max(0, Math.min(trackWidth, rawX));
       const percent = (clampedX / trackWidth) * 100;
       const snappedPercent = snap ? Math.round(percent / 5) * 5 : percent;
       setSelectedEnergyPercent(snappedPercent);
@@ -258,9 +259,13 @@ const SymptomLogScreen = () => {
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 4,
+        // Capture immediately so dragging the thumb or track updates energy without needing a tap
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
         onPanResponderMove: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: false }),
         onPanResponderRelease: (evt) => updateEnergyFromGesture(evt.nativeEvent.locationX, { snap: true }),
@@ -454,7 +459,7 @@ const SymptomLogScreen = () => {
 
       if (selectedSymptoms.length) {
         const symptomPayload = selectedSymptoms
-          .filter((option) => option.id && !option.isLocal && isUuid(option.id))
+          .filter((option) => option.id && !option.isLocal)
           .map((option) => ({
             user_id: userId,
             daily_log_id: dailyLogId,
@@ -476,7 +481,7 @@ const SymptomLogScreen = () => {
 
       if (selectedMoods.length) {
         const moodPayload = selectedMoods
-          .filter((option) => option.id && !option.isLocal && isUuid(option.id))
+          .filter((option) => option.id && !option.isLocal)
           .map((option) => ({
             user_id: userId,
             daily_log_id: dailyLogId,
@@ -733,11 +738,12 @@ const SymptomLogScreen = () => {
                   </Text>
                 ))}
               </View>
-              <Pressable
+              <View
+                ref={trackRef}
                 style={styles.energyTrackWrapper}
                 onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
-                onPress={(event) => updateEnergyFromGesture(event.nativeEvent.locationX, { snap: true })}
-                hitSlop={{ top: 6, bottom: 6 }}
+                hitSlop={{ top: 6, bottom: 6, left: 12, right: 12 }}
+                pointerEvents="box-only"
                 {...panResponder.panHandlers}
               >
                 <View style={styles.energyTrackBackground} />
@@ -764,7 +770,7 @@ const SymptomLogScreen = () => {
                 >
                   <BatteryIcon />
                 </View>
-              </Pressable>
+              </View>
             </View>
 
             <View style={styles.card}>

@@ -46,6 +46,33 @@ const to24HourString = (date) => {
   return `${hours}:${minutes}:00`;
 };
 
+const PICKER_ANCHOR_DAY = new Date(2020, 6, 1, 12, 0, 0, 0); // Mid-summer to avoid DST edge
+
+const readTimeParts = (raw) => {
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return { hours: raw.getHours(), minutes: raw.getMinutes() };
+  }
+
+  if (typeof raw === 'string') {
+    const match = raw.match(/^(\\d{1,2}):(\\d{2})/);
+    if (match) {
+      const hours = Math.min(23, Math.max(0, Number(match[1])));
+      const minutes = Math.min(59, Math.max(0, Number(match[2])));
+      return { hours, minutes };
+    }
+  }
+
+  const now = new Date();
+  return { hours: now.getHours(), minutes: now.getMinutes() };
+};
+
+const buildAnchoredTime = (value) => {
+  const { hours, minutes } = readTimeParts(value);
+  const anchor = new Date(PICKER_ANCHOR_DAY);
+  anchor.setHours(hours, minutes, 0, 0);
+  return anchor;
+};
+
 export default function ReminderScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -55,10 +82,18 @@ export default function ReminderScreen() {
   const hasAutoSavedRef = useRef(false);
 
   const [selectedTime, setSelectedTime] = useState(() => {
-    const initial = state.reminder.time ? new Date(state.reminder.time) : new Date();
-    initial.setSeconds(0, 0);
-    return initial;
+    return buildAnchoredTime(state.reminder.time ? new Date(state.reminder.time) : new Date());
   });
+  const pickerMinDate = useMemo(() => {
+    const d = new Date(PICKER_ANCHOR_DAY);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const pickerMaxDate = useMemo(() => {
+    const d = new Date(PICKER_ANCHOR_DAY);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, []);
   const [saving, setSaving] = useState(false);
 
   const formattedTime = useMemo(
@@ -69,8 +104,7 @@ export default function ReminderScreen() {
   const handleTimeChange = useCallback(
     (_, date) => {
       if (!date) return;
-      const next = new Date(date);
-      next.setSeconds(0, 0);
+      const next = buildAnchoredTime(date);
       setSelectedTime(next);
       updateReminder({ time: next });
     },
@@ -333,7 +367,10 @@ export default function ReminderScreen() {
                 display="spinner"
                 onChange={handleTimeChange}
                 minuteInterval={1}
+                minimumDate={pickerMinDate}
+                maximumDate={pickerMaxDate}
                 textColor={COLORS.textPrimary}
+                is24Hour={false}
                 style={styles.picker}
               />
             ) : (
@@ -342,6 +379,10 @@ export default function ReminderScreen() {
                 mode="time"
                 display="default"
                 onChange={handleTimeChange}
+                is24Hour
+                minimumDate={pickerMinDate}
+                maximumDate={pickerMaxDate}
+                minuteInterval={1}
               />
             )}
           </View>
