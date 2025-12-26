@@ -7,9 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useOnboardingGuard } from '../utils/useOnboardingGuard'
 import { useOnboarding } from '../src/context/OnboardingContext'
 
+
 const DEFAULT_LAST_PERIOD = new Date()
 const MAX_DATE = new Date()
-const PICKER_TEXT_COLOR = '#1F103B'
 
 const formatDate = (date) =>
   date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -20,6 +20,8 @@ const CycleDetailsScreen = ({ navigation }) => {
   const { updateCycle } = useOnboarding()
   const [lastPeriod, setLastPeriod] = useState(null)
   const [tempLastPeriod, setTempLastPeriod] = useState(DEFAULT_LAST_PERIOD)
+  const [showCycleInfo, setShowCycleInfo] = useState(false)
+  const [showPeriodInfo, setShowPeriodInfo]=useState(false)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [cycleLength, setCycleLength] = useState('')
   const [periodLength, setPeriodLength] = useState('')
@@ -109,8 +111,9 @@ const CycleDetailsScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.card}>
+            {/*Last period*/}
               <TouchableOpacity
-                style={[styles.field, styles.fieldRow]}
+                style={[styles.field, styles.fieldRow, styles.pressableRow]}
                 activeOpacity={0.85}
                 onPress={openDatePicker}
               >
@@ -119,9 +122,16 @@ const CycleDetailsScreen = ({ navigation }) => {
                   {lastPeriod ? formatDate(lastPeriod) : 'Select date'}
                 </Text>
               </TouchableOpacity>
+              {/*Cycle Length*/}
+            <View style = {styles.field}>
+              <View style={[styles.rowBetween, styles.fieldRow]}>
+                <View style = {styles.labelRow}>
+                 <Text style={styles.fieldLabel}>Cycle length</Text>
+                 <TouchableOpacity onPress={()=> setShowCycleInfo((s) =>!s)}>
+                  <Ionicons name="information-circle-outline" size={20} color="#555"/>
+                 </TouchableOpacity>
+                </View>
 
-              <View style={[styles.field, styles.fieldRow]}>
-                <Text style={styles.fieldLabel}>Cycle length</Text>
                 <View style={[styles.inputField, styles.inputWithUnit]}>
                   <TextInput
                     value={cycleLength}
@@ -138,39 +148,55 @@ const CycleDetailsScreen = ({ navigation }) => {
                 </View>
               </View>
 
-              <View style={[styles.field, styles.lastField, styles.fieldRow]}>
+              {showCycleInfo && (
+                <View pointerEvents="none" style = {styles.infoBox}>
+                  <Text style = {styles.infoText}>
+                    Cycle Length is the number of days between the first day of one period to the first day of the next.
+                  </Text>
+                </View>
+              )}
+          </View>
+              
+          {/*Period length*/}
+
+          <View style={styles.field}>
+            <View style={[styles.rowBetween, styles.fieldRow]}>
+              <View style={styles.labelRow}>
                 <Text style={styles.fieldLabel}>Period length</Text>
-                <View style={[styles.inputField, styles.inputWithUnit]}>
-                  <TextInput
-                    ref={periodLengthRef}
-                    value={periodLength}
-                    onChangeText={(value) => setPeriodLength(sanitizeNumber(value))}
-                    style={[styles.textInput, styles.numericInput]}
-                    keyboardType="number-pad"
-                    returnKeyType="done"
-                    maxLength={2}
-                    onSubmitEditing={handleContinue}
-                  />
-                  <View style={styles.unitBadge}>
-                    <Text style={styles.unitBadgeText}>days</Text>
-                  </View>
+                <TouchableOpacity onPress={()=> setShowPeriodInfo((s) => !s)}>
+                  <Ionicons name="information-circle-outline" size={20} color="#555"/>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.inputField, styles.inputWithUnit]}>
+                <TextInput
+                  ref={periodLengthRef}
+                  value={periodLength}
+                  onChangeText={(value) => setPeriodLength(sanitizeNumber(value))}
+                  style={[styles.textInput, styles.numericInput]}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  maxLength={2}
+                  onSubmitEditing={handleContinue}
+                />
+                <View style={styles.unitBadge}>
+                  <Text style={styles.unitBadgeText}>days</Text>
                 </View>
               </View>
             </View>
-
-            <View style={styles.detailsText}>
-              <Text style={styles.detailHeading}>Cycle Length</Text>
-              <Text style={styles.detailBody}>
-                Cycle Length is the number of days between the first day of one period to the first
-                day of the next.
-              </Text>
-              <Text style={[styles.detailHeading, { marginTop: 16 }]}>Period Length</Text>
-              <Text style={styles.detailBody}>
-                Period Length is the number of days you experience menstrual bleeding within your
-                typical cycle.
-              </Text>
-            </View>
+          
+            {showPeriodInfo && (
+              <View pointerEvents="none" style = {[styles.infoBox, styles.infoBoxFullWidth]}>
+                  <Text style = {styles.infoText}>
+                    Period Length is the number of days you experience menstrual bleeding within your typical cycle.
+                    </Text>
+                </View>
+        
+            )}
           </View>
+        </View>
+      </View>
+
         </KeyboardAvoidingView>
 
         <View style={styles.footer}>
@@ -204,18 +230,13 @@ const CycleDetailsScreen = ({ navigation }) => {
                 maximumDate={MAX_DATE}
                 value={tempLastPeriod}
                 onChange={handleDateChange}
-                themeVariant="light"
-                textColor={PICKER_TEXT_COLOR}
                 style={styles.datePicker}
               />
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.modalButton} onPress={cancelDateIOS}>
                   <Text style={styles.modalButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalConfirm]}
-                  onPress={confirmDateIOS}
-                >
+                <TouchableOpacity style={[styles.modalButton, styles.modalConfirm]} onPress={confirmDateIOS}>
                   <Text style={[styles.modalButtonText, styles.modalConfirmText]}>Done</Text>
                 </TouchableOpacity>
               </View>
@@ -287,38 +308,26 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     justifyContent: 'center',
   },
-  lastField: {
-    marginBottom: 0,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  fieldLabel: {
-    flexShrink: 0,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#7F6AAE',
-  },
-  textInput: {
-    fontSize: 18,
-    color: '#2E1C4F',
-    paddingVertical: 0,
-    textAlign: 'right',
-    flex: 1,
-  },
+  lastField: { marginBottom: 0, borderBottomWidth: 0, paddingBottom: 0 }, 
+
+  fieldRow: { flexDirection: 'row', alignItems: 'center' },
+
+  pressableRow: { justifyContent: 'space-between' }, 
+  rowBetween: { flexDirection: 'row', alignItems:'center', justifyContent: 'space-between', },
+
+  labelRow: { flex: 1, flexDirection: 'row', alignItems: 'center', minWidth:0, }, 
+
+  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#7F6AAE' },
+
+  inputField: { flexDirection: 'row', alignItems:'center', justifyContent:'flex-end', flexShrink:0, minWidth: 90, },
+
+  inputWithUnit: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   numericInput: {
-    paddingRight: 4,
+  width: 32, textAlign: 'right',
+  paddingRight: 0,
   },
-  inputField: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  inputWithUnit: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
+
+
   valueText: {
     fontSize: 18,
     color: '#2E1C4F',
@@ -329,7 +338,7 @@ const styles = StyleSheet.create({
     color: '#B6A9D3',
   },
   unitBadge: {
-    marginLeft: 8,
+    marginLeft: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
@@ -340,23 +349,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12,
   },
-  detailsText: {
-    marginTop: 28,
+  infoBox: {
+    marginTop: 10, marginBottom:6,
+    alignSelf: 'center',
+    width: '100%',
+    backgroundColor: '#F7F1FF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  detailHeading: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4B117B',
-  },
-  detailBody: {
+  infoText: {
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 18,
     color: '#5E4A82',
-    marginTop: 6,
+    textAlign: 'center',
+  },
+  infoBoxFullWidth: {
+   alignSelf: 'stretch',
+   width: '100%',
   },
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingBottom: 28,
   },
   cta: {
     width: '100%',
