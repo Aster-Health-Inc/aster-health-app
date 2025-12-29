@@ -3,9 +3,11 @@ import 'dotenv/config';
 export default ({ config }) => ({
   ...config,
   scheme: 'aster',
+  version: '1.0.0',
   ios: {
     ...(config.ios ?? {}),
-    bundleIdentifier: 'com.aster.healthapp.dev',
+    bundleIdentifier: 'com.asterhealth.app',
+    buildNumber: '3',
     usesAppleSignIn: true,
     infoPlist: {
       NSHealthShareUsageDescription:
