@@ -6,8 +6,8 @@ export default ({ config }) => ({
   version: '1.0.0',
   ios: {
     ...(config.ios ?? {}),
-    bundleIdentifier: 'com.asterhealth.app',
-    buildNumber: '3',
+    bundleIdentifier: 'com.asterhealthinc.app',
+    buildNumber: '1',
     usesAppleSignIn: true,
     infoPlist: {
       NSHealthShareUsageDescription:
