@@ -25,6 +25,7 @@ export default ({ config }) => ({
   plugins: [
     "expo-localization",
     ...(config.plugins ?? []),
+    "expo-notifications",
     'expo-web-browser'
   ]
 });

@@ -53,6 +53,15 @@ import PastCycleCalendarScreen from './screens/PastCycleCalendarScreen';
 import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLogger';
 // ✅ import PostHog client + provider
 import { PostHogProvider, PostHog } from 'posthog-react-native';
+import * as Notifications from 'expo-notifications';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const Stack = createStackNavigator();
 

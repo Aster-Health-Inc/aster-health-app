@@ -14,6 +14,19 @@ export const ensureUserRecord = async (user) => {
   }
 };
 
+export const getVerifiedUser = async () => {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (user) return user;
+
+  if (error) {
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) return null;
+    return refreshData?.user ?? refreshData?.session?.user ?? null;
+  }
+
+  return null;
+};
+
 /**
  * Resolve the canonical user id used for shared tables (periods, predictions, etc).
  *

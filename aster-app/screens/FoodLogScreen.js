@@ -4,7 +4,7 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Defs, ClipPath, Rect, G, LinearGradient, Stop } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
-import { ensureUserRecord, getCanonicalUserId } from '../utils/authUser';
+import { ensureUserRecord, getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
 import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import BottomTaskbar from '../components/BottomTaskbar';
@@ -156,7 +156,7 @@ const FoodLogScreen = () => {
     try {
       setLoading(true);
       setInlineError(null);
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getVerifiedUser();
       if (!user) {
         setDaily(null);
         setGoals(null);
@@ -308,7 +308,7 @@ const saveWaterLog = async () => {
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getVerifiedUser();
     if (!user) return;
 
     const canonicalUserId = await getCanonicalUserId(user);
@@ -405,7 +405,7 @@ const saveWaterLog = async () => {
     };
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getVerifiedUser();
       if (!user) return;
       const canonicalUserId = await getCanonicalUserId(user);
 

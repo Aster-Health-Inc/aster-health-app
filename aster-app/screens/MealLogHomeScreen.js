@@ -7,6 +7,7 @@ import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomTaskbar from '../components/BottomTaskbar';
 import { fetchUserDailyLogs } from '../utils/meallogger';
+import { getVerifiedUser } from '../utils/authUser';
 import { supabase } from '../lib/supabase';
 
 const MEALS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -45,7 +46,7 @@ export default function MealLogHomeScreen() {
 
   const loadDailyData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getVerifiedUser();
       if (!user) return;
       const dateStr = formatDateKey(selectedDate);
       const data = await fetchUserDailyLogs(user.id, dateStr);
@@ -337,7 +338,7 @@ export default function MealLogHomeScreen() {
               <Pressable
                 onPress={async () => {
                   try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    const user = await getVerifiedUser();
                     if (!user) return;
 
                     const intake = parseInt(waterDraft, 10);
@@ -423,7 +424,7 @@ export default function MealLogHomeScreen() {
               <Pressable
                 onPress={async () => {
                   try {
-                    const { data: { user } } = await supabase.auth.getUser();
+                    const user = await getVerifiedUser();
                     if (!user) return;
 
                     const ml = parseInt(waterGoalDraft, 10);

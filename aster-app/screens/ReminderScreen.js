@@ -10,6 +10,7 @@ import { useOnboardingGuard } from '../utils/useOnboardingGuard';
 import { useOnboarding } from '../src/context/OnboardingContext';
 import { getCanonicalUserId } from '../utils/authUser';
 import { updatePredictionsForUser, saveCyclePrediction } from '../utils/cyclePredictions';
+import { scheduleDailyCheckins } from '../utils/notifications';
 
 const COLORS = {
   background: '#EDE5F7',
@@ -308,6 +309,12 @@ export default function ReminderScreen() {
           prediction_method: 'onboarding_fallback',
         });
       }
+
+      await scheduleDailyCheckins({
+        enabled: checkinEnabled,
+        time: checkinEnabled ? selectedTime : null,
+        days: reminderDays,
+      });
 
       resetOnboarding();
       navigation.reset({ index: 0, routes: [{ name: 'Home' }] });

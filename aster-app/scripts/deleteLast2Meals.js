@@ -1,7 +1,14 @@
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://iinbwdrzmmcwajbmuynh.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpbmJ3ZHJ6bW1jd2FqYm11eW5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODEwNjgsImV4cCI6MjA2NzA1NzA2OH0.31o5g-ES31ary6-JIe_QeRDctrP03NZ07V9icf2VWNU';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase env vars: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY'
+  );
+}
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

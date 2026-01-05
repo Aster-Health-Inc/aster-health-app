@@ -73,6 +73,13 @@ const ALL_SYMPTOM_NAMES = Array.from(
   ]),
 );
 
+const symptomCategoryByName = groupedSymptoms.reduce((acc, group) => {
+  group.items.forEach((item) => {
+    acc[item] = group.title;
+  });
+  return acc;
+}, {});
+
 const groupedMoods = [
   {
     title: 'Positive/Neutral Moods',
@@ -421,6 +428,56 @@ const SymptomLogScreen = () => {
     });
   }, []);
 
+  const resolveSymptomIds = useCallback(async () => {
+    const selections = selectedSymptoms || [];
+    if (!selections.length) return [];
+
+    const resolved = selections.map((option) => {
+      const directId = isUuid(option.id) ? option.id : null;
+      const mapped = symptomMap.get(normalizeName(option.name));
+      const mappedId = isUuid(mapped?.id) ? mapped.id : null;
+      return { option, id: directId || mappedId || null };
+    });
+
+    const missingNames = Array.from(
+      new Set(
+        resolved
+          .filter((item) => !item.id)
+          .map((item) => item.option?.name)
+          .filter(Boolean),
+      ),
+    );
+
+    if (missingNames.length) {
+      const buildCategory = (name) => symptomCategoryByName[name] || 'Other';
+      const { error: upsertError } = await supabase
+        .from('symptom_categories')
+        .upsert(
+          missingNames.map((name) => ({
+            name,
+            category: buildCategory(name),
+          })),
+          { onConflict: 'name' },
+        );
+      if (upsertError) throw upsertError;
+
+      const { data: fetched, error: fetchError } = await supabase
+        .from('symptom_categories')
+        .select('id, name')
+        .in('name', missingNames);
+      if (fetchError) throw fetchError;
+
+      const fetchedMap = new Map((fetched ?? []).map((row) => [normalizeName(row.name), row.id]));
+      resolved.forEach((item) => {
+        if (!item.id) {
+          item.id = fetchedMap.get(normalizeName(item.option?.name)) || null;
+        }
+      });
+    }
+
+    return resolved.filter((item) => item.id).map((item) => item.id);
+  }, [normalizeName, selectedSymptoms, symptomMap]);
+
   const handleSave = useCallback(async () => {
     if (!userIdRef.current || saving) return;
     try {
@@ -458,14 +515,13 @@ const SymptomLogScreen = () => {
       if (deleteSymptomsError) throw deleteSymptomsError;
 
       if (selectedSymptoms.length) {
-        const symptomPayload = selectedSymptoms
-          .filter((option) => option.id && !option.isLocal)
-          .map((option) => ({
+        const symptomIds = await resolveSymptomIds();
+        if (symptomIds.length) {
+          const symptomPayload = symptomIds.map((id) => ({
             user_id: userId,
             daily_log_id: dailyLogId,
-            symptom_id: option.id,
+            symptom_id: id,
           }));
-        if (symptomPayload.length) {
           const { error: insertSymptomsError } = await supabase
             .from('user_symptoms')
             .insert(symptomPayload);
@@ -503,7 +559,7 @@ const SymptomLogScreen = () => {
     } finally {
       setSaving(false);
     }
-  }, [navigation, notes, selectedEnergyPercent, selectedMoods, selectedSymptoms, saving]);
+  }, [navigation, notes, resolveSymptomIds, selectedEnergyPercent, selectedMoods, selectedSymptoms, saving]);
 
   const handleClose = () => navigation.goBack();
 

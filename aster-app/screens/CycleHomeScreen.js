@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo, parseYMD, toUtcMidnight } from '../utils/cycleCalculations';
-import { getCanonicalUserId } from '../utils/authUser';
+import { getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
 import { updatePredictionsForUser } from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
 
@@ -249,12 +249,7 @@ const CycleHomeScreen = () => {
   const loadCycleData = useCallback(async () => {
     setLoading(true);
     try {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError) throw authError;
+      const user = await getVerifiedUser();
 
       if (!user) {
         setCycleData(null);
@@ -511,7 +506,7 @@ const CycleHomeScreen = () => {
     if (!selectedDay) return;
     setSavingDay(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getVerifiedUser();
       if (!user) {
         Alert.alert('Sign in required', 'Please sign in to log your period day.');
         return;
@@ -559,9 +554,7 @@ const CycleHomeScreen = () => {
     async (value) => {
       setSubmittingRating(true);
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = await getVerifiedUser();
 
         const payload = {
           rating: value,
