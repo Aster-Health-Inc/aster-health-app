@@ -7,7 +7,7 @@ export default ({ config }) => ({
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealthinc.app',
-    buildNumber: '3',
+    buildNumber: '5',
     "icon": "./assets/icon.png",
     usesAppleSignIn: true,
     infoPlist: {
