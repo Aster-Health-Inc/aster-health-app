@@ -69,6 +69,8 @@ export default function App() {
   // 1) Hooks at the top
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isInvalidRefreshToken = (err) =>
+    String(err?.message || err || '').toLowerCase().includes('invalid refresh token');
 
   // 2) Initialize global error handlers once
   useEffect(() => {
@@ -80,8 +82,16 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
       if (!isMounted) return;
+      if (error) {
+        error('[Auth] getSession error:', error);
+        if (isInvalidRefreshToken(error)) {
+          try {
+            await supabase.auth.signOut();
+          } catch {}
+        }
+      }
       setSession(session);
       setLoading(false);
     });

@@ -75,9 +75,10 @@ export const initLogging = () => {
 
 // Set up global error capture
 export const initGlobalErrorHandler = () => {
+  const hasErrorUtils = typeof ErrorUtils !== 'undefined';
   // JS runtime errors
-  const defaultHandler = ErrorUtils.getGlobalHandler?.();
-  if (ErrorUtils.setGlobalHandler) {
+  const defaultHandler = hasErrorUtils ? ErrorUtils.getGlobalHandler?.() : null;
+  if (hasErrorUtils && ErrorUtils.setGlobalHandler) {
     ErrorUtils.setGlobalHandler((err, isFatal) => {
       error('[GlobalError]', isFatal ? 'FATAL' : 'NON-FATAL', err);
       try {
