@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { usePostHog } from 'posthog-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +13,7 @@ import { calculateCyclePhase, getPhaseInfo, parseYMD, toUtcMidnight } from '../u
 import { getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
 import { updatePredictionsForUser } from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
+import TabSwipeWrapper from '../components/TabSwipeWrapper';
 
 const BACKGROUND_COLOR = '#EEE7FF';
 const CARD_BORDER = 'rgba(255,255,255,0.6)';
@@ -203,6 +205,7 @@ function isSameDay(a, b) {
 
 const CycleHomeScreen = () => {
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const [loading, setLoading] = useState(true);
   const [cycleData, setCycleData] = useState(null);
   const [symptomCards, setSymptomCards] = useState(() => getDefaultSymptomCards());
@@ -533,6 +536,13 @@ const CycleHomeScreen = () => {
         console.log('Prediction refresh failed', err);
       }
 
+      posthog?.capture('cycle_logged', {
+        source: 'cycle_home',
+        start_date: toYMD(startDate),
+        end_date: toYMD(endDate),
+        period_day: periodDay,
+      });
+
       setDayModalVisible(false);
       setToast('Period day saved');
       setTimeout(() => setToast(null), 1800);
@@ -601,7 +611,8 @@ const CycleHomeScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <TabSwipeWrapper activeKey="Cycle">
+      <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.container}>
         <ScrollView
@@ -1062,8 +1073,9 @@ const CycleHomeScreen = () => {
         </Pressable>
       </Modal>
 
-      <BottomTaskbar activeKey="Cycle" />
-    </SafeAreaView>
+        <BottomTaskbar activeKey="Cycle" />
+      </SafeAreaView>
+    </TabSwipeWrapper>
   );
 };
 

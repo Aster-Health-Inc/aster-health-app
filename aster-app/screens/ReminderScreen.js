@@ -3,6 +3,7 @@ import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { usePostHog } from 'posthog-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
@@ -77,6 +78,7 @@ const buildAnchoredTime = (value) => {
 export default function ReminderScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const posthog = usePostHog();
   useOnboardingGuard(navigation);
   const { state, updateReminder, resetOnboarding } = useOnboarding();
   const checkinEnabled = state.reminder.checkinEnabled !== false;
@@ -314,6 +316,12 @@ export default function ReminderScreen() {
         enabled: checkinEnabled,
         time: checkinEnabled ? selectedTime : null,
         days: reminderDays,
+      });
+
+      posthog?.capture('cycle_logged', {
+        source: 'onboarding',
+        start_date: lastPeriodYmd,
+        period_count: periodPayload.length,
       });
 
       resetOnboarding();

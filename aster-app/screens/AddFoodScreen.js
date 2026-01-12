@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostHog } from 'posthog-react-native';
 import { supabase } from '../lib/supabase';
+import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 
 const formatLocalDateKey = (inputDate) => {
   const d = new Date(inputDate || new Date());
@@ -16,6 +18,7 @@ const formatLocalDateKey = (inputDate) => {
 const AddFoodScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const { mealType, photoUri, analysisData, selectedDate } = route.params || {};
   const resolvedMealType = mealType || 'Meal';
 
@@ -193,6 +196,29 @@ const AddFoodScreen = () => {
       } else {
         console.log('Successfully saved via RPC:', rpcResult);
       }
+
+      let calorieGoal = null;
+      try {
+        const goals = await getUserNutritionGoals(supabase, user.id);
+        calorieGoal = goals?.calories ?? null;
+      } catch (goalError) {
+        console.log('[PostHog] nutrition goals fetch failed', goalError);
+      }
+
+      const normalizedMealType = String(resolvedMealType || '')
+        .trim()
+        .toLowerCase();
+      const mealTypeKey = ['breakfast', 'lunch', 'dinner', 'snack'].includes(normalizedMealType)
+        ? normalizedMealType
+        : undefined;
+
+      posthog?.capture('meal_logged', {
+        meal_type: mealTypeKey,
+        calories: caloriesNum || undefined,
+        calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
+        calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
+        water_logged: false,
+      });
 
       Alert.alert('Success!', `${foodName} has been added to your ${resolvedMealType} log`, [
         {

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Activi
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostHog } from 'posthog-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -155,6 +156,7 @@ const BatteryIcon = ({ width = 28, height = 12 }) => (
 
 const SymptomLogScreen = () => {
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const slideAnim = useRef(new Animated.Value(120)).current;
   const trackRef = useRef(null);
   const [searchValue, setSearchValue] = useState('');
@@ -551,6 +553,13 @@ const SymptomLogScreen = () => {
           if (insertMoodsError) throw insertMoodsError;
         }
       }
+
+      posthog?.capture('mood_logged', {
+        symptoms_count: selectedSymptoms.length,
+        moods_count: selectedMoods.length,
+        energy_level: energyValue,
+        has_notes: Boolean(sanitizedNotes),
+      });
 
       navigation.goBack();
     } catch (error) {

@@ -18,6 +18,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { usePostHog } from 'posthog-react-native';
 import { SvgXml } from 'react-native-svg';
 import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
@@ -144,6 +145,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const [mode, setMode] = useState(
     initialMode === Mode.SIGN_IN ? Mode.SIGN_IN : Mode.SIGN_UP
   );
@@ -157,6 +159,13 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
   const [anonModalVisible, setAnonModalVisible] = useState(false);
   const [anonUsername, setAnonUsername] = useState('');
   const [anonPassword, setAnonPassword] = useState('');
+  const [recoveryModalVisible, setRecoveryModalVisible] = useState(false);
+  const [recoveryStep, setRecoveryStep] = useState('email');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryOtp, setRecoveryOtp] = useState('');
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   const copy = modeCopy[mode];
   const redirectUri = useMemo(() => getRedirectUri(), []);
@@ -193,6 +202,11 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
   const showEmailError = stage !== Stage.METHODS && emailTouched && !emailValid;
   const showPasswordError = stage === Stage.PASSWORD && passwordTouched && !passwordValid;
+  const recoveryEmailValid = useMemo(
+    () => emailRegex.test(recoveryEmail.trim().toLowerCase()),
+    [recoveryEmail]
+  );
+  const recoveryPasswordValid = recoveryPassword.trim().length >= 8;
 
   const toggleMode = (nextMode) => {
     if (mode === nextMode) return;
@@ -327,6 +341,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           index: 0,
           routes: [{ name: 'OnboardingRouter' }],
         });
+        posthog?.capture('sign_in', { method: provider });
 
         return;
       }
@@ -382,6 +397,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           index: 0,
           routes: [{ name: 'OnboardingRouter' }],
         });
+        posthog?.capture('sign_in', { method: 'anonymous' });
       } else {
         throw new Error('Anonymous session missing user');
       }
@@ -393,6 +409,89 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       setAnonModalVisible(false);
       setAnonUsername('');
       setAnonPassword('');
+    }
+  };
+
+  const resetRecoveryState = () => {
+    setRecoveryStep('email');
+    setRecoveryEmail('');
+    setRecoveryOtp('');
+    setRecoveryPassword('');
+    setRecoveryConfirmPassword('');
+    setRecoveryLoading(false);
+  };
+
+  const handleSendRecoveryOtp = async () => {
+    if (!recoveryEmailValid) {
+      Alert.alert('Valid email required', 'Enter the email tied to your account.');
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      const normalizedEmail = recoveryEmail.trim().toLowerCase();
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: redirectUri,
+      });
+      if (error) throw error;
+
+      setRecoveryStep('verify');
+      posthog?.capture('password_recovery_requested');
+      Alert.alert(
+        'Code sent',
+        'Check your inbox for a one-time code to reset your password.'
+      );
+    } catch (err) {
+      logError('[Auth] Password recovery send failed', err);
+      Alert.alert(
+        'Unable to send code',
+        err?.message ?? 'Please try again in a moment.'
+      );
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const handleVerifyRecovery = async () => {
+    if (!recoveryOtp.trim()) {
+      Alert.alert('Enter the code', 'Please enter the one-time code from your email.');
+      return;
+    }
+    if (!recoveryPasswordValid) {
+      Alert.alert(
+        'Invalid password',
+        'Password must be at least 8 characters with uppercase, lowercase, number and symbol.'
+      );
+      return;
+    }
+    if (recoveryPassword !== recoveryConfirmPassword) {
+      Alert.alert('Passwords do not match', 'Please retype your new password.');
+      return;
+    }
+
+    setRecoveryLoading(true);
+    try {
+      const normalizedEmail = recoveryEmail.trim().toLowerCase();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: recoveryOtp.trim(),
+        type: 'recovery',
+      });
+      if (verifyError) throw verifyError;
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: recoveryPassword,
+      });
+      if (updateError) throw updateError;
+
+      posthog?.capture('password_recovery_completed');
+      Alert.alert('Password updated', 'You can now sign in with your new password.');
+      setRecoveryModalVisible(false);
+      resetRecoveryState();
+    } catch (err) {
+      logError('[Auth] Password recovery verify failed', err);
+      Alert.alert('Recovery failed', err?.message ?? 'Please try again.');
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -411,6 +510,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     }
     if (!passwordValid) {
       setPasswordTouched(true);
+      Alert.alert(
+        'Invalid password',
+        'Password must be at least 8 characters with uppercase, lowercase, number and symbol.'
+      );
       return;
     }
 
@@ -472,6 +575,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
             index: 0,
             routes: [{ name: 'OnboardingRouter' }],
           });
+          posthog?.capture('sign_up', { method: 'email' });
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -492,10 +596,16 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           index: 0,
           routes: [{ name: 'OnboardingRouter' }],
         });
+        posthog?.capture('sign_in', { method: 'email' });
       }
     } catch (err) {
+      const message = err?.message ?? 'Please try again.';
       logError('[Auth] Email authentication error', mode, err);
-      Alert.alert('Authentication error', err?.message ?? 'Please try again.');
+      if (mode === Mode.SIGN_IN && /invalid login credentials/i.test(message)) {
+        Alert.alert('Invalid password', 'The password you entered is incorrect.');
+        return;
+      }
+      Alert.alert('Authentication error', message);
     } finally {
       setSubmitting(false);
     }
@@ -702,6 +812,15 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         </Text>
       ) : null}
 
+      {mode === Mode.SIGN_IN ? (
+        <TouchableOpacity
+          style={styles.forgotButton}
+          onPress={() => setRecoveryModalVisible(true)}
+        >
+          <Text style={styles.forgotButtonText}>Forgot password?</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <TouchableOpacity
         style={[
           styles.primaryButton,
@@ -878,6 +997,127 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
                   )}
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          visible={recoveryModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setRecoveryModalVisible(false);
+            resetRecoveryState();
+          }}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Password recovery</Text>
+              <Text style={styles.modalSubtitle}>
+                {recoveryStep === 'email'
+                  ? 'Send a one-time code to your email.'
+                  : 'Enter the code and choose a new password.'}
+              </Text>
+
+              {recoveryStep === 'email' ? (
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={recoveryEmail}
+                    onChangeText={setRecoveryEmail}
+                    placeholder="Email"
+                    placeholderTextColor={COLORS.sub}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    style={styles.input}
+                  />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      value={recoveryOtp}
+                      onChangeText={setRecoveryOtp}
+                      placeholder="One-time code"
+                      placeholderTextColor={COLORS.sub}
+                      autoCapitalize="none"
+                      keyboardType="number-pad"
+                      style={styles.input}
+                    />
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      value={recoveryPassword}
+                      onChangeText={setRecoveryPassword}
+                      placeholder="New password"
+                      placeholderTextColor={COLORS.sub}
+                      autoCapitalize="none"
+                      secureTextEntry
+                      style={styles.input}
+                    />
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      value={recoveryConfirmPassword}
+                      onChangeText={setRecoveryConfirmPassword}
+                      placeholder="Confirm new password"
+                      placeholderTextColor={COLORS.sub}
+                      autoCapitalize="none"
+                      secureTextEntry
+                      style={styles.input}
+                    />
+                  </View>
+                </>
+              )}
+
+              <View style={styles.modalActions}>
+                {recoveryStep === 'verify' ? (
+                  <TouchableOpacity
+                    style={styles.modalGhostButton}
+                    onPress={() => setRecoveryStep('email')}
+                  >
+                    <Text style={styles.modalGhostText}>Back</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.modalGhostButton}
+                    onPress={() => {
+                      setRecoveryModalVisible(false);
+                      resetRecoveryState();
+                    }}
+                  >
+                    <Text style={styles.modalGhostText}>Cancel</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.modalPrimaryButton,
+                    recoveryLoading && { opacity: 0.7 },
+                  ]}
+                  onPress={
+                    recoveryStep === 'email'
+                      ? handleSendRecoveryOtp
+                      : handleVerifyRecovery
+                  }
+                  disabled={recoveryLoading}
+                >
+                  {recoveryLoading ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.modalPrimaryText}>
+                      {recoveryStep === 'email' ? 'Send code' : 'Reset password'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {recoveryStep === 'verify' ? (
+                <TouchableOpacity
+                  style={styles.modalHelperButton}
+                  onPress={handleSendRecoveryOtp}
+                  disabled={recoveryLoading}
+                >
+                  <Text style={styles.modalHelperText}>Resend code</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </Modal>
@@ -1198,5 +1438,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.error,
     marginTop: -10,
+  },
+  forgotButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+  },
+  forgotButtonText: {
+    color: COLORS.iris,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  modalHelperButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+  },
+  modalHelperText: {
+    color: COLORS.iris,
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

@@ -4,8 +4,10 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
+import { usePostHog } from 'posthog-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomTaskbar from '../components/BottomTaskbar';
+import TabSwipeWrapper from '../components/TabSwipeWrapper';
 import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getVerifiedUser } from '../utils/authUser';
 import { supabase } from '../lib/supabase';
@@ -28,6 +30,7 @@ const prettyDate = (d) => {
 export default function MealLogHomeScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const posthog = usePostHog();
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
@@ -146,7 +149,8 @@ export default function MealLogHomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <TabSwipeWrapper activeKey="Food">
+      <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.topActions}>
           <TouchableOpacity style={styles.circleButton}>
@@ -385,6 +389,14 @@ export default function MealLogHomeScreen() {
                     setLastLog({ amount: totalMl, time: nowIso });
                     setWaterDraft('');
                     setWaterModalVisible(false);
+
+                    posthog?.capture('nutrition_logged', {
+                      water_logged: true,
+                      water_amount_ml: intake,
+                      water_total_ml: totalMl,
+                      calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
+                      calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
+                    });
                   } catch (err) {
                     console.error('Error logging water:', err);
                   }
@@ -450,6 +462,10 @@ export default function MealLogHomeScreen() {
                     setWaterGoal(Math.round(oz));
                     setWaterGoalDraft('');
                     setWaterGoalModalVisible(false);
+                    posthog?.capture('nutrition_goal_updated', {
+                      water_goal_ml: ml,
+                      water_goal_oz: Math.round(oz),
+                    });
                   } catch (err) {
                     console.error('Error saving water goal:', err);
                   }
@@ -492,6 +508,9 @@ export default function MealLogHomeScreen() {
                   }
                   setCalorieGoal(Math.min(3500, Math.round(parsed)));
                   setGoalModalVisible(false);
+                  posthog?.capture('nutrition_goal_updated', {
+                    calorie_goal: Math.min(3500, Math.round(parsed)),
+                  });
                 }}
                 style={styles.modalPrimaryButton}
               >
@@ -501,7 +520,8 @@ export default function MealLogHomeScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TabSwipeWrapper>
   );
 }
 

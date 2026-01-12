@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Path, Defs, ClipPath, Rect, G, LinearGradient, Stop } from 'react-native-svg';
+import { usePostHog } from 'posthog-react-native';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord, getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
 import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import BottomTaskbar from '../components/BottomTaskbar';
+import TabSwipeWrapper from '../components/TabSwipeWrapper';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -123,6 +125,7 @@ const MacroBar = ({ label, value, goal, color }) => {
 const FoodLogScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  const posthog = usePostHog();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [goals, setGoals] = useState(null);
@@ -364,6 +367,14 @@ const saveWaterLog = async () => {
     setWaterModalVisible(false);
     setWaterInput('');
 
+    posthog?.capture('nutrition_logged', {
+      water_logged: true,
+      water_amount_ml: amountMlRounded,
+      water_total_ml: totalMl,
+      calorie_goal_set: Number.isFinite(goals?.calories) ? goals.calories > 0 : undefined,
+      calorie_goal: Number.isFinite(goals?.calories) ? goals.calories : undefined,
+    });
+
     // Optional: you can keep this or remove it once confident
     loadData();
   } catch (err) {
@@ -424,6 +435,14 @@ const saveWaterLog = async () => {
           { onConflict: 'user_id' }
         );
 
+      posthog?.capture('nutrition_goal_updated', {
+        calorie_goal: updated.calories || undefined,
+        protein_goal: updated.protein || undefined,
+        carbs_goal: updated.carbs || undefined,
+        fat_goal: updated.fat || undefined,
+        water_goal: updated.water || undefined,
+      });
+
       setGoals(updated);
       setEditModalVisible(false);
     } catch (err) {
@@ -452,7 +471,8 @@ const saveWaterLog = async () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <TabSwipeWrapper activeKey="Food">
+      <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.iconCircle}
@@ -753,7 +773,8 @@ const saveWaterLog = async () => {
           </Animated.View>
         </Pressable>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TabSwipeWrapper>
   );
 };
 

@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { CardStyleInterpolators, createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from './lib/supabase';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import { OnboardingProvider } from './src/context/OnboardingContext';
@@ -123,6 +124,72 @@ export default function App() {
       }),
     []
   );
+  const appStateRef = useRef(AppState.currentState);
+  const lastActiveAtRef = useRef(null);
+  const identifiedUserRef = useRef(null);
+  const sessionStartSentRef = useRef(null);
+
+  useEffect(() => {
+    if (!posthogClient) return;
+    const userId = session?.user?.id ?? null;
+
+    if (userId) {
+      if (identifiedUserRef.current !== userId) {
+        const meta = session?.user?.user_metadata || {};
+        posthogClient.identify(userId, {
+          email: session?.user?.email ?? undefined,
+          name: meta.full_name || meta.name || undefined,
+          phone: meta.phone || undefined,
+          is_anonymous: Boolean(meta.is_anonymous),
+        });
+        identifiedUserRef.current = userId;
+      }
+
+      if (AppState.currentState === 'active' && sessionStartSentRef.current !== userId) {
+        posthogClient.capture('app_session_started');
+        sessionStartSentRef.current = userId;
+      }
+    } else {
+      identifiedUserRef.current = null;
+      sessionStartSentRef.current = null;
+      posthogClient.reset();
+    }
+  }, [posthogClient, session?.user?.email, session?.user?.id]);
+
+  useEffect(() => {
+    if (!posthogClient) return;
+
+    const handleAppStateChange = (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (nextState === 'active') {
+        lastActiveAtRef.current = Date.now();
+        posthogClient.capture('application_became_active');
+
+        const userId = session?.user?.id ?? null;
+        if (userId && sessionStartSentRef.current !== userId) {
+          posthogClient.capture('app_session_started');
+          sessionStartSentRef.current = userId;
+        }
+      } else if (previousState === 'active') {
+        const startedAt = lastActiveAtRef.current;
+        const durationSec = startedAt
+          ? Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+          : 0;
+        posthogClient.capture('application_backgrounded', {
+          session_duration: durationSec,
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    if (AppState.currentState === 'active') {
+      lastActiveAtRef.current = Date.now();
+      posthogClient.capture('application_became_active');
+    }
+    return () => subscription.remove();
+  }, [posthogClient, session?.user?.id]);
 
   // 5) Early return AFTER all hooks
   if (loading) {
@@ -136,38 +203,39 @@ export default function App() {
   console.log('App render - Session:', session, 'User:', session?.user);
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer
-        onStateChange={(state) => {
-          const routeNames = state?.routes?.map((r) => r.name) || [];
-          console.log('Navigation state changed:', routeNames);
-          // Manually track screens to avoid PostHog navigation hook warnings
-          const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
-          if (currentRoute?.name) {
-            // Don't send params to avoid large payloads (e.g., photo data)
-            posthogClient?.screen(currentRoute.name);
-          }
-        }}
-      >
-        <PostHogProvider
-          client={posthogClient}
-          autocapture={false}
+    <GestureHandlerRootView style={styles.flex}>
+      <SafeAreaProvider>
+        <NavigationContainer
+          onStateChange={(state) => {
+            const routeNames = state?.routes?.map((r) => r.name) || [];
+            console.log('Navigation state changed:', routeNames);
+            // Manually track screens to avoid PostHog navigation hook warnings
+            const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
+            if (currentRoute?.name) {
+              // Don't send params to avoid large payloads (e.g., photo data)
+              posthogClient?.screen(currentRoute.name);
+            }
+          }}
         >
-          <OnboardingProvider>
-            <FeatureFlagsProvider>
-              <StatusBar style="auto" />
-              <Stack.Navigator
-                screenOptions={({ route }) => {
-                  const tabDirection = route?.params?.tabTransition?.direction;
-                  const isRtl = tabDirection === 'rtl';
-                  return {
-                    headerShown: false,
-                    gestureDirection: isRtl ? 'horizontal-inverted' : 'horizontal',
-                    // Use stable built-in interpolator; flip gesture direction for RTL moves
-                    cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-                  };
-                }}
-              >
+          <PostHogProvider
+            client={posthogClient}
+            autocapture={false}
+          >
+            <OnboardingProvider>
+              <FeatureFlagsProvider>
+                <StatusBar style="auto" />
+                <Stack.Navigator
+                  screenOptions={({ route }) => {
+                    const tabDirection = route?.params?.tabTransition?.direction;
+                    const isRtl = tabDirection === 'rtl';
+                    return {
+                      headerShown: false,
+                      gestureDirection: isRtl ? 'horizontal-inverted' : 'horizontal',
+                      // Use stable built-in interpolator; flip gesture direction for RTL moves
+                      cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+                    };
+                  }}
+                >
                 {!session || !session.user ? (
                   <>
                     <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -236,17 +304,21 @@ export default function App() {
                     <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
                   </>
                 )}
-              </Stack.Navigator>
-              <ConnectivityOverlay />
-            </FeatureFlagsProvider>
-          </OnboardingProvider>
-        </PostHogProvider>
-      </NavigationContainer>
-    </SafeAreaProvider>
+                </Stack.Navigator>
+                <ConnectivityOverlay />
+              </FeatureFlagsProvider>
+            </OnboardingProvider>
+          </PostHogProvider>
+        </NavigationContainer>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

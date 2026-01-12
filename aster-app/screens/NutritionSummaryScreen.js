@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePostHog } from 'posthog-react-native';
 import { supabase } from '../lib/supabase';
 import { upsertMealLog, upsertDailyCalorie } from '../utils/meallogger';
+import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BACKGROUND = '#E6E0F3';
@@ -15,6 +17,7 @@ const TEXT_MUTED = '#6A6A6A';
 const NutritionSummaryScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const { photoUri, analysisData, geminiData } = route.params;
   const [saving, setSaving] = useState(false);
 
@@ -156,6 +159,28 @@ const NutritionSummaryScreen = () => {
       } else {
         console.log('Successfully saved via RPC:', rpcResult);
       }
+
+      let calorieGoal = null;
+      try {
+        const goals = await getUserNutritionGoals(supabase, user.id);
+        calorieGoal = goals?.calories ?? null;
+      } catch (goalError) {
+        console.log('[PostHog] nutrition goals fetch failed', goalError);
+      }
+
+      const mealTypeKey = String(validMealType || '')
+        .trim()
+        .toLowerCase();
+
+      posthog?.capture('meal_logged', {
+        meal_type: ['breakfast', 'lunch', 'dinner', 'snack'].includes(mealTypeKey)
+          ? mealTypeKey
+          : undefined,
+        calories: caloriesNum || undefined,
+        calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
+        calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
+        water_logged: false,
+      });
 
       Alert.alert('Success!', 'Food has been added to your daily log', [
         {

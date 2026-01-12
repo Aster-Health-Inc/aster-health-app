@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Keyboard, Platform, InputAccessoryView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { usePostHog } from 'posthog-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,6 +35,7 @@ const FieldRow = ({ label, value }) => (
 
 const AccountDetailsScreen = () => {
   const navigation = useNavigation();
+  const posthog = usePostHog();
   const [personalFields, setPersonalFields] = useState(BASE_PERSONAL_FIELDS);
   const [healthFields, setHealthFields] = useState(BASE_HEALTH_FIELDS);
   const [form, setForm] = useState({
@@ -510,6 +512,10 @@ const AccountDetailsScreen = () => {
                       ]);
 
                       setBirthdate(profilePayload.birthdate || birthdate);
+                      posthog?.capture('measurement_logged', {
+                        weight_lbs: Number.isFinite(weightNum) ? weightNum : undefined,
+                        height_in: Number.isFinite(totalInches) ? totalInches : undefined,
+                      });
                       setEditing(false);
                     } catch (err) {
                       console.log('Save profile failed', err);

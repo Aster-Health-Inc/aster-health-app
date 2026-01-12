@@ -14,6 +14,7 @@ import {
 } from 'react-native'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { useNavigation } from '@react-navigation/native'
+import { usePostHog } from 'posthog-react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -59,6 +60,7 @@ const getAgeFromDate = (date) => {
 
 export default function BasicInfoScreen() {
   const navigation = useNavigation()
+  const posthog = usePostHog()
   const { updateProfile } = useOnboarding()
 
   const [name, setName] = useState('')
@@ -353,6 +355,14 @@ export default function BasicInfoScreen() {
       heightCm: round0(totalCm).toString(),
       heightMeters: ensuredMeters.toString(),
       heightCentimeters: ensuredCentimeters.toString(),
+    })
+
+    posthog?.capture('measurement_logged', {
+      weight_lbs: weightLbs,
+      weight_kg: weightKg,
+      height_cm: round0(totalCm),
+      height_in: totalInRounded,
+      unit_system: heightUnit === 'imperial' ? 'imperial' : 'metric',
     })
 
     navigation.navigate('CycleDetails')

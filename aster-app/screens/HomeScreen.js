@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 import BottomTaskbar from '../components/BottomTaskbar';
+import TabSwipeWrapper from '../components/TabSwipeWrapper';
 import ChatbotModal from '../components/ChatBotModal';
 import { useFeatureFlags } from '../lib/FeatureFlag';
 import { ASTER_FLOWER_SVG } from '../assets/logoSvg';
@@ -612,10 +613,11 @@ const HomeScreen = () => {
   }, [chartWidth, energyChartData]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
-      <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <TabSwipeWrapper activeKey="Home">
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="dark" />
+        <View style={styles.container}>
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               style={styles.iconButton}
@@ -896,13 +898,14 @@ const HomeScreen = () => {
               })}
             </View>
           </View>
-        </ScrollView>
-      </View>
-      <BottomTaskbar activeKey="Home" />
-      {chatbotEnabled && (
-        <ChatbotModal visible={chatbotVisible} onClose={() => setChatbotVisible(false)} />
-      )}
-    </SafeAreaView>
+          </ScrollView>
+        </View>
+        <BottomTaskbar activeKey="Home" />
+        {chatbotEnabled && (
+          <ChatbotModal visible={chatbotVisible} onClose={() => setChatbotVisible(false)} />
+        )}
+      </SafeAreaView>
+    </TabSwipeWrapper>
   );
 };
 
