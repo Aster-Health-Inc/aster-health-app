@@ -32,6 +32,7 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
 
     let avgCycleLength = null;
     let fallbackUsed = false;
+    let predictionMethod = 'average';
 
     if (cycleLengths.length === 0) {
       // Fallback: single period entry. Use stored average_cycle_length or default 28.
@@ -43,11 +44,27 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
 
       avgCycleLength = Number(userRow?.average_cycle_length) || 28;
       fallbackUsed = true;
+      predictionMethod = 'fallback_single_period';
+    } else if (cycleLengths.length === 1) {
+      // Single cycle: use it directly
+      avgCycleLength = cycleLengths[0];
+      predictionMethod = 'single_cycle';
     } else {
-      // Calculate average cycle length from data
-      avgCycleLength = Math.round(
-        cycleLengths.reduce((sum, length) => sum + length, 0) / cycleLengths.length
-      );
+      // Multiple cycles: use recency-weighted average (recent cycles weighted more)
+      // Weight formula: weight = index + 1 (most recent gets highest weight)
+      let weightedSum = 0;
+      let totalWeight = 0;
+      
+      cycleLengths.forEach((length, index) => {
+        const weight = cycleLengths.length - index; // Most recent gets highest weight
+        weightedSum += length * weight;
+        totalWeight += weight;
+      });
+      
+      avgCycleLength = Math.round(weightedSum / totalWeight);
+      predictionMethod = cycleLengths.length >= 3 
+        ? 'weighted_average' 
+        : 'average';
     }
 
     if (!avgCycleLength || Number.isNaN(avgCycleLength)) {
@@ -79,11 +96,7 @@ export const calculateCyclePredictions = async (userId, extraUserIds = []) => {
       predicted_ovulation_date: ovulationDate.toISOString().split('T')[0],
       predicted_cycle_length: avgCycleLength,
       confidence_score: Math.round(confidence * 100) / 100,
-      prediction_method: fallbackUsed
-        ? 'fallback_single_period'
-        : cycleLengths.length >= 3
-          ? 'trend'
-          : 'average'
+      prediction_method: predictionMethod
     };
   } catch (error) {
     console.error('Error calculating predictions:', error);
