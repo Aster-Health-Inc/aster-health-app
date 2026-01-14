@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Modal, Pressable, Alert, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -34,7 +34,12 @@ const LEGEND_ITEMS = [
   {
     key: 'menstrual',
     label: 'Period',
-    dotStyle: { backgroundColor: '#EEE5FF', borderWidth: 0 },
+    dotStyle: {
+      backgroundColor: '#FDE6EF',
+      borderWidth: 1.4,
+      borderColor: '#EA5C7B',
+      borderStyle: 'dotted',
+    },
   },
   {
     key: 'fertile',
@@ -44,12 +49,7 @@ const LEGEND_ITEMS = [
   {
     key: 'pms',
     label: 'PMS',
-    dotStyle: {
-      backgroundColor: 'transparent',
-      borderWidth: 1.4,
-      borderColor: '#EA5C7B',
-      borderStyle: 'dotted',
-    },
+    dotStyle: { backgroundColor: '#EEE5FF', borderWidth: 0 },
   },
 ];
 
@@ -187,6 +187,12 @@ const addDays = (date, days) => {
   return d;
 };
 
+const addDaysUtc = (date, days) => {
+  const copy = new Date(date);
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+};
+
 function addMonths(date, value) {
   const next = new Date(date);
   next.setDate(1);
@@ -208,7 +214,11 @@ const CycleHomeScreen = () => {
   const posthog = usePostHog();
   const [loading, setLoading] = useState(true);
   const [cycleData, setCycleData] = useState(null);
+  const [periodHistory, setPeriodHistory] = useState([]);
+  const [avgPeriodLength, setAvgPeriodLength] = useState(5);
+  const [avgCycleLength, setAvgCycleLength] = useState(28);
   const [symptomCards, setSymptomCards] = useState(() => getDefaultSymptomCards());
+  const cleanupAttemptedRef = useRef(false);
   const [calendarDate, setCalendarDate] = useState(() => {
     const initial = new Date();
     initial.setHours(0, 0, 0, 0);
@@ -256,6 +266,9 @@ const CycleHomeScreen = () => {
 
       if (!user) {
         setCycleData(null);
+        setPeriodHistory([]);
+        setAvgPeriodLength(5);
+        setAvgCycleLength(28);
         setSymptomCards(getDefaultSymptomCards());
         return;
       }
@@ -276,10 +289,9 @@ const CycleHomeScreen = () => {
           .maybeSingle(),
         supabase
           .from('periods')
-          .select('user_id, start_date, end_date')
+          .select('user_id, start_date, end_date, created_at')
           .in('user_id', canonicalUserId === user.id ? [canonicalUserId] : [canonicalUserId, user.id])
-          .order('start_date', { ascending: false })
-          .limit(12),
+          .order('start_date', { ascending: false }),
         supabase
           .from('daily_logs')
           .select('id, energy_level')
@@ -311,8 +323,43 @@ const CycleHomeScreen = () => {
       }
 
       periodRows = canonicalRows.length ? canonicalRows : legacyRows;
+      const latestByMonth = new Map();
+      periodRows.forEach((row) => {
+        if (!row.start_date) return;
+        const key = row.start_date.slice(0, 7);
+        const existing = latestByMonth.get(key);
+        if (!existing) {
+          latestByMonth.set(key, row);
+          return;
+        }
+        if (row.created_at && existing.created_at) {
+          if (new Date(row.created_at) > new Date(existing.created_at)) {
+            latestByMonth.set(key, row);
+          }
+          return;
+        }
+        if (row.start_date > existing.start_date) {
+          latestByMonth.set(key, row);
+        }
+      });
+      const dedupedRows = Array.from(latestByMonth.values()).sort((a, b) =>
+        b.start_date.localeCompare(a.start_date),
+      );
 
-      if (periodRows.length) {
+      if (!cleanupAttemptedRef.current && periodRows.length > dedupedRows.length) {
+        cleanupAttemptedRef.current = true;
+        const keepStartDates = dedupedRows.map((row) => row.start_date).filter(Boolean);
+        if (keepStartDates.length) {
+          const { error: cleanupError } = await supabase.rpc('delete_periods_not_in_start_dates', {
+            keep_start_dates: keepStartDates,
+          });
+          if (cleanupError) {
+            console.log('Cleanup periods RPC failed', cleanupError);
+          }
+        }
+      }
+
+      if (dedupedRows.length) {
         try {
           await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
         } catch (predictionErr) {
@@ -321,10 +368,10 @@ const CycleHomeScreen = () => {
       }
 
       let computedCycleData = null;
-      if (periodRows?.length) {
+      if (dedupedRows?.length) {
         const cycleLength = userData?.average_cycle_length ?? 28;
         const periodLength = userData?.average_period_length ?? 5;
-      const lastPeriodDate = periodRows[0].start_date;
+      const lastPeriodDate = dedupedRows[0].start_date;
       const info = calculateCyclePhase(lastPeriodDate, cycleLength);
 
       if (info) {
@@ -336,6 +383,9 @@ const CycleHomeScreen = () => {
         }
       }
 
+      setAvgPeriodLength(userData?.average_period_length ?? 5);
+      setAvgCycleLength(userData?.average_cycle_length ?? 28);
+      setPeriodHistory(dedupedRows);
       setCycleData(computedCycleData);
 
       const logData = dailyLogResult.data ?? null;
@@ -405,11 +455,43 @@ const CycleHomeScreen = () => {
 
   const getCycleStateForDate = useCallback(
     (date) => {
+      const targetDate = toUtcMidnight(date);
+      if (!targetDate) return 'default';
+
+      if (periodHistory.length) {
+        let baseStart = null;
+        let baseEnd = null;
+        for (const period of periodHistory) {
+          const start = parseYMD(period.start_date);
+          if (!start) continue;
+          if (start <= targetDate) {
+            baseStart = start;
+            baseEnd = period.end_date
+              ? parseYMD(period.end_date)
+              : addDaysUtc(start, Math.max(0, avgPeriodLength - 1));
+            break;
+          }
+        }
+
+        if (baseStart && baseEnd && targetDate >= baseStart && targetDate <= baseEnd) {
+          return 'menstrual';
+        }
+
+        if (baseStart) {
+          const diff = Math.floor((targetDate.getTime() - baseStart.getTime()) / MS_IN_DAY);
+          if (diff >= 0) {
+            const cycleDay = (diff % avgCycleLength) + 1;
+            const daysUntilNextPeriod = Math.max(0, avgCycleLength - cycleDay);
+            if (cycleDay >= 13 && cycleDay <= 16) return 'fertile';
+            if (daysUntilNextPeriod <= 5) return 'pms';
+          }
+        }
+      }
+
       if (!cycleData?.lastPeriodDate) return 'default';
 
-      const targetDate = toUtcMidnight(date);
       const lastPeriod = parseYMD(cycleData.lastPeriodDate) || toUtcMidnight(cycleData.lastPeriodDate);
-      if (!targetDate || !lastPeriod) return 'default';
+      if (!lastPeriod) return 'default';
 
       const diff = Math.floor((targetDate.getTime() - lastPeriod.getTime()) / MS_IN_DAY);
       if (diff < 0) return 'default';
@@ -423,7 +505,7 @@ const CycleHomeScreen = () => {
       if (daysUntilNextPeriod <= 5) return 'pms';
       return 'default';
     },
-    [cycleData],
+    [avgCycleLength, avgPeriodLength, cycleData, periodHistory],
   );
 
   const calendarMatrix = useMemo(() => {
@@ -518,6 +600,22 @@ const CycleHomeScreen = () => {
       const canonicalUserId = await getCanonicalUserId(user);
       const startDate = addDays(selectedDay, -(periodDay - 1));
       const endDate = addDays(startDate, Math.max(periodDay, 4)); // basic default duration
+      const monthStart = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1);
+      const monthEnd = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0);
+      const monthStartYmd = toYMD(monthStart);
+      const monthEndYmd = toYMD(monthEnd);
+
+      const { error: deleteError } = await supabase.rpc('delete_periods_for_month', {
+        month_start: monthStartYmd,
+        month_end: monthEndYmd,
+      });
+
+      if (deleteError) {
+        if (String(deleteError.message || '').toLowerCase().includes('delete_periods_for_month')) {
+          throw new Error('Missing migration: delete_periods_for_month RPC not installed.');
+        }
+        throw deleteError;
+      }
 
       await supabase
         .from('periods')
@@ -1318,25 +1416,25 @@ const styles = StyleSheet.create({
     color: '#5B4F76',
   },
   calendarDayMenstrual: {
-    backgroundColor: '#EEE5FF',
+    backgroundColor: '#FDE6EF',
+    borderWidth: 1.6,
+    borderStyle: 'dotted',
+    borderColor: '#EA5C7B',
   },
   calendarDayMenstrualText: {
-    color: '#4B117B',
+    color: '#C2446C',
   },
   calendarDayFertile: {
     backgroundColor: '#F0EFF5',
   },
   calendarDayPms: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.6,
-    borderStyle: 'dotted',
-    borderColor: '#EA5C7B',
+    backgroundColor: '#EEE5FF',
   },
   calendarDayFertileText: {
     color: '#9C6BFF',
   },
   calendarDayPmsText: {
-    color: '#DA4F7B',
+    color: '#4B117B',
   },
   calendarDayToday: {
     backgroundColor: '#4B117B',

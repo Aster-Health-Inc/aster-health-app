@@ -24,7 +24,7 @@ const FAQ_ITEMS = [
   {
     question: 'Can I edit or delete past entries?',
     answer:
-      'Yes! Tap any logged entry to edit or delete it. For period dates, go to Calendar and choose Edit/Delete. Your insights will update automatically.',
+      'Yes! Tap any logged entry to edit or delete it. For period dates, go to Cycle and tap a past date in the calendar. Your insights will update automatically.',
   },
   {
     question: 'Do I need to log everything daily?',

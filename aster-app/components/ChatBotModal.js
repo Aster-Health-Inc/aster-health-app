@@ -17,6 +17,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
@@ -26,6 +27,9 @@ export default function ChatbotModal({ visible, onClose }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('idle');
+  const [voiceMessage, setVoiceMessage] = useState('');
   const [userContext, setUserContext] = useState(null);
   const [messages, setMessages] = useState([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
@@ -233,6 +237,32 @@ const MarkdownBubble = ({ text }) => {
     }
   };
 
+  const closeVoiceModal = () => {
+    setVoiceModalVisible(false);
+    setVoiceStatus('idle');
+    setVoiceMessage('');
+  };
+
+  const handleMicPress = async () => {
+    setVoiceModalVisible(true);
+    setVoiceStatus('loading');
+    setVoiceMessage('Requesting microphone permission...');
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status === 'granted') {
+        setVoiceStatus('granted');
+        setVoiceMessage('Voice input is coming soon. You can keep using text for now.');
+      } else {
+        setVoiceStatus('denied');
+        setVoiceMessage('Microphone permission is off. Enable it in Settings to use voice input.');
+      }
+    } catch (err) {
+      console.log('Mic permission request failed', err);
+      setVoiceStatus('error');
+      setVoiceMessage('Unable to access the microphone right now.');
+    }
+  };
+
   /**
    * Generate context-aware response (mock implementation)
    * Replace this with actual API call to your chatbot service
@@ -424,11 +454,11 @@ const MarkdownBubble = ({ text }) => {
                 multiline
               />
               <Pressable
-                onPress={() => sendMessage()}
-                disabled={sending || input.trim().length === 0}
+                onPress={() => (input.trim().length > 0 ? sendMessage() : handleMicPress())}
+                disabled={sending}
                 style={({ pressed }) => [
                   styles.micBtn,
-                  (sending || input.trim().length === 0) && { opacity: 0.4 },
+                  sending && { opacity: 0.4 },
                   pressed && { transform: [{ scale: 0.96 }] },
                 ]}
               >
@@ -442,6 +472,26 @@ const MarkdownBubble = ({ text }) => {
           </KeyboardAvoidingView>
         </View>
       </SafeAreaView>
+
+      <Modal
+        visible={voiceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeVoiceModal}
+      >
+        <Pressable style={styles.voiceBackdrop} onPress={closeVoiceModal}>
+          <Pressable style={styles.voiceCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.voiceTitle}>Voice Input</Text>
+            <Text style={styles.voiceMessage}>{voiceMessage}</Text>
+            {voiceStatus === 'loading' && (
+              <ActivityIndicator size="small" color="#4B117B" />
+            )}
+            <TouchableOpacity style={styles.voiceButton} onPress={closeVoiceModal}>
+              <Text style={styles.voiceButtonText}>OK</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -564,6 +614,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8DEFF',
     marginLeft: 8,
   },
+  voiceBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(34, 22, 55, 0.35)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  voiceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+  },
+  voiceTitle: { fontSize: 16, fontWeight: '700', color: '#1F1F1F' },
+  voiceMessage: { fontSize: 14, color: '#5C556B', lineHeight: 20 },
+  voiceButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#4B117B',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  voiceButtonText: { color: '#FFFFFF', fontWeight: '700' },
 
   loadingContainer: {
     flexDirection: 'row',

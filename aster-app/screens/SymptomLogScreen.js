@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Animated, PanResponder, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, Animated, PanResponder, Pressable, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePostHog } from 'posthog-react-native';
 import Svg, { Path } from 'react-native-svg';
+import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -171,6 +172,9 @@ const SymptomLogScreen = () => {
   const [saving, setSaving] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
   const [moreMoodsVisible, setMoreMoodsVisible] = useState(false);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('idle');
+  const [voiceMessage, setVoiceMessage] = useState('');
 
   const userIdRef = useRef(null);
   const dailyLogIdRef = useRef(null);
@@ -480,6 +484,54 @@ const SymptomLogScreen = () => {
     return resolved.filter((item) => item.id).map((item) => item.id);
   }, [normalizeName, selectedSymptoms, symptomMap]);
 
+  const resolveMoodIds = useCallback(async () => {
+    const selections = selectedMoods || [];
+    if (!selections.length) return [];
+
+    const resolved = selections.map((option) => {
+      const directId = isUuid(option.id) ? option.id : null;
+      const mapped = moodMap.get(normalizeName(option.name));
+      const mappedId = isUuid(mapped?.id) ? mapped.id : null;
+      return { option, id: directId || mappedId || null };
+    });
+
+    const missingNames = Array.from(
+      new Set(
+        resolved
+          .filter((item) => !item.id)
+          .map((item) => item.option?.name)
+          .filter(Boolean),
+      ),
+    );
+
+    if (missingNames.length) {
+      const { error: upsertError } = await supabase.rpc('upsert_mood_categories', {
+        mood_names: missingNames,
+      });
+      if (upsertError) {
+        if (String(upsertError.message || '').toLowerCase().includes('upsert_mood_categories')) {
+          throw new Error('Missing migration: upsert_mood_categories RPC not installed.');
+        }
+        throw upsertError;
+      }
+
+      const { data: fetched, error: fetchError } = await supabase
+        .from('mood_categories')
+        .select('id, name')
+        .in('name', missingNames);
+      if (fetchError) throw fetchError;
+
+      const fetchedMap = new Map((fetched ?? []).map((row) => [normalizeName(row.name), row.id]));
+      resolved.forEach((item) => {
+        if (!item.id) {
+          item.id = fetchedMap.get(normalizeName(item.option?.name)) || null;
+        }
+      });
+    }
+
+    return resolved.filter((item) => item.id).map((item) => item.id);
+  }, [moodMap, normalizeName, selectedMoods]);
+
   const handleSave = useCallback(async () => {
     if (!userIdRef.current || saving) return;
     try {
@@ -538,14 +590,13 @@ const SymptomLogScreen = () => {
       if (deleteMoodsError) throw deleteMoodsError;
 
       if (selectedMoods.length) {
-        const moodPayload = selectedMoods
-          .filter((option) => option.id && !option.isLocal)
-          .map((option) => ({
-            user_id: userId,
-            daily_log_id: dailyLogId,
-            mood_id: option.id,
-            intensity: 3,
-          }));
+        const moodIds = await resolveMoodIds();
+        const moodPayload = moodIds.map((id) => ({
+          user_id: userId,
+          daily_log_id: dailyLogId,
+          mood_id: id,
+          intensity: 3,
+        }));
         if (moodPayload.length) {
           const { error: insertMoodsError } = await supabase
             .from('user_moods')
@@ -568,9 +619,43 @@ const SymptomLogScreen = () => {
     } finally {
       setSaving(false);
     }
-  }, [navigation, notes, resolveSymptomIds, selectedEnergyPercent, selectedMoods, selectedSymptoms, saving]);
+  }, [
+    navigation,
+    notes,
+    resolveMoodIds,
+    resolveSymptomIds,
+    selectedEnergyPercent,
+    selectedMoods,
+    selectedSymptoms,
+    saving,
+  ]);
 
   const handleClose = () => navigation.goBack();
+  const closeVoiceModal = () => {
+    setVoiceModalVisible(false);
+    setVoiceStatus('idle');
+    setVoiceMessage('');
+  };
+
+  const handleMicPress = useCallback(async () => {
+    setVoiceModalVisible(true);
+    setVoiceStatus('loading');
+    setVoiceMessage('Requesting microphone permission...');
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status === 'granted') {
+        setVoiceStatus('granted');
+        setVoiceMessage('Voice input is coming soon. You can keep using text for now.');
+      } else {
+        setVoiceStatus('denied');
+        setVoiceMessage('Microphone permission is off. Enable it in Settings to use voice input.');
+      }
+    } catch (err) {
+      console.log('Mic permission request failed', err);
+      setVoiceStatus('error');
+      setVoiceMessage('Unable to access the microphone right now.');
+    }
+  }, []);
 
   if (initializing) {
     return (
@@ -616,7 +701,14 @@ const SymptomLogScreen = () => {
               value={searchValue}
               onChangeText={setSearchValue}
             />
-            <Ionicons name="mic-outline" size={18} color="#B0AAB8" />
+            <TouchableOpacity
+              style={styles.micButton}
+              onPress={handleMicPress}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Ionicons name="mic-outline" size={18} color="#B0AAB8" />
+            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -665,7 +757,9 @@ const SymptomLogScreen = () => {
               {(moreVisible || searchQuery) && (
                 <View style={styles.moreList}>
                   {groupedSymptoms.map((group) => {
-                    const allGroupItems = group.items.map((name) => symptomMap.get(name) || createLocalOption(name));
+                    const allGroupItems = group.items.map(
+                      (name) => symptomMap.get(normalizeName(name)) || createLocalOption(name),
+                    );
                     const groupItems = searchQuery
                       ? allGroupItems.filter((option) =>
                           option.name.toLowerCase().includes(searchQuery),
@@ -748,7 +842,9 @@ const SymptomLogScreen = () => {
               {(moreMoodsVisible || searchQuery) && (
                 <View style={styles.moreList}>
                   {groupedMoods.map((group) => {
-                    const allGroupItems = group.items.map((name) => moodMap.get(name) || createLocalOption(name));
+                    const allGroupItems = group.items.map(
+                      (name) => moodMap.get(normalizeName(name)) || createLocalOption(name),
+                    );
                     const groupItems = searchQuery
                       ? allGroupItems.filter((option) =>
                           option.name.toLowerCase().includes(searchQuery),
@@ -853,6 +949,26 @@ const SymptomLogScreen = () => {
         </View>
       </Animated.View>
 
+      <Modal
+        visible={voiceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeVoiceModal}
+      >
+        <Pressable style={styles.voiceBackdrop} onPress={closeVoiceModal}>
+          <Pressable style={styles.voiceCard} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.voiceTitle}>Voice Input</Text>
+            <Text style={styles.voiceMessage}>{voiceMessage}</Text>
+            {voiceStatus === 'loading' && (
+              <ActivityIndicator size="small" color="#4B117B" />
+            )}
+            <TouchableOpacity style={styles.voiceButton} onPress={closeVoiceModal}>
+              <Text style={styles.voiceButtonText}>OK</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
     </SafeAreaView>
   );
 };
@@ -916,6 +1032,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2DEEC',
   },
   searchInput: { flex: 1, fontSize: 14, color: '#1F1F1F' },
+  micButton: { padding: 4 },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 60, gap: 14 },
   card: {
@@ -1031,4 +1148,26 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
     marginBottom: 10,
   },
+  voiceBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(34, 22, 55, 0.35)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  voiceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    gap: 12,
+  },
+  voiceTitle: { fontSize: 16, fontWeight: '700', color: '#1F1F1F' },
+  voiceMessage: { fontSize: 14, color: '#5C556B', lineHeight: 20 },
+  voiceButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#4B117B',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  voiceButtonText: { color: '#FFFFFF', fontWeight: '700' },
 });
