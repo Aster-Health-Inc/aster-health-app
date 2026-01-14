@@ -276,6 +276,9 @@ export default function WorkoutScreen() {
                 </View>
               </View>
             )}
+            {!summaryError && (
+              <Text style={styles.healthSource}>Synced from Apple Health</Text>
+            )}
 
             {activeMetric.key === 'calories' ? (
               <TouchableOpacity style={styles.logButton} activeOpacity={0.85}>
@@ -447,6 +450,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: THEME.textSecondary,
+  },
+  healthSource: {
+    marginTop: 12,
+    fontSize: 12,
+    color: THEME.textMuted,
+    textAlign: 'center',
   },
   logButton: {
     width: '100%',
