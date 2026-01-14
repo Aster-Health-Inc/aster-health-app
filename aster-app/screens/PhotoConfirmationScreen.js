@@ -72,7 +72,7 @@ const PhotoConfirmationScreen = () => {
           <Ionicons name="close" size={22} color="#4A4A4A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Confirm Photo</Text>
-        <View style={styles.circleBtn} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -139,9 +139,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   headerTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
     color: '#2E2E2E',
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 36,
   },
   scrollContent: {
     paddingHorizontal: 16,
