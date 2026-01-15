@@ -15,16 +15,11 @@ export default ({ config }) => ({
         'Aster uses Apple Health data you choose to share to provide insights.',
       NSHealthUpdateUsageDescription:
         'Aster writes health data you choose to log to Apple Health.',
-      NSMicrophoneUsageDescription:
-        'Aster uses your microphone for voice input when you choose to use it.',
     "ITSAppUsesNonExemptEncryption": false
     }
   },
   android: {
     ...(config.android ?? {}),
-    permissions: Array.from(
-      new Set([...(config.android?.permissions ?? []), 'RECORD_AUDIO']),
-    ),
   },
   extra: {
     ...(config.extra ?? {}),

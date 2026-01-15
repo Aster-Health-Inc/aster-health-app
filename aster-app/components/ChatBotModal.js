@@ -17,7 +17,6 @@ import Svg, { Path } from 'react-native-svg';
 import { Dimensions } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
@@ -27,9 +26,6 @@ export default function ChatbotModal({ visible, onClose }) {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('idle');
-  const [voiceMessage, setVoiceMessage] = useState('');
   const [userContext, setUserContext] = useState(null);
   const [messages, setMessages] = useState([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
@@ -91,7 +87,7 @@ export default function ChatbotModal({ visible, onClose }) {
       setMessages([{
         id: "sys-error",
         role: "assistant",
-        text: "Hi! I had trouble loading your data, but I can still help with general health questions. What would you like to know?"
+        text: "Oops, had a little trouble loading your data 😅 but no worries! I can still help with your health questions. What's on your mind?"
       }]);
 
       // Set fallback context
@@ -111,15 +107,15 @@ const generateWelcomeMessage = (data) => {
   if (userProfile?.name) {
       welcome += ` ${userProfile.name}`;
     }
-    welcome += "! 👋\n\n";
+    welcome += "! 💜\n\n";
 
     if (latestPeriod) {
       const daysSince = Math.floor((new Date() - new Date(latestPeriod.start_date)) / (1000 * 60 * 60 * 24));
-      welcome += `Your last period was ${daysSince} days ago.\n\n`;
+      welcome += `Your last period started ${daysSince} days ago!\n\n`;
     }
 
-    welcome += "Ask me anything about your health, cycle, or nutrition! 💬\n\n";
-    welcome += "⚠️ Note: I'm an AI assistant, not a medical professional. For medical concerns, please consult a healthcare provider.";
+    welcome += "I'm here for all your health, cycle, and nutrition questions! 💬\n\n";
+    welcome += "✨ Note: I'm an AI assistant, not a doctor, so for serious medical concerns please see a healthcare professional!";
 
     return welcome;
   };
@@ -229,7 +225,7 @@ const MarkdownBubble = ({ text }) => {
       console.error('Error sending message:', e);
       setMessages((m) => [
         ...m,
-        { id: `${userMsg.id}-err`, role: "assistant", text: "Sorry, I could not process that. Please try again." },
+        { id: `${userMsg.id}-err`, role: "assistant", text: "Sorry, something went wrong 😅 Could you try asking again?" },
       ]);
     } finally {
       setSending(false);
@@ -237,31 +233,6 @@ const MarkdownBubble = ({ text }) => {
     }
   };
 
-  const closeVoiceModal = () => {
-    setVoiceModalVisible(false);
-    setVoiceStatus('idle');
-    setVoiceMessage('');
-  };
-
-  const handleMicPress = async () => {
-    setVoiceModalVisible(true);
-    setVoiceStatus('loading');
-    setVoiceMessage('Requesting microphone permission...');
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status === 'granted') {
-        setVoiceStatus('granted');
-        setVoiceMessage('Voice input is coming soon. You can keep using text for now.');
-      } else {
-        setVoiceStatus('denied');
-        setVoiceMessage('Microphone permission is off. Enable it in Settings to use voice input.');
-      }
-    } catch (err) {
-      console.log('Mic permission request failed', err);
-      setVoiceStatus('error');
-      setVoiceMessage('Unable to access the microphone right now.');
-    }
-  };
 
   /**
    * Generate context-aware response (mock implementation)
@@ -382,7 +353,7 @@ const MarkdownBubble = ({ text }) => {
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.suggestionWrap}>
-                {['When will my next period be?', 'What foods should I be avoiding right now?', 'What is the Luteal Phase?', 'Why is my estrogen higher than usual?'].map(
+                {['When is my next period coming?', 'What foods should I avoid right now?', 'What is the Luteal Phase?', 'Why is my estrogen higher than usual?'].map(
                   (q) => (
                     <TouchableOpacity
                       key={q}
@@ -419,8 +390,7 @@ const MarkdownBubble = ({ text }) => {
                   <View style={[styles.bubbleRow, styles.leftRow]}>
                     <View style={[styles.bubble, styles.botBubble]}>
                       <Text style={styles.bubbleText}>
-                        Hey there,{'\n'}Feel free to ask me anything or click one of the suggested
-                        questions to learn more about your health!
+                        Hey there! 👋{'\n'}Ask me anything or tap one of the suggested questions above to get started!
                       </Text>
                     </View>
                   </View>
@@ -448,22 +418,24 @@ const MarkdownBubble = ({ text }) => {
               <TextInput
                 value={input}
                 onChangeText={setInput}
-                placeholder="Type here..."
+                placeholder="Type your message..."
                 placeholderTextColor="#9A90B0"
                 style={styles.input}
                 multiline
               />
               <Pressable
-                onPress={() => (input.trim().length > 0 ? sendMessage() : handleMicPress())}
-                disabled={sending}
+                onPress={() => sendMessage()}
+                disabled={sending || input.trim().length === 0}
                 style={({ pressed }) => [
-                  styles.micBtn,
-                  sending && { opacity: 0.4 },
+                  styles.sendBtn,
+                  (sending || input.trim().length === 0) && { opacity: 0.4 },
                   pressed && { transform: [{ scale: 0.96 }] },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
               >
                 <Ionicons
-                  name={input.trim().length > 0 ? "send" : "mic-outline"}
+                  name="send"
                   size={18}
                   color="#4B117B"
                 />
@@ -472,26 +444,6 @@ const MarkdownBubble = ({ text }) => {
           </KeyboardAvoidingView>
         </View>
       </SafeAreaView>
-
-      <Modal
-        visible={voiceModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeVoiceModal}
-      >
-        <Pressable style={styles.voiceBackdrop} onPress={closeVoiceModal}>
-          <Pressable style={styles.voiceCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.voiceTitle}>Voice Input</Text>
-            <Text style={styles.voiceMessage}>{voiceMessage}</Text>
-            {voiceStatus === 'loading' && (
-              <ActivityIndicator size="small" color="#4B117B" />
-            )}
-            <TouchableOpacity style={styles.voiceButton} onPress={closeVoiceModal}>
-              <Text style={styles.voiceButtonText}>OK</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Modal>
   );
 }
@@ -605,7 +557,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 14,
   },
-  micBtn: {
+  sendBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -614,28 +566,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8DEFF',
     marginLeft: 8,
   },
-  voiceBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(34, 22, 55, 0.35)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  voiceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    gap: 12,
-  },
-  voiceTitle: { fontSize: 16, fontWeight: '700', color: '#1F1F1F' },
-  voiceMessage: { fontSize: 14, color: '#5C556B', lineHeight: 20 },
-  voiceButton: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#4B117B',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  voiceButtonText: { color: '#FFFFFF', fontWeight: '700' },
 
   loadingContainer: {
     flexDirection: 'row',

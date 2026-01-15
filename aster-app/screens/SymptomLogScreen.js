@@ -5,7 +5,6 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePostHog } from 'posthog-react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Audio } from 'expo-av';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -172,9 +171,6 @@ const SymptomLogScreen = () => {
   const [saving, setSaving] = useState(false);
   const [moreVisible, setMoreVisible] = useState(false);
   const [moreMoodsVisible, setMoreMoodsVisible] = useState(false);
-  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('idle');
-  const [voiceMessage, setVoiceMessage] = useState('');
 
   const userIdRef = useRef(null);
   const dailyLogIdRef = useRef(null);
@@ -631,31 +627,6 @@ const SymptomLogScreen = () => {
   ]);
 
   const handleClose = () => navigation.goBack();
-  const closeVoiceModal = () => {
-    setVoiceModalVisible(false);
-    setVoiceStatus('idle');
-    setVoiceMessage('');
-  };
-
-  const handleMicPress = useCallback(async () => {
-    setVoiceModalVisible(true);
-    setVoiceStatus('loading');
-    setVoiceMessage('Requesting microphone permission...');
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status === 'granted') {
-        setVoiceStatus('granted');
-        setVoiceMessage('Voice input is coming soon. You can keep using text for now.');
-      } else {
-        setVoiceStatus('denied');
-        setVoiceMessage('Microphone permission is off. Enable it in Settings to use voice input.');
-      }
-    } catch (err) {
-      console.log('Mic permission request failed', err);
-      setVoiceStatus('error');
-      setVoiceMessage('Unable to access the microphone right now.');
-    }
-  }, []);
 
   if (initializing) {
     return (
@@ -701,14 +672,6 @@ const SymptomLogScreen = () => {
               value={searchValue}
               onChangeText={setSearchValue}
             />
-            <TouchableOpacity
-              style={styles.micButton}
-              onPress={handleMicPress}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-            >
-              <Ionicons name="mic-outline" size={18} color="#B0AAB8" />
-            </TouchableOpacity>
           </View>
 
           <ScrollView
@@ -949,26 +912,6 @@ const SymptomLogScreen = () => {
         </View>
       </Animated.View>
 
-      <Modal
-        visible={voiceModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={closeVoiceModal}
-      >
-        <Pressable style={styles.voiceBackdrop} onPress={closeVoiceModal}>
-          <Pressable style={styles.voiceCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.voiceTitle}>Voice Input</Text>
-            <Text style={styles.voiceMessage}>{voiceMessage}</Text>
-            {voiceStatus === 'loading' && (
-              <ActivityIndicator size="small" color="#4B117B" />
-            )}
-            <TouchableOpacity style={styles.voiceButton} onPress={closeVoiceModal}>
-              <Text style={styles.voiceButtonText}>OK</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
     </SafeAreaView>
   );
 };
@@ -1032,7 +975,6 @@ const styles = StyleSheet.create({
     borderColor: '#E2DEEC',
   },
   searchInput: { flex: 1, fontSize: 14, color: '#1F1F1F' },
-  micButton: { padding: 4 },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 60, gap: 14 },
   card: {
@@ -1148,26 +1090,4 @@ const styles = StyleSheet.create({
     color: '#2D2D2D',
     marginBottom: 10,
   },
-  voiceBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(34, 22, 55, 0.35)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  voiceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    gap: 12,
-  },
-  voiceTitle: { fontSize: 16, fontWeight: '700', color: '#1F1F1F' },
-  voiceMessage: { fontSize: 14, color: '#5C556B', lineHeight: 20 },
-  voiceButton: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#4B117B',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  voiceButtonText: { color: '#FFFFFF', fontWeight: '700' },
 });
