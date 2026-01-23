@@ -8,8 +8,14 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  const { View } = require('react-native');
   const mock = require('react-native-gesture-handler/jestSetup');
-  return mock;
+  return {
+    ...mock,
+    State: mock.State || { END: 'END' },
+    PanGestureHandler: ({ children }) => React.createElement(View, null, children),
+  };
 });
 
 // AsyncStorage mock for React Native

@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -298,7 +298,7 @@ const HealthAppAccessScreen = () => {
               disabled={requesting || syncing}
             >
               <Text style={styles.primaryButtonText}>
-                {requesting ? 'Requesting�' : syncing ? 'Syncing�' : 'Continue'}
+                {requesting ? 'Requesting...' : syncing ? 'Syncing...' : 'Continue'}
               </Text>
             </TouchableOpacity>
           </View>

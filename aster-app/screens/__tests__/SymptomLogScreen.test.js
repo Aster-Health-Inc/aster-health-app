@@ -1,5 +1,5 @@
 import React from 'react';
-import { waitFor } from '@testing-library/react-native';
+import { act, waitFor } from '@testing-library/react-native';
 import SymptomLogScreen from '../SymptomLogScreen';
 import { renderWithProviders, createSupabaseMock } from '../testUtils';
 
@@ -21,9 +21,15 @@ jest.mock('../../lib/supabase', () => {
 
 describe('SymptomLogScreen (integration)', () => {
   it('renders symptom and mood sections with default mock data', async () => {
-    const { getByText } = renderWithProviders(<SymptomLogScreen />);
+    const { getByPlaceholderText, getByText } = renderWithProviders(<SymptomLogScreen />);
+    const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
+
+    await act(async () => {
+      await flushPromises();
+    });
 
     await waitFor(() => {
+      expect(getByPlaceholderText('Search')).toBeTruthy();
       expect(getByText('Symptoms')).toBeTruthy();
       expect(getByText('Moods')).toBeTruthy();
     });

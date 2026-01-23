@@ -6,7 +6,14 @@ import CycleHomeScreen from '../CycleHomeScreen';
 // Freeze time so cycle math is deterministic
 const FIXED_NOW = new Date('2025-12-16T12:00:00Z');
 
-jest.useFakeTimers().setSystemTime(FIXED_NOW);
+beforeAll(() => {
+  jest.useFakeTimers();
+  jest.setSystemTime(FIXED_NOW);
+});
+
+afterAll(() => {
+  jest.useRealTimers();
+});
 
 // Mock navigation hooks
 jest.mock('@react-navigation/native', () => {
@@ -22,6 +29,7 @@ jest.mock('@react-navigation/native', () => {
 // Mock canonical user resolver
 jest.mock('../../utils/authUser', () => ({
   getCanonicalUserId: jest.fn().mockResolvedValue('user-1'),
+  getVerifiedUser: jest.fn().mockResolvedValue({ id: 'user-1' }),
 }));
 
 // Mock prediction updater to avoid network

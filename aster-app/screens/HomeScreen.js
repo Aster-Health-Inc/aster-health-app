@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -87,6 +87,16 @@ const getCyclePhaseInsights = (phase) => {
         icon: 'nutrition',
         background: '#FCECD4',
         accent: '#D4841F',
+        sources: [
+          {
+            label: 'ACOG: Premenstrual Syndrome (PMS)',
+            url: 'https://www.acog.org/womens-health/faqs/premenstrual-syndrome-pms',
+          },
+          {
+            label: 'NIH: Magnesium Fact Sheet',
+            url: 'https://ods.od.nih.gov/factsheets/Magnesium-Consumer/',
+          },
+        ],
       },
       {
         key: 'selfcare',
@@ -95,6 +105,12 @@ const getCyclePhaseInsights = (phase) => {
         icon: 'heart',
         background: '#FFE5F0',
         accent: '#D4427F',
+        sources: [
+          {
+            label: 'ACOG: Premenstrual Syndrome (PMS)',
+            url: 'https://www.acog.org/womens-health/faqs/premenstrual-syndrome-pms',
+          },
+        ],
       },
     ],
     'Late Cycle': [
@@ -409,6 +425,14 @@ const HomeScreen = () => {
   const route = useRoute();
   const { flags } = useFeatureFlags();
   const chatbotEnabled = flags?.chatbot !== false;
+  const openSourceUrl = async (url) => {
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch (err) {
+      console.log('Open source link failed', err);
+    }
+  };
 
   const today = useMemo(() => new Date(), []);
   const greeting = useMemo(() => {
@@ -891,6 +915,20 @@ const HomeScreen = () => {
                     <View style={styles.insightContent}>
                       <Text style={[styles.insightTitle, { color: insight.accent }]}>{insight.title}</Text>
                       <Text style={styles.insightDescription}>{insight.description}</Text>
+                      {insight.sources?.length ? (
+                        <View style={styles.sourceList}>
+                          <Text style={styles.sourceLabel}>Sources</Text>
+                          {insight.sources.map((source, index) => (
+                            <Text
+                              key={`${insight.key}-source-${index}`}
+                              style={styles.sourceLink}
+                              onPress={() => openSourceUrl(source.url)}
+                            >
+                              {source.label}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : null}
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={`${insight.accent}CC`} />
                   </View>
@@ -1118,6 +1156,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#5F5478',
+  },
+  sourceList: {
+    marginTop: 6,
+    gap: 4,
+  },
+  sourceLabel: {
+    fontSize: 11,
+    color: '#5F5478',
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  sourceLink: {
+    fontSize: 12,
+    color: '#3C2C8B',
+    textDecorationLine: 'underline',
   },
   wellnessCard: {
     backgroundColor: '#7FD99F',

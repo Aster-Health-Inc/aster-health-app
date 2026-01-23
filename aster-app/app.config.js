@@ -18,7 +18,7 @@ export default ({ config }) => ({
       NSHealthUpdateUsageDescription:
         'Aster writes health data you choose to log to Apple Health.',
       NSCameraUsageDescription:
-        'Aster uses the camera to let you take photos of meals for food logging, such as capturing a meal photo to attach to a nutrition entry.',
+        'Aster uses the camera to take photos of meals for food logging and nutrition tracking, such as capturing a meal photo to attach to a nutrition entry.',
       "ITSAppUsesNonExemptEncryption": false
     }
   },

@@ -229,24 +229,6 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
-    if (provider === 'apple') {
-      const redirectTo = makeRedirectUri({ useProxy: true });
-      console.log('FORCED Expo redirect:', redirectTo);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo,
-        },
-      });
-
-      if (error) {
-        console.error('Apple OAuth error:', error);
-      }
-
-      return data;
-    }
-
     const providerRedirectUri = redirectUri;
     logInfo('[OAuth] Starting', provider, 'redirect:', providerRedirectUri);
 
