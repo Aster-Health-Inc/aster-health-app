@@ -92,7 +92,9 @@ const getRedirectUri = () => {
       return uri || FALLBACK_REDIRECT_URI;
     }
 
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const isExpoGo =
+      Constants.appOwnership === 'expo' ||
+      Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
       // Use Expo proxy URL (matches Supabase allowed list)
       return makeRedirectUri({ useProxy: true, path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
@@ -109,6 +111,18 @@ const getRedirectUri = () => {
   } catch {
     return FALLBACK_REDIRECT_URI;
   }
+};
+
+const getProxyProjectName = () => {
+  const owner = Constants.expoConfig?.owner;
+  const slug = Constants.expoConfig?.slug;
+  if (owner && slug) {
+    return `@${owner}/${slug}`;
+  }
+  if (slug) {
+    return slug;
+  }
+  return undefined;
 };
 
 const Stage = {
@@ -215,7 +229,26 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
-    logInfo('[OAuth] Starting', provider, 'redirect:', redirectUri);
+    if (provider === 'apple') {
+      const redirectTo = makeRedirectUri({ useProxy: true });
+      console.log('FORCED Expo redirect:', redirectTo);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo,
+        },
+      });
+
+      if (error) {
+        console.error('Apple OAuth error:', error);
+      }
+
+      return data;
+    }
+
+    const providerRedirectUri = redirectUri;
+    logInfo('[OAuth] Starting', provider, 'redirect:', providerRedirectUri);
 
     try {
       // Web: let Supabase handle the PKCE callback in the URL
@@ -223,7 +256,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: redirectUri,
+            redirectTo: providerRedirectUri,
             queryParams: provider === 'apple' ? {} : { prompt: 'select_account' },
           },
         });
@@ -248,7 +281,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: redirectUri,
+          redirectTo: providerRedirectUri,
           skipBrowserRedirect: true,
           queryParams: provider === 'apple' ? {} : { prompt: 'select_account' },
         },
@@ -269,7 +302,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        redirectUri
+        providerRedirectUri
       );
 
       logInfo(

@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 import { ensureUserRecord } from '../utils/authUser';
 
@@ -62,7 +64,31 @@ const oauthProviders = [
   { key: 'apple', label: 'Continue with Apple', asset: assets.apple },
 ];
 
-const getRedirectUri = () => { try { const uri = Linking.createURL('auth/callback'); return uri || FALLBACK_REDIRECT_URI; } catch { return FALLBACK_REDIRECT_URI; } };
+const getRedirectUri = () => {
+  try {
+    if (Platform.OS === 'web') {
+      const uri = makeRedirectUri({ path: 'auth/callback' });
+      return uri || FALLBACK_REDIRECT_URI;
+    }
+
+    const isExpoGo =
+      Constants.appOwnership === 'expo' ||
+      Constants.executionEnvironment === 'storeClient';
+    if (isExpoGo) {
+      return makeRedirectUri({ useProxy: true, path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
+    }
+
+    const authSessionUri = makeRedirectUri({
+      scheme: 'aster',
+      path: 'auth/callback',
+      preferLocalhost: true,
+    });
+
+    return authSessionUri || FALLBACK_REDIRECT_URI;
+  } catch {
+    return FALLBACK_REDIRECT_URI;
+  }
+};
 
 const AnonymousUpgradeScreen = ({ navigation }) => {
   const [checkingUser, setCheckingUser] = useState(true);

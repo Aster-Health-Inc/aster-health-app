@@ -2,12 +2,14 @@ import 'dotenv/config';
 
 export default ({ config }) => ({
   ...config,
+  owner: 'asterhealth',
+  slug: 'aster-app',
   scheme: 'aster',
   version: '1.0.0',
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealthinc.app',
-    buildNumber: '6',
+    buildNumber: '10',
     "icon": "./assets/icon.png",
     usesAppleSignIn: true,
     infoPlist: {
@@ -15,7 +17,9 @@ export default ({ config }) => ({
         'Aster uses Apple Health data you choose to share to provide insights.',
       NSHealthUpdateUsageDescription:
         'Aster writes health data you choose to log to Apple Health.',
-    "ITSAppUsesNonExemptEncryption": false
+      NSCameraUsageDescription:
+        'Aster uses the camera to let you take photos of meals for food logging, such as capturing a meal photo to attach to a nutrition entry.',
+      "ITSAppUsesNonExemptEncryption": false
     }
   },
   android: {

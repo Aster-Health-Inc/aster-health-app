@@ -18,6 +18,14 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
+const BACKGROUND = '#E9E2F4';
+const CARD = '#FFFFFF';
+const TEXT_PRIMARY = '#2D1B4E';
+const TEXT_MUTED = '#7D7394';
+const ACCENT = '#4B117B';
+const BORDER = '#E6E0F0';
+const INPUT_BG = '#F7F5FB';
+
 const formatLocalDateKey = (inputDate) => {
   const d = new Date(inputDate || new Date());
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -37,7 +45,7 @@ const InputWithUnit = ({
       <TextInput
         style={[
           styles.unitTextInput,
-          !editable && { backgroundColor: '#F0ECF8' },
+          !editable && { backgroundColor: '#F1EEF7' },
         ]}
         value={value}
         onChangeText={(t) => onChangeText(t.replace(/[^0-9.]/g, ''))}
@@ -240,36 +248,62 @@ export default AddFoodScreen;
 
 /* STYLES */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E6DFF2' },
+  container: { flex: 1, backgroundColor: BACKGROUND },
   scrollContent: { padding: 20, paddingBottom: 140 },
-  inputCard: { backgroundColor: '#F5F1FB', borderRadius: 14, padding: 14, marginBottom: 12 },
-  inputLabel: { fontWeight: '700', marginBottom: 6, color: '#3F2560' },
-  textInput: { backgroundColor: '#FFF', borderRadius: 10, padding: 12 },
+  inputCard: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    shadowColor: '#C7BDE8',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  inputLabel: { fontWeight: '700', marginBottom: 6, color: TEXT_PRIMARY },
+  textInput: {
+    backgroundColor: INPUT_BG,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    color: TEXT_PRIMARY,
+  },
 
   unitInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: INPUT_BG,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   unitTextInput: {
     flex: 1,
     padding: 12,
     fontSize: 15,
+    color: TEXT_PRIMARY,
   },
   unitBadge: {
     paddingHorizontal: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: BORDER,
   },
   unitText: {
     fontWeight: '600',
-    color: '#6B5CA5',
+    color: ACCENT,
   },
 
   suggestionItem: {
     padding: 12,
-    backgroundColor: '#FFF',
+    backgroundColor: CARD,
     borderRadius: 10,
     marginBottom: 6,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
 
   addButton: {
@@ -277,10 +311,14 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 20,
     right: 20,
-    backgroundColor: '#6B4CD9',
+    backgroundColor: ACCENT,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     alignItems: 'center',
+    shadowColor: ACCENT,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
   },
-  addButtonText: { color: '#FFF', fontWeight: '700' },
+  addButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
 });
