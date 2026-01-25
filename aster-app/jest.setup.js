@@ -43,6 +43,7 @@ jest.mock('./lib/supabase', () => {
         getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
         getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
         onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })),
+        signInWithOAuth: jest.fn().mockResolvedValue({ data: { url: 'https://example.com' }, error: null }),
       },
       from: jest.fn(() => queryBuilder()),
       rpc: jest.fn(() => Promise.resolve({ data: null, error: null })),

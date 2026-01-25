@@ -75,7 +75,12 @@ const getRedirectUri = () => {
       Constants.appOwnership === 'expo' ||
       Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
-      return makeRedirectUri({ useProxy: true, path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
+      const owner = Constants.expoConfig?.owner;
+      const slug = Constants.expoConfig?.slug;
+      if (owner && slug) {
+        return `https://auth.expo.io/@${owner}/${slug}`;
+      }
+      return makeRedirectUri({ path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
     }
 
     const authSessionUri = makeRedirectUri({

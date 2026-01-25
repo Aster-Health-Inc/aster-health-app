@@ -96,8 +96,13 @@ const getRedirectUri = () => {
       Constants.appOwnership === 'expo' ||
       Constants.executionEnvironment === 'storeClient';
     if (isExpoGo) {
-      // Use Expo proxy URL (matches Supabase allowed list)
-      return makeRedirectUri({ useProxy: true, path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
+      // makeRedirectUri in Expo Go returns exp://... which is not in Supabase's allow list.
+      // Use the Expo auth proxy URL explicitly (must be in Supabase Redirect URLs).
+      const proxy = getProxyProjectName();
+      if (proxy) {
+        return `https://auth.expo.io/${proxy}`;
+      }
+      return makeRedirectUri({ path: 'auth/callback' }) || FALLBACK_REDIRECT_URI;
     }
 
     // Bare/standalone: use custom scheme
@@ -252,10 +257,14 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           Boolean(data?.url)
         );
 
-        if (data?.url) {
-          await Linking.openURL(data.url);
+        if (!data?.url) {
+          throw new Error(
+            provider === 'apple'
+              ? 'Apple Sign In is not configured. In Supabase: Authentication > Providers, enable Apple and add your Services ID and secret.'
+              : 'Unable to open the authentication page.'
+          );
         }
-
+        await Linking.openURL(data.url);
         return;
       }
 
@@ -279,12 +288,17 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       );
 
       if (!data?.url) {
-        throw new Error('Unable to open the authentication page.');
+        throw new Error(
+          provider === 'apple'
+            ? 'Apple Sign In is not configured. In Supabase: Authentication > Providers, enable Apple and add your Services ID and secret.'
+            : 'Unable to open the authentication page.'
+        );
       }
 
       const result = await WebBrowser.openAuthSessionAsync(
         data.url,
-        providerRedirectUri
+        providerRedirectUri,
+        { preferEphemeralSession: false }
       );
 
       logInfo(

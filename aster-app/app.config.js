@@ -11,7 +11,6 @@ export default ({ config }) => ({
     bundleIdentifier: 'com.asterhealthinc.app',
     buildNumber: '10',
     "icon": "./assets/icon.png",
-    usesAppleSignIn: true,
     infoPlist: {
       NSHealthShareUsageDescription:
         'Aster uses Apple Health data you choose to share to provide insights.',
@@ -33,6 +32,6 @@ export default ({ config }) => ({
     "expo-localization",
     ...(config.plugins ?? []),
     "expo-notifications",
-    'expo-web-browser'
+    "expo-web-browser"
   ]
 });
