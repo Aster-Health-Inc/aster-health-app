@@ -181,6 +181,14 @@ const NutritionSummaryScreen = () => {
         calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
         water_logged: false,
       });
+      posthog?.capture('food_logged', {
+        meal_type: ['breakfast', 'lunch', 'dinner', 'snack'].includes(mealTypeKey)
+          ? mealTypeKey
+          : undefined,
+        calories: caloriesNum || undefined,
+        calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
+        calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
+      });
 
       Alert.alert('Success!', 'Food has been added to your daily log', [
         {

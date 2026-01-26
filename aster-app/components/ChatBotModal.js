@@ -18,6 +18,7 @@ import { Dimensions } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { usePostHog } from 'posthog-react-native';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
 
@@ -25,6 +26,7 @@ export default function ChatbotModal({ visible, onClose }) {
   const insets = useSafeAreaInsets();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const posthog = usePostHog();
   const [loading, setLoading] = useState(false);
   const [userContext, setUserContext] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -198,6 +200,9 @@ const MarkdownBubble = ({ text }) => {
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setSending(true);
+    posthog?.capture('chatbot_used', {
+      prompt_length: text.length,
+    });
 
     try {
       // Call Gemini AI chatbot (it will format the context internally)

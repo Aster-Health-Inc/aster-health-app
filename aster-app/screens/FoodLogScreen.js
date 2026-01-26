@@ -374,6 +374,12 @@ const saveWaterLog = async () => {
       calorie_goal_set: Number.isFinite(goals?.calories) ? goals.calories > 0 : undefined,
       calorie_goal: Number.isFinite(goals?.calories) ? goals.calories : undefined,
     });
+    posthog?.capture('water_logged', {
+      water_amount_ml: amountMlRounded,
+      water_total_ml: totalMl,
+      calorie_goal_set: Number.isFinite(goals?.calories) ? goals.calories > 0 : undefined,
+      calorie_goal: Number.isFinite(goals?.calories) ? goals.calories : undefined,
+    });
 
     // Optional: you can keep this or remove it once confident
     loadData();

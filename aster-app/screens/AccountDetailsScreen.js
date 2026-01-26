@@ -512,7 +512,15 @@ const AccountDetailsScreen = () => {
                       ]);
 
                       setBirthdate(profilePayload.birthdate || birthdate);
+                      const measurementTypes = [];
+                      if (Number.isFinite(weightNum)) {
+                        measurementTypes.push('weight');
+                      }
+                      if (Number.isFinite(totalInches)) {
+                        measurementTypes.push('height');
+                      }
                       posthog?.capture('measurement_logged', {
+                        measurement_types: measurementTypes.length ? measurementTypes : undefined,
                         weight_lbs: Number.isFinite(weightNum) ? weightNum : undefined,
                         height_in: Number.isFinite(totalInches) ? totalInches : undefined,
                       });

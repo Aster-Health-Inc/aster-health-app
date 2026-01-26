@@ -120,7 +120,16 @@ export default function App() {
     () =>
       new PostHog('phc_bb786hqaz5EACriYfwC1qUDn1NOWNW24IqNAnJzUA8o', {
         host: 'https://us.i.posthog.com',
-        enableSessionReplay: false,  // Disabled: Causes 413 errors with camera/photo screens
+        enableSessionReplay: true,
+        enablePersistSessionIdAcrossRestart: true,
+        sessionReplayConfig: {
+          maskAllTextInputs: true,
+          maskAllImages: true,
+          maskAllSandboxedViews: true,
+          captureLog: false,
+          captureNetworkTelemetry: false,
+          throttleDelayMs: 1500,
+        },
         autocapture: false,  // Disabled: Autocapture sends large payloads with photo data
       }),
     []

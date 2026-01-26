@@ -397,6 +397,12 @@ export default function MealLogHomeScreen() {
                       calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
                       calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
                     });
+                    posthog?.capture('water_logged', {
+                      water_amount_ml: intake,
+                      water_total_ml: totalMl,
+                      calorie_goal_set: Number.isFinite(calorieGoal) ? calorieGoal > 0 : undefined,
+                      calorie_goal: Number.isFinite(calorieGoal) ? calorieGoal : undefined,
+                    });
                   } catch (err) {
                     console.error('Error logging water:', err);
                   }

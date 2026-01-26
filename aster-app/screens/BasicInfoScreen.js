@@ -357,7 +357,16 @@ export default function BasicInfoScreen() {
       heightCentimeters: ensuredCentimeters.toString(),
     })
 
+    const measurementTypes = []
+    if (Number.isFinite(weightLbs) || Number.isFinite(weightKg)) {
+      measurementTypes.push('weight')
+    }
+    if (Number.isFinite(totalCm) || Number.isFinite(totalInRounded)) {
+      measurementTypes.push('height')
+    }
+
     posthog?.capture('measurement_logged', {
+      measurement_types: measurementTypes.length ? measurementTypes : undefined,
       weight_lbs: weightLbs,
       weight_kg: weightKg,
       height_cm: round0(totalCm),
