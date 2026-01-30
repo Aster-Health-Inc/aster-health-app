@@ -9,7 +9,7 @@ export default ({ config }) => ({
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealthinc.app',
-    buildNumber: '13',
+    buildNumber: '14',
     usesAppleSignIn: true,
     "icon": "./assets/icon.png",
     infoPlist: {
@@ -26,6 +26,7 @@ export default ({ config }) => ({
     eas: { projectId: 'c220f578-b1ce-41ff-971c-88e90f13c7e5' }
   },
   plugins: [
+    "./plugins/withBuildNumberSync",
     "expo-localization",
     ...(config.plugins ?? []),
     "expo-notifications",
