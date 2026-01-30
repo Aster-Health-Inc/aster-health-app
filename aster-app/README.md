@@ -21,7 +21,6 @@ npx expo start --tunnel
 
 Scan QR with Expo Go app.
 
- HealthKit will not work in Expo Go.
 
 Commit + push to GitHub (main or feature branch):
 

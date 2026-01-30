@@ -51,7 +51,6 @@ import AccountDetailsScreen from './screens/AccountDetailsScreen';
 import PastAnalyticsScreen from './screens/PastAnalyticsScreen';
 import PastAnalyticsDetailScreen from './screens/PastAnalyticsDetailScreen';
 import PastCycleCalendarScreen from './screens/PastCycleCalendarScreen';
-import HealthDataUsageScreen from './screens/HealthDataUsageScreen';
 
 // ✅ import your logger utilities
 import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLogger';
@@ -286,7 +285,6 @@ export default function App() {
                     <Stack.Screen name="ReportBug" component={ReportBugScreen} />
                     <Stack.Screen name="Support" component={SupportScreen} />
                     <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                    <Stack.Screen name="HealthDataUsage" component={HealthDataUsageScreen} />
                     <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
                     <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
                     <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />

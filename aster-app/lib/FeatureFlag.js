@@ -17,7 +17,6 @@ const envBool = (val, fallback=false) => {
 // Build-time defaults (Expo reads EXPO_PUBLIC_* at runtime too)
 const DEFAULT_FLAGS = {
   chatbot: envBool(process.env.EXPO_PUBLIC_ENABLE_CHATBOT, true),
-  appleHealth: envBool(process.env.EXPO_PUBLIC_ENABLE_APPLE_HEALTH, false),
 };
 
 export function FeatureFlagsProvider({ children }) {
@@ -37,7 +36,7 @@ export function FeatureFlagsProvider({ children }) {
       const { data, error } = await supabase
         .from("feature_flags")
         .select("key, value")
-        .in("key", ["chatbot", "appleHealth"]);
+        .in("key", ["chatbot"]);
 
       if (!error && Array.isArray(data)) {
         const runtime = {};

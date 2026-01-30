@@ -9,14 +9,10 @@ export default ({ config }) => ({
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealthinc.app',
-    buildNumber: '12',
+    buildNumber: '13',
     usesAppleSignIn: true,
     "icon": "./assets/icon.png",
     infoPlist: {
-      NSHealthShareUsageDescription:
-        'Aster uses Apple Health data you choose to share to provide insights.',
-      NSHealthUpdateUsageDescription:
-        'Aster writes health data you choose to log to Apple Health.',
       NSCameraUsageDescription:
         'Aster uses the camera to take photos of meals for food logging and nutrition tracking, such as capturing a meal photo to attach to a nutrition entry.',
       "ITSAppUsesNonExemptEncryption": false

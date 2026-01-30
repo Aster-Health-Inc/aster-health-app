@@ -13,7 +13,6 @@ const SURFACE = '#FFFFFF';
 const SETTINGS_ITEMS = [
   { key: 'account', label: 'Account Details', navigateTo: 'AccountDetails' },
   { key: 'privacy', label: 'Privacy & Information Safety', navigateTo: 'PrivacySafety' },
-  { key: 'healthData', label: 'Health Data Usage', navigateTo: 'HealthDataUsage' },
   { key: 'notifications', label: 'Notifications', navigateTo: 'Notifications' },
   { key: 'help', label: 'Help & Feedback', navigateTo: 'HelpFeedback' },
   { key: 'import', label: 'Import Data from Third Party', navigateTo: 'DataImport' },
