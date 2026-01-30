@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from './lib/supabase';
+import { ensureUserRecord } from './utils/authUser';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import { OnboardingProvider } from './src/context/OnboardingContext';
 import ConnectivityOverlay from './components/ConnectivityOverlay';
@@ -20,6 +21,7 @@ import CycleDetailsScreen from './screens/CycleDetailsScreen';
 import CycleHomeScreen from './screens/CycleHomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import WelcomeScreen from './screens/WelcomeScreen';
+import PrivacyConsentScreen from './screens/PrivacyConsentScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import OptionalCycleHistoryScreen from './screens/OptionalCycleHistoryScreen';
 import AdditionalInfoScreen from './screens/AdditionalInfoScreen';
@@ -94,11 +96,17 @@ export default function App() {
           } catch {}
         }
       }
+      if (session?.user) {
+        await ensureUserRecord(session.user);
+      }
       setSession(session);
       setLoading(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      if (newSession?.user) {
+        await ensureUserRecord(newSession.user);
+      }
       setSession(newSession);
     });
 
@@ -249,6 +257,7 @@ export default function App() {
                 {!session || !session.user ? (
                   <>
                     <Stack.Screen name="Welcome" component={WelcomeScreen} />
+                    <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
                     <Stack.Screen name="Consent" component={ConsentScreen} />
                     <Stack.Screen name="Login" component={LoginScreen} />
                     <Stack.Screen name="SignUp" component={SignUpScreen} />

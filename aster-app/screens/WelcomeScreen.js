@@ -14,7 +14,7 @@ const WelcomeScreen = ({ navigation }) => (
       <TouchableOpacity
         activeOpacity={0.9}
         style={styles.startButton}
-        onPress={() => navigation.navigate('SignUp')}
+        onPress={() => navigation.navigate('PrivacyConsent')}
       >
         <Text style={styles.startText}>Get Started</Text>
       </TouchableOpacity>

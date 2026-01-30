@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Modal, ActivityIndicator, Alert, Linking } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,29 +17,54 @@ const CameraScreen = () => {
   const mealTypes = ['Breakfast', 'Lunch', 'Snack', 'Dinner'];
 
   useEffect(() => {
-    (async () => {
-      if (Platform.OS === 'web') {
+    if (Platform.OS === 'web') {
+      setHasPermission(true);
+    }
+  }, []);
+
+  const promptOpenSettings = () => {
+    Alert.alert(
+      'Camera access needed',
+      'Enable camera access in Settings to take meal photos.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ]
+    );
+  };
+
+  const ensureCameraPermission = async () => {
+    if (Platform.OS === 'web') return true;
+
+    try {
+      const current = await ImagePicker.getCameraPermissionsAsync();
+      if (current.status === 'granted') {
         setHasPermission(true);
-        return;
+        return true;
       }
 
-      try {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          setHasPermission(false);
-          Alert.alert(
-            'Camera permission needed',
-            'Please enable camera access in Settings to take meal photos.'
-          );
-        } else {
-          setHasPermission(true);
-        }
-      } catch (err) {
-        console.error('Camera permission error:', err);
+      if (current.status === 'denied') {
         setHasPermission(false);
+        promptOpenSettings();
+        return false;
       }
-    })();
-  }, []);
+
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        setHasPermission(false);
+        promptOpenSettings();
+        return false;
+      }
+
+      setHasPermission(true);
+      return true;
+    } catch (err) {
+      console.error('Camera permission error:', err);
+      setHasPermission(false);
+      Alert.alert('Camera unavailable', 'Please enable camera access to take a photo.');
+      return false;
+    }
+  };
 
   const takePhoto = async () => {
     if (Platform.OS === 'web') {
@@ -47,8 +72,8 @@ const CameraScreen = () => {
       return;
     }
 
-    if (hasPermission !== true) {
-      Alert.alert('Camera unavailable', 'Please enable camera access to take a photo.');
+    const allowed = await ensureCameraPermission();
+    if (!allowed) {
       return;
     }
 
@@ -127,28 +152,6 @@ const CameraScreen = () => {
       selectedDate: selectedDate
     });
   };
-
-  if (hasPermission === null) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#111111" />
-      </View>
-    );
-  }
-
-  if (hasPermission === false) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.noPermissionText}>No access to camera</Text>
-        <TouchableOpacity
-          style={styles.permissionButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.permissionButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>

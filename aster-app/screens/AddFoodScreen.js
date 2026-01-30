@@ -198,6 +198,14 @@ const AddFoodScreen = () => {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={{ flex: 1 }}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
+              <TouchableOpacity
+                style={styles.photoButton}
+                activeOpacity={0.9}
+                onPress={() => navigation.navigate('Camera', { mealType: resolvedMealType })}
+              >
+                <Ionicons name="camera-outline" size={18} color={ACCENT} />
+                <Text style={styles.photoButtonText}>Take a photo instead</Text>
+              </TouchableOpacity>
 
               <View style={styles.inputCard}>
                 <Text style={styles.inputLabel}>Food Name</Text>
@@ -304,6 +312,22 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderWidth: 1,
     borderColor: BORDER,
+  },
+  photoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F5F2FB',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 14,
+  },
+  photoButtonText: {
+    color: ACCENT,
+    fontWeight: '700',
   },
 
   addButton: {

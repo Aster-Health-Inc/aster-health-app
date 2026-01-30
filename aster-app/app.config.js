@@ -9,7 +9,7 @@ export default ({ config }) => ({
   ios: {
     ...(config.ios ?? {}),
     bundleIdentifier: 'com.asterhealthinc.app',
-    buildNumber: '10',
+    buildNumber: '12',
     "icon": "./assets/icon.png",
     infoPlist: {
       NSHealthShareUsageDescription:

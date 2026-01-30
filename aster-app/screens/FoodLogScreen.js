@@ -769,7 +769,7 @@ const saveWaterLog = async () => {
                   activeOpacity={0.85}
                   onPress={() => {
                     closeMealPicker();
-                    navigation.navigate('Camera', { mealType: meal });
+                    navigation.navigate('AddFoodScreen', { mealType: meal });
                   }}
                 >
                   <Text style={styles.mealOptionText}>{meal}</Text>
