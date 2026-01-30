@@ -55,10 +55,6 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Aster uses the camera to take photos of meals for food logging and nutrition tracking, such as capturing a meal photo to attach to a nutrition entry.</string>
-    <key>NSHealthShareUsageDescription</key>
-    <string>Aster uses Apple Health data you choose to share to provide insights.</string>
-    <key>NSHealthUpdateUsageDescription</key>
-    <string>Aster writes health data you choose to log to Apple Health.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSMotionUsageDescription</key>
