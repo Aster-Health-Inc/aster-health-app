@@ -232,6 +232,20 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     setMode(nextMode);
   };
 
+  const openAuthSessionWithTimeout = async (url, returnUrl) => {
+    const timeoutMs = 45000;
+    const timeoutPromise = new Promise((resolve) =>
+      setTimeout(() => resolve({ type: 'timeout' }), timeoutMs)
+    );
+
+    const result = await Promise.race([
+      WebBrowser.openAuthSessionAsync(url, returnUrl, { preferEphemeralSession: false }),
+      timeoutPromise,
+    ]);
+
+    return result;
+  };
+
   const handleOAuthSignIn = async (provider) => {
     setOauthLoading(provider);
     const providerRedirectUri = redirectUri;
@@ -295,10 +309,9 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         );
       }
 
-      const result = await WebBrowser.openAuthSessionAsync(
+      const result = await openAuthSessionWithTimeout(
         data.url,
-        providerRedirectUri,
-        { preferEphemeralSession: false }
+        providerRedirectUri
       );
 
       logInfo(
@@ -309,6 +322,29 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         'url:',
         result?.url
       );
+
+      if (result.type === 'timeout') {
+        logInfo('[OAuth] Auth session timed out', provider);
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
+        if (sessionError) {
+          logError('[OAuth] getSession error after timeout', provider, sessionError);
+        }
+        if (sessionData?.session?.user) {
+          logInfo('[OAuth] Session detected after timeout', provider, {
+            userId: sessionData.session.user.id,
+          });
+          void ensureUserRecord(sessionData.session.user);
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'OnboardingRouter' }],
+          });
+          posthog?.capture('sign_in', { method: provider });
+          return;
+        }
+        logInfo('[OAuth] No session found after timeout', provider);
+        throw new Error('Authentication is taking too long. Please try again.');
+      }
 
       if (result.type === 'cancel' || result.type === 'dismiss') {
         throw new Error('Authentication cancelled');
@@ -358,7 +394,8 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           );
         }
 
-        await ensureUserRecord(user);
+        // Do not block UI on profile upsert; handle in background.
+        void ensureUserRecord(user);
         logInfo(
           '[OAuth] Completed user session',
           provider,
@@ -418,7 +455,8 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           logError('[Anon] Failed to update anonymous metadata', metaErr);
         }
 
-        await ensureUserRecord({
+        // Do not block UI on profile upsert; handle in background.
+        void ensureUserRecord({
           ...user,
           user_metadata: { ...(user.user_metadata || {}), username },
         });
@@ -599,7 +637,8 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           logInfo('[Auth] Email sign-up completed', {
             userId: resolvedUser.id,
           });
-          await ensureUserRecord(resolvedUser);
+          // Do not block UI on profile upsert; handle in background.
+          void ensureUserRecord(resolvedUser);
           navigation.reset({
             index: 0,
             routes: [{ name: 'OnboardingRouter' }],
@@ -618,7 +657,8 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           userId: userData?.user?.id,
         });
         if (userData?.user) {
-          await ensureUserRecord(userData.user);
+          // Do not block UI on profile upsert; handle in background.
+          void ensureUserRecord(userData.user);
         }
 
         navigation.reset({

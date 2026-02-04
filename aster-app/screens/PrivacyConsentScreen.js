@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { LOGO_SVG } from '../assets/logoSvg';
+import {
+  AI_DISCLAIMER_CONSENT_TEXT,
+  recordAiDisclaimerConsent,
+} from '../utils/aiDisclaimerConsent';
 
 const PRIVACY_POLICY_URL = 'https://aster.fit/privacypolicy/';
 
-const PrivacyConsentScreen = ({ navigation }) => {
-  const [consentChecked, setConsentChecked] = useState(false);
+const PrivacyConsentScreen = ({ navigation, route }) => {
+  const fromSettings = Boolean(route?.params?.fromSettings);
+  const [consentChecked, setConsentChecked] = useState(fromSettings);
+  const [aiDisclaimerChecked, setAiDisclaimerChecked] = useState(fromSettings);
+
+  useEffect(() => {
+    if (fromSettings) {
+      setConsentChecked(true);
+      setAiDisclaimerChecked(true);
+    }
+  }, [fromSettings]);
+
+  const handleContinue = async () => {
+    if (fromSettings) {
+      navigation.goBack();
+    } else {
+      await recordAiDisclaimerConsent();
+      navigation.navigate('SignUp');
+    }
+  };
 
   const openPrivacyPolicy = async () => {
     try {
@@ -21,6 +43,18 @@ const PrivacyConsentScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {fromSettings ? (
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              activeOpacity={0.85}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="close" size={22} color="#3F2560" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <View style={styles.logoWrap}>
           <SvgXml xml={LOGO_SVG} width={180} height={72} />
         </View>
@@ -41,9 +75,10 @@ const PrivacyConsentScreen = ({ navigation }) => {
 
         <Pressable
           style={styles.checkboxRow}
-          onPress={() => setConsentChecked((prev) => !prev)}
+          onPress={() => !fromSettings && setConsentChecked((prev) => !prev)}
+          disabled={fromSettings}
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: consentChecked }}
+          accessibilityState={{ checked: consentChecked, disabled: fromSettings }}
         >
           <View style={[styles.checkbox, consentChecked && styles.checkboxChecked]}>
             {consentChecked ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
@@ -57,13 +92,31 @@ const PrivacyConsentScreen = ({ navigation }) => {
           </Text>
         </Pressable>
 
-        <TouchableOpacity
-          style={[styles.primaryButton, !consentChecked && styles.primaryButtonDisabled]}
-          activeOpacity={0.9}
-          disabled={!consentChecked}
-          onPress={() => navigation.navigate('SignUp')}
+        <Pressable
+          style={styles.checkboxRow}
+          onPress={() => !fromSettings && setAiDisclaimerChecked((prev) => !prev)}
+          disabled={fromSettings}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: aiDisclaimerChecked, disabled: fromSettings }}
         >
-          <Text style={styles.primaryButtonText}>Continue</Text>
+          <View style={[styles.checkbox, aiDisclaimerChecked && styles.checkboxChecked]}>
+            {aiDisclaimerChecked ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
+          </View>
+          <Text style={styles.checkboxText}>
+            {AI_DISCLAIMER_CONSENT_TEXT}
+          </Text>
+        </Pressable>
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            !(consentChecked && aiDisclaimerChecked) && styles.primaryButtonDisabled,
+          ]}
+          activeOpacity={0.9}
+          disabled={!(consentChecked && aiDisclaimerChecked)}
+          onPress={handleContinue}
+        >
+          <Text style={styles.primaryButtonText}>{fromSettings ? 'Done' : 'Continue'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -76,6 +129,20 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F1FF',
+  },
+  headerRow: {
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E6DDFC',
   },
   content: {
     paddingHorizontal: 24,

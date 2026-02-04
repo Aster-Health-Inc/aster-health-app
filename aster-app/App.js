@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from './lib/supabase';
 import { ensureUserRecord } from './utils/authUser';
+import { flushAiDisclaimerConsent } from './utils/aiDisclaimerConsent';
 import { FeatureFlagsProvider } from "./lib/FeatureFlag";
 import { OnboardingProvider } from './src/context/OnboardingContext';
 import ConnectivityOverlay from './components/ConnectivityOverlay';
@@ -96,7 +97,9 @@ export default function App() {
         }
       }
       if (session?.user) {
-        await ensureUserRecord(session.user);
+        // Avoid blocking the session state on network latency.
+        void ensureUserRecord(session.user);
+        void flushAiDisclaimerConsent();
       }
       setSession(session);
       setLoading(false);
@@ -104,7 +107,9 @@ export default function App() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (newSession?.user) {
-        await ensureUserRecord(newSession.user);
+        // Avoid blocking auth state updates on background profile writes.
+        void ensureUserRecord(newSession.user);
+        void flushAiDisclaimerConsent();
       }
       setSession(newSession);
     });
@@ -308,6 +313,7 @@ export default function App() {
                     <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
                     <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
                     <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
+                    <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
 
                     {/* Food-related */}
                     <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />

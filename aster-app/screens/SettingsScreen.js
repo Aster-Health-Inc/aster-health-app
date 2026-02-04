@@ -12,7 +12,7 @@ const SURFACE = '#FFFFFF';
 
 const SETTINGS_ITEMS = [
   { key: 'account', label: 'Account Details', navigateTo: 'AccountDetails' },
-  { key: 'privacy', label: 'Privacy & Information Safety', navigateTo: 'PrivacySafety' },
+  { key: 'privacy', label: 'Privacy & Information Safety', navigateTo: 'PrivacyConsent' },
   { key: 'notifications', label: 'Notifications', navigateTo: 'Notifications' },
   { key: 'help', label: 'Help & Feedback', navigateTo: 'HelpFeedback' },
   { key: 'import', label: 'Import Data from Third Party', navigateTo: 'DataImport' },
@@ -63,6 +63,10 @@ const SettingsScreen = () => {
   const handleItemPress = (item) => {
     if (item.action === 'logout') {
       setShowLogoutConfirm(true);
+      return;
+    }
+    if (item.key === 'privacy') {
+      navigation.navigate('PrivacyConsent', { fromSettings: true });
       return;
     }
     if (item.navigateTo) {
