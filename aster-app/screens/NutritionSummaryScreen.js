@@ -7,6 +7,10 @@ import { supabase } from '../lib/supabase';
 import { upsertMealLog, upsertDailyCalorie } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Disclaimer from '../components/Disclaimer';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
+import { healthInsightSources } from '../data/healthInsightSources';
 
 const BACKGROUND = '#E6E0F3';
 const SURFACE = '#FFFFFF';
@@ -20,6 +24,7 @@ const NutritionSummaryScreen = () => {
   const posthog = usePostHog();
   const { photoUri, analysisData, geminiData } = route.params;
   const [saving, setSaving] = useState(false);
+  const [sourcesKey, setSourcesKey] = useState(null);
 
   const { name, description, calories, macros, ingredients, micronutrients, servingSize, mealType, weight } =
     analysisData || {};
@@ -253,7 +258,13 @@ const NutritionSummaryScreen = () => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Macronutrients</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Macronutrients</Text>
+            <InfoIcon
+              onPress={() => setSourcesKey('nutrition_reports')}
+              accessibilityLabel="Macronutrients sources and methodology"
+            />
+          </View>
           <Text style={styles.sectionDesc}>
             Lightly grilled salmon with quinoa, roasted vegetables, and a lemon and herb dressing.
           </Text>
@@ -299,7 +310,13 @@ const NutritionSummaryScreen = () => {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Key Micronutrients</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Key Micronutrients</Text>
+            <InfoIcon
+              onPress={() => setSourcesKey('nutrition_reports')}
+              accessibilityLabel="Micronutrients sources and methodology"
+            />
+          </View>
           {(micronutrients && micronutrients.length > 0
             ? micronutrients
             : [
@@ -314,7 +331,15 @@ const NutritionSummaryScreen = () => {
             </View>
           ))}
         </View>
+        <Disclaimer compact style={styles.disclaimerFooter} />
       </ScrollView>
+      <SourcesModal
+        visible={!!sourcesKey}
+        onClose={() => setSourcesKey(null)}
+        title="Sources and Methodology"
+        contextText="This nutrition summary reflects your logged food data and general public health guidance. It is for general wellness and educational purposes only and does not provide medical advice."
+        sources={healthInsightSources[sourcesKey]}
+      />
 
       <TouchableOpacity
         style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
@@ -442,6 +467,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: TEXT_PRIMARY,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
   sectionDesc: {
     fontSize: 13,
     color: TEXT_MUTED,
@@ -523,5 +554,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonDisabled: {
     backgroundColor: '#AAA',
+  },
+  disclaimerFooter: {
+    marginBottom: 8,
   },
 });

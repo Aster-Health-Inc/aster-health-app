@@ -185,7 +185,7 @@ const handleContinue = async () => {
         </View>
 
         <Text style={styles.subtitle}>Tell me about your period!</Text>
-        <Text style={styles.title}>For better predictions . . .</Text>
+        <Text style={styles.title}>For better cycle estimates . . .</Text>
         <Text style={styles.instructions}>
           Include the days you experienced menstrual bleeding in your last 4 cycles.
         </Text>

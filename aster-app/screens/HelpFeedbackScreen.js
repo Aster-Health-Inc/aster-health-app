@@ -17,9 +17,9 @@ const ACTIONS = [
 
 const FAQ_ITEMS = [
   {
-    question: "Why isn't my period prediction accurate yet?",
+    question: "Why isn't my period estimate accurate yet?",
     answer:
-      'Aster learns your unique cycle over time. For the best accuracy, track at least 2-3 cycles and include factors like stress, diet changes, and workout intensity.',
+      'Aster improves estimates as you log more data. To improve estimate quality, track at least 2-3 cycles and include routine factors like stress, food, and workouts.',
   },
   {
     question: 'Can I edit or delete past entries?',
@@ -34,7 +34,7 @@ const FAQ_ITEMS = [
   {
     question: 'How does the AI chatbot keep my data private?',
     answer:
-      'Your health data is encrypted and never shared with third parties. The AI uses your logged data to provide advice, but all conversations remain secure in your account.',
+      'Your health data is encrypted and never shared with third parties. The AI uses your logged data to provide general wellness information, and conversations remain secure in your account.',
   },
   {
     question: 'What do the insights actually tell me?',
@@ -137,7 +137,7 @@ const HelpFeedbackScreen = () => {
             </View>
             <Text style={styles.emergencyTitle}>EMERGENCY SUPPORT</Text>
             <Text style={styles.emergencyText}>
-              For urgent health concerns, please contact your healthcare provider immediately.
+              For urgent health concerns, contact a qualified healthcare professional immediately.
             </Text>
           </View>
         </ScrollView>

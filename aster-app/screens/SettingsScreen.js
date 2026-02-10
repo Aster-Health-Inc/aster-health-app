@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
+import Disclaimer from '../components/Disclaimer';
 
 const BACKGROUND = '#EEE7FF';
 const SURFACE = '#FFFFFF';
@@ -156,6 +157,20 @@ const SettingsScreen = () => {
                 />
               </TouchableOpacity>
             ))}
+          </View>
+
+          <View style={styles.legalCard}>
+            <View style={styles.legalHeaderRow}>
+              <Text style={styles.legalTitle}>Information & Legal</Text>
+              <TouchableOpacity
+                style={styles.legalAction}
+                onPress={() => navigation.navigate('PrivacyConsent', { fromSettings: true })}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.legalActionText}>View Details</Text>
+              </TouchableOpacity>
+            </View>
+            <Disclaimer compact />
           </View>
         </ScrollView>
       </View>
@@ -313,6 +328,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#3F2560',
+  },
+  legalCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(63,37,96,0.12)',
+    gap: 10,
+  },
+  legalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  legalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#3F2560',
+  },
+  legalAction: {
+    backgroundColor: '#F2ECFF',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  legalActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4B117B',
   },
   logoutText: {
     color: '#D84A4A',

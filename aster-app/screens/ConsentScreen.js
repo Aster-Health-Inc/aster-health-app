@@ -37,7 +37,7 @@ const ConsentScreen = ({ navigation }) => {
         onPressOut={() => setPressed(null)}
         activeOpacity={0.9}
       >
-        <Image source={require('../assets/googlef.png')} style={styles.googleFullImage} resizeMode="contain" />
+        <Image source={require('../assets/Google.png')} style={styles.googleFullImage} resizeMode="contain" />
       </TouchableOpacity>
 
       {/* ✅ Email Sign Up Button (Box + Hover Black) */}

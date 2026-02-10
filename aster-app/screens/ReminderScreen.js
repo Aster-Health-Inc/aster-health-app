@@ -56,7 +56,7 @@ const readTimeParts = (raw) => {
   }
 
   if (typeof raw === 'string') {
-    const match = raw.match(/^(\\d{1,2}):(\\d{2})/);
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
     if (match) {
       const hours = Math.min(23, Math.max(0, Number(match[1])));
       const minutes = Math.min(59, Math.max(0, Number(match[2])));
@@ -85,7 +85,7 @@ export default function ReminderScreen() {
   const hasAutoSavedRef = useRef(false);
 
   const [selectedTime, setSelectedTime] = useState(() => {
-    return buildAnchoredTime(state.reminder.time ? new Date(state.reminder.time) : new Date());
+    return buildAnchoredTime(state.reminder.time || new Date());
   });
   const pickerMinDate = useMemo(() => {
     const d = new Date(PICKER_ANCHOR_DAY);
@@ -274,19 +274,6 @@ export default function ReminderScreen() {
             },
             { onConflict: 'user_id' },
           ),
-        supabase
-          .from('reminder_settings')
-          .upsert(
-            [
-              {
-                user_id: user.id,
-                reminder_time: reminderTime,
-                reminder_days: reminderDays,
-                checkin_enabled: checkinEnabled,
-              },
-            ],
-            { onConflict: 'user_id' },
-          ),
       ];
 
       const results = await Promise.all(writes);
@@ -312,11 +299,36 @@ export default function ReminderScreen() {
         });
       }
 
-      await scheduleDailyCheckins({
-        enabled: checkinEnabled,
-        time: checkinEnabled ? selectedTime : null,
-        days: reminderDays,
-      });
+      try {
+        const { error: reminderSettingsError } = await supabase
+          .from('reminder_settings')
+          .upsert(
+            [
+              {
+                user_id: user.id,
+                reminder_time: reminderTime,
+                reminder_days: reminderDays,
+                checkin_enabled: checkinEnabled,
+              },
+            ],
+            { onConflict: 'user_id' },
+          );
+        if (reminderSettingsError) {
+          console.log('Reminder settings save error (non-blocking):', reminderSettingsError);
+        }
+      } catch (reminderSettingsError) {
+        console.log('Reminder settings save exception (non-blocking):', reminderSettingsError);
+      }
+
+      try {
+        await scheduleDailyCheckins({
+          enabled: checkinEnabled,
+          time: checkinEnabled ? selectedTime : null,
+          days: reminderDays,
+        });
+      } catch (scheduleError) {
+        console.log('Reminder schedule error (non-blocking):', scheduleError);
+      }
 
       posthog?.capture('cycle_logged', {
         source: 'onboarding',
@@ -335,7 +347,7 @@ export default function ReminderScreen() {
     } finally {
       setSaving(false);
     }
-  }, [navigation, saving, selectedTime]);
+  }, [checkinEnabled, navigation, posthog, resetOnboarding, saving, selectedTime, state]);
 
   // If user opted out of notifications, skip the time selection UI and persist immediately
   useEffect(() => {

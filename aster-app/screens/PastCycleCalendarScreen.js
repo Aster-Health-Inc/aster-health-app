@@ -3,6 +3,9 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Disclaimer from '../components/Disclaimer';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
 
 const MS_IN_DAY = 1000 * 60 * 60 * 24;
 
@@ -40,6 +43,7 @@ export default function PastCycleCalendarScreen() {
   const cycleContext = route.params?.cycleContext;
 
   const [currentMonth, setCurrentMonth] = useState(() => addMonths(new Date(), -offset));
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
 
   const getCycleStateForDate = useCallback(
     (date) => {
@@ -98,6 +102,8 @@ export default function PastCycleCalendarScreen() {
       }),
     [currentMonth],
   );
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'cycle_estimates');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -128,7 +134,10 @@ export default function PastCycleCalendarScreen() {
           >
             <Ionicons name="chevron-back" size={18} color="#111111" />
           </TouchableOpacity>
-          <Text style={styles.monthTitle}>{currentLabel}</Text>
+          <View style={styles.monthTitleRow}>
+            <Text style={styles.monthTitle}>{currentLabel}</Text>
+            <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
+          </View>
           <TouchableOpacity
             style={styles.navButton}
             onPress={() => setCurrentMonth((prev) => addMonths(prev, 1))}
@@ -187,6 +196,12 @@ export default function PastCycleCalendarScreen() {
           ))}
         </View>
       </View>
+      <Disclaimer compact style={styles.disclaimerBlock} />
+      <SourcesModal
+        visible={Boolean(activeSourcesKey)}
+        onClose={closeSourcesModal}
+        categoryKey={activeSourcesKey || 'cycle_estimates'}
+      />
     </SafeAreaView>
   );
 }
@@ -248,6 +263,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#111111',
+  },
+  monthTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   weekLabels: {
     flexDirection: 'row',
@@ -327,5 +347,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#333333',
     fontWeight: '600',
+  },
+  disclaimerBlock: {
+    marginTop: 12,
   },
 });

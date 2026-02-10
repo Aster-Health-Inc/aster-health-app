@@ -1,8 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { getPhaseInfo } from '../utils/cycleCalculations';
+import Disclaimer from './Disclaimer';
+import InfoIcon from './InfoIcon';
+import SourcesModal from './SourcesModal';
 
 const DailyInsights = ({ cycleData, cyclePrediction }) => {
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
+
   if (!cycleData) {
     return (
       <View style={styles.container}>
@@ -20,22 +25,31 @@ const DailyInsights = ({ cycleData, cyclePrediction }) => {
     month: 'long', 
     day: 'numeric' 
   });
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'cycle_phase_patterns');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Today's Insights</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>Today's Wellness Insights</Text>
+        <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
+      </View>
       <Text style={styles.date}>{today}</Text>
       
       <View style={[styles.phaseCard, { borderLeftColor: phaseInfo.color }]}>
         <View style={styles.phaseHeader}>
           <Text style={styles.phaseEmoji}>{phaseInfo.emoji}</Text>
           <Text style={styles.phaseName}>{phaseInfo.name} Phase</Text>
+          <InfoIcon tint={phaseInfo.color} onPress={() => openSourcesModal('cycle_phase_patterns')} />
         </View>
         <Text style={styles.phaseDescription}>{phaseInfo.description}</Text>
       </View>
 
       <View style={styles.hormonalInsight}>
-        <Text style={styles.sectionTitle}>Your Hormonal Landscape</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Cycle Pattern Snapshot</Text>
+          <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
+        </View>
         <View style={styles.hormoneRow}>
           <Text style={styles.hormoneLabel}>Estrogen:</Text>
           <Text style={styles.hormoneValue}>{phaseInfo.hormones.estrogen}</Text>
@@ -51,7 +65,10 @@ const DailyInsights = ({ cycleData, cyclePrediction }) => {
       </View>
 
       <View style={styles.tipsSection}>
-        <Text style={styles.sectionTitle}>Phase-Perfect Tips</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Phase-Based Wellness Tips</Text>
+          <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {phaseInfo.tips.map((tip, index) => (
             <View key={index} style={[styles.tipCard, { backgroundColor: phaseInfo.color + '20' }]}>
@@ -63,9 +80,12 @@ const DailyInsights = ({ cycleData, cyclePrediction }) => {
 
       {cyclePrediction && (
         <View style={styles.predictionSection}>
-          <Text style={styles.sectionTitle}>Smart Predictions</Text>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>Cycle Estimates</Text>
+            <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
+          </View>
           <View style={styles.predictionCard}>
-            <Text style={styles.predictionLabel}>Next Period Expected:</Text>
+            <Text style={styles.predictionLabel}>Next Period Estimate:</Text>
             <Text style={styles.predictionDate}>
               {new Date(cyclePrediction.predicted_period_date).toLocaleDateString('en-US', {
                 month: 'long',
@@ -73,11 +93,17 @@ const DailyInsights = ({ cycleData, cyclePrediction }) => {
               })}
             </Text>
             <Text style={styles.confidence}>
-              {Math.round(cyclePrediction.confidence_score * 100)}% confidence
+              {Math.round(cyclePrediction.confidence_score * 100)}% estimate confidence
             </Text>
           </View>
         </View>
       )}
+      <Disclaimer compact style={styles.disclaimerFooter} />
+      <SourcesModal
+        visible={Boolean(activeSourcesKey)}
+        onClose={closeSourcesModal}
+        categoryKey={activeSourcesKey || 'cycle_phase_patterns'}
+      />
     </View>
   );
 };
@@ -98,7 +124,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   date: {
     fontSize: 14,
@@ -153,6 +184,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   hormoneRow: {
     flexDirection: 'row',
@@ -210,6 +246,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontStyle: 'italic',
+  },
+  disclaimerFooter: {
+    marginTop: 16,
   },
 });
 

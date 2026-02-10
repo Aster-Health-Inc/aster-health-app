@@ -13,6 +13,9 @@ import { calculateCyclePhase, getPhaseInfo, parseYMD, toUtcMidnight } from '../u
 import { getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
 import { updatePredictionsForUser } from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
+import Disclaimer from '../components/Disclaimer';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
 import TabSwipeWrapper from '../components/TabSwipeWrapper';
 
 const BACKGROUND_COLOR = '#EEE7FF';
@@ -235,6 +238,7 @@ const CycleHomeScreen = () => {
   const [ratingValue, setRatingValue] = useState(0);
   const [ratingFollowUp, setRatingFollowUp] = useState(null); // 'low' | 'high' | null
   const [submittingRating, setSubmittingRating] = useState(false);
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
 
   const today = useMemo(() => new Date(), []);
 
@@ -559,11 +563,13 @@ const CycleHomeScreen = () => {
 
   const nextPeriodDays = cycleData?.daysUntilNextPeriod ?? cycleData?.daysUntilNext ?? null;
   const nextPeriodCopy = (() => {
-    if (nextPeriodDays == null) return 'Track your cycle to see predictions';
-    if (nextPeriodDays === 0) return 'Next period starts today';
-    if (nextPeriodDays === 1) return 'Next period in 1 day';
-    return `Next period in ${nextPeriodDays} days`;
+    if (nextPeriodDays == null) return 'Track your cycle to see date estimates';
+    if (nextPeriodDays === 0) return 'Next period estimate: today';
+    if (nextPeriodDays === 1) return 'Next period estimate: 1 day';
+    return `Next period estimate: ${nextPeriodDays} days`;
   })();
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'cycle_estimates');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   const todayLabel = today.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -755,7 +761,10 @@ const CycleHomeScreen = () => {
             <>
               <View style={styles.summaryCard}>
                 <View style={styles.summaryHeader}>
-                  <Text style={styles.summaryTitle}>Cycle Day</Text>
+                  <View style={styles.summaryTitleRow}>
+                    <Text style={styles.summaryTitle}>Cycle Day</Text>
+                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
+                  </View>
                   <View style={[styles.phaseBadge, { backgroundColor: phaseBadgeStyle.bg }]}>
                     <Text style={[styles.phaseBadgeText, { color: phaseBadgeStyle.text }]}>
                       {phaseLabel}
@@ -784,7 +793,10 @@ const CycleHomeScreen = () => {
 
               <View style={styles.calendarCard}>
                 <View style={styles.calendarHeader}>
-                  <Text style={styles.calendarTitle}>{monthLabel}</Text>
+                  <View style={styles.calendarTitleRow}>
+                    <Text style={styles.calendarTitle}>{monthLabel}</Text>
+                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
+                  </View>
                   <View style={styles.calendarArrows}>
                     <TouchableOpacity
                       style={styles.calendarArrowButton}
@@ -865,7 +877,10 @@ const CycleHomeScreen = () => {
             <>
               <View style={styles.compactCalendarCard}>
                 <View style={styles.compactCalendarHeader}>
-                  <Text style={styles.compactCalendarMonth}>{monthLabel}</Text>
+                  <View style={styles.calendarTitleRow}>
+                    <Text style={styles.compactCalendarMonth}>{monthLabel}</Text>
+                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
+                  </View>
                   <View style={styles.calendarArrows}>
                     <TouchableOpacity
                       style={styles.calendarArrowButton}
@@ -934,7 +949,10 @@ const CycleHomeScreen = () => {
 
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>Monthly Cycle</Text>
+                  <View style={styles.summaryTitleRow}>
+                    <Text style={styles.cardTitle}>Monthly Cycle</Text>
+                    <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
+                  </View>
                   <View style={[styles.phaseBadge, { backgroundColor: phaseBadgeStyle.bg }]}>
                     <Text style={[styles.phaseBadgeText, { color: phaseBadgeStyle.text }]}>
                       {phaseLabel}
@@ -1015,6 +1033,7 @@ const CycleHomeScreen = () => {
               <Text style={styles.symptomButtonText}>Log symptoms</Text>
             </TouchableOpacity>
           </View>
+          <Disclaimer compact style={styles.disclaimerBlock} />
         </ScrollView>
       </View>
 
@@ -1118,7 +1137,7 @@ const CycleHomeScreen = () => {
               <Text style={styles.primaryBtnText}>{savingDay ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
             <Text style={styles.helperText}>
-              We backfill earlier days of this period based on the chosen day to keep predictions in sync.
+              We backfill earlier days of this period based on the chosen day to keep cycle estimates in sync.
             </Text>
           </Pressable>
         </Pressable>
@@ -1170,6 +1189,12 @@ const CycleHomeScreen = () => {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <SourcesModal
+        visible={Boolean(activeSourcesKey)}
+        onClose={closeSourcesModal}
+        categoryKey={activeSourcesKey || 'cycle_estimates'}
+      />
 
         <BottomTaskbar activeKey="Cycle" />
       </SafeAreaView>
@@ -1229,6 +1254,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+  },
+  summaryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   summaryTitle: {
     fontSize: 16,
@@ -1301,6 +1331,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 14,
+  },
+  calendarTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   compactCalendarMonth: {
     fontSize: 16,
@@ -1712,6 +1747,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     textAlign: 'center',
+  },
+  disclaimerBlock: {
+    marginTop: 2,
   },
   ratingOverlay: {
     flex: 1,

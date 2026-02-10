@@ -42,7 +42,7 @@ export default function ChatbotModal({ visible, onClose }) {
       setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: false }), 0);
       if (!hasShownWelcome) {
         // Only load and show welcome on first open
-        setMessages([{ id: "sys-hello", role: "assistant", text: "Hey! Getting your health data ready... ✨" }]);
+        setMessages([{ id: "sys-hello", role: "assistant", text: "Hey! Getting your wellness data ready... ✨" }]);
         loadUserData();
       }
     }
@@ -85,11 +85,11 @@ export default function ChatbotModal({ visible, onClose }) {
     } catch (error) {
       console.error('Error loading user data:', error);
 
-      // Fallback message
+        // Fallback message
       setMessages([{
         id: "sys-error",
         role: "assistant",
-        text: "Oops, had a little trouble loading your data 😅 but no worries! I can still help with your health questions. What's on your mind?"
+        text: "Oops, had a little trouble loading your data 😅 but no worries! I can still help with general wellness questions. What's on your mind?"
       }]);
 
       // Set fallback context
@@ -116,7 +116,7 @@ const generateWelcomeMessage = (data) => {
       welcome += `Your last period started ${daysSince} days ago!\n\n`;
     }
 
-    welcome += "I'm here for all your health, cycle, and nutrition questions! 💬\n\n";
+    welcome += "I'm here for your cycle, nutrition, and general wellness questions! 💬\n\n";
     welcome += "✨ Note: I'm an AI assistant, not a doctor, so for serious medical concerns please see a healthcare professional!";
 
     return welcome;
@@ -247,7 +247,7 @@ const MarkdownBubble = ({ text }) => {
     const lowerQuery = query.toLowerCase();
 
     if (!context || context.isFallback) {
-      return "I don't have access to your health data right now, but I'm here to help with general health questions. Could you provide more details about what you'd like to know?";
+      return "I don't have access to your wellness data right now, but I'm here to help with general wellness questions. Could you share more details about what you'd like to know?";
     }
 
     // Period-related queries
@@ -256,8 +256,8 @@ const MarkdownBubble = ({ text }) => {
         const daysSince = Math.floor((new Date() - new Date(context.latestPeriod.start_date)) / (1000 * 60 * 60 * 24));
         return `Based on your data, your last period started on ${context.latestPeriod.start_date} (${daysSince} days ago). ${
           context.cyclePredictions.length > 0 ?
-          `Your next period is predicted for around ${context.cyclePredictions[0].predicted_period_date}.` :
-          'Would you like me to help predict your next cycle?'
+          `Your next period is estimated around ${context.cyclePredictions[0].predicted_period_date}.` :
+          'Would you like help estimating your next cycle date?'
         }`;
       } else {
         return "I don't see any period data yet. Would you like to log your current or recent period to get started with tracking?";
@@ -274,7 +274,7 @@ const MarkdownBubble = ({ text }) => {
       if (context.recentMeals.length > 0) {
         const avgCalories = context.recentMeals.reduce((sum, meal) => sum + (meal.total_calories || 0), 0) / context.recentMeals.length;
         return `Based on your recent meal logs, you're averaging ${Math.round(avgCalories)} calories per day. ${
-          avgCalories < 1500 ? 'Consider increasing your intake to support your health goals.' :
+          avgCalories < 1500 ? 'You may want to increase intake to support your wellness goals.' :
           avgCalories > 2500 ? 'You might want to review your portion sizes.' :
           'Your nutrition tracking looks balanced!'
         }`;
@@ -284,9 +284,9 @@ const MarkdownBubble = ({ text }) => {
     }
 
     // Default response with context
-    return `I see you're asking about "${query}". Based on your health profile, I can provide personalized advice. ${
+    return `I see you're asking about "${query}". Based on your logged profile, I can share general wellness information. ${
       context.latestPeriod ? `Since your last period was ${context.latestPeriod.start_date}, ` : ''
-    }how can I help you with your health tracking today?`;
+    }how can I help with your tracking today?`;
   };
 
   const renderItem = ({ item }) => {

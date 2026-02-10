@@ -62,7 +62,7 @@ const COLORS = {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const assets = {
-  google: require('../assets/googlef.png'),
+  google: require('../assets/Google.png'),
   apple: require('../assets/apple-icon.png'),
 };
 

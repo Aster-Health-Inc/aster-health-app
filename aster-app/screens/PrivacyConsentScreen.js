@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { LOGO_SVG } from '../assets/logoSvg';
+import Disclaimer from '../components/Disclaimer';
 import {
   AI_DISCLAIMER_CONSENT_TEXT,
   recordAiDisclaimerConsent,
@@ -68,10 +69,10 @@ const PrivacyConsentScreen = ({ navigation, route }) => {
         <View style={styles.noticeCard}>
           <Ionicons name="information-circle" size={20} color="#4B117B" />
           <Text style={styles.noticeText}>
-            Aster Fit provides general wellness insights and nutrition tracking. It does not provide
-            medical advice, diagnosis, or treatment.
+            Aster provides cycle and wellness estimates based on your logged data and general research references.
           </Text>
         </View>
+        <Disclaimer compact style={styles.disclaimerBlock} />
 
         <Pressable
           style={styles.checkboxRow}
@@ -183,6 +184,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#4A3B66',
+  },
+  disclaimerBlock: {
+    marginBottom: 18,
   },
   checkboxRow: {
     flexDirection: 'row',

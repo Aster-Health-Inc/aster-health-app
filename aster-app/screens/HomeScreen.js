@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -10,6 +10,9 @@ import { supabase } from '../lib/supabase';
 import BottomTaskbar from '../components/BottomTaskbar';
 import TabSwipeWrapper from '../components/TabSwipeWrapper';
 import ChatbotModal from '../components/ChatBotModal';
+import Disclaimer from '../components/Disclaimer';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
 import { useFeatureFlags } from '../lib/FeatureFlag';
 import { ASTER_FLOWER_SVG } from '../assets/logoSvg';
 
@@ -29,106 +32,100 @@ const getCyclePhaseInsights = (phase) => {
       {
         key: 'nutrition',
         title: 'Nutrition Focus',
-        description: 'Your iron levels may be lower during menstruation. Consider iron-rich foods like spinach, red meat, and lentils.',
+        description: 'Some people notice lower energy during menstruation. Iron-rich foods like spinach, lentils, and lean proteins may help support wellbeing.',
         icon: 'nutrition',
         background: '#FCECD4',
         accent: '#D4841F',
+        sourceCategory: 'cycle_phase_patterns',
       },
       {
         key: 'rest',
         title: 'Rest & Recovery',
-        description: 'Your body needs extra rest during your period. Prioritize sleep and gentle movement like yoga or walking.',
+        description: 'This phase may feel better with extra rest, steady hydration, and gentle movement such as stretching, yoga, or walking.',
         icon: 'bed',
         background: '#E8E5FF',
         accent: '#6B4FD4',
+        sourceCategory: 'cycle_phase_patterns',
       },
     ],
     Follicular: [
       {
         key: 'energy',
         title: 'High Energy Phase',
-        description: "Your energy is rising! This is the perfect time to try new workouts or tackle challenging projects.",
+        description: 'Energy may trend upward in this phase. It can be a good time to try new workouts or plan higher-focus tasks.',
         icon: 'flash',
         background: '#FFF4E5',
         accent: '#E4B02A',
+        sourceCategory: 'cycle_phase_patterns',
       },
       {
         key: 'social',
         title: 'Social Time',
-        description: "You're more social during your follicular phase. Great time to schedule catch-ups with friends or networking events.",
+        description: 'Some people notice higher motivation in this phase. You may find social plans or collaborative work easier to maintain.',
         icon: 'heart',
         background: '#E5F4F6',
         accent: '#0F8C94',
+        sourceCategory: 'cycle_phase_patterns',
       },
     ],
     Ovulation: [
       {
         key: 'peak',
         title: 'Peak Energy',
-        description: "You're at your energetic peak! Great time for important meetings, social events, or intense workouts.",
+        description: 'You may notice higher energy around this phase. Consider planning active routines and balancing them with recovery.',
         icon: 'sunny',
         background: '#FFF4E5',
         accent: '#E4B02A',
+        sourceCategory: 'cycle_phase_patterns',
       },
       {
         key: 'hydration',
         title: 'Stay Hydrated',
-        description: 'Your body temperature rises during ovulation. Make sure to drink plenty of water throughout the day.',
+        description: 'Hydration and regular meals may help support stable energy and comfort during this part of your cycle.',
         icon: 'water',
         background: '#E5F4F6',
         accent: '#0F8C94',
+        sourceCategory: 'cycle_phase_patterns',
       },
     ],
     Luteal: [
       {
         key: 'nutrition',
         title: 'Manage PMS',
-        description: 'Complex carbs and magnesium-rich foods can help reduce PMS symptoms. Try dark chocolate, nuts, and whole grains.',
+        description: 'Some people find complex carbs and magnesium-rich foods helpful for comfort in this phase, such as nuts, whole grains, and leafy greens.',
         icon: 'nutrition',
         background: '#FCECD4',
         accent: '#D4841F',
-        sources: [
-          {
-            label: 'ACOG: Premenstrual Syndrome (PMS)',
-            url: 'https://www.acog.org/womens-health/faqs/premenstrual-syndrome-pms',
-          },
-          {
-            label: 'NIH: Magnesium Fact Sheet',
-            url: 'https://ods.od.nih.gov/factsheets/Magnesium-Consumer/',
-          },
-        ],
+        sourceCategory: 'cycle_phase_patterns',
       },
       {
         key: 'selfcare',
         title: 'Self-Care Priority',
-        description: 'Hormonal changes may affect mood. Practice stress-reducing activities like meditation, journaling, or gentle exercise.',
+        description: 'Mood and energy can vary in this phase. Gentle routines like walking, breathing exercises, and journaling may support wellbeing.',
         icon: 'heart',
         background: '#FFE5F0',
         accent: '#D4427F',
-        sources: [
-          {
-            label: 'ACOG: Premenstrual Syndrome (PMS)',
-            url: 'https://www.acog.org/womens-health/faqs/premenstrual-syndrome-pms',
-          },
-        ],
+        sourceCategory: 'cycle_phase_patterns',
       },
     ],
     'Late Cycle': [
       {
         key: 'track',
         title: 'Track Symptoms',
-        description: 'Your cycle is longer than usual. Log any symptoms or changes you notice to discuss with your healthcare provider.',
+        description: 'If your cycle feels longer than usual, logging notes can help you spot personal patterns over time.',
         icon: 'clipboard',
         background: '#E8E5FF',
         accent: '#6B4FD4',
+        sourceCategory: 'cycle_estimates',
       },
       {
         key: 'stress',
         title: 'Stress Management',
-        description: 'Stress can delay your period. Try relaxation techniques like deep breathing, yoga, or getting enough sleep.',
+        description: 'Stress and routine changes can affect cycle timing. Sleep, hydration, and relaxation habits may help with consistency.',
         icon: 'heart',
         background: '#FFE5F0',
         accent: '#D4427F',
+        sourceCategory: 'cycle_estimates',
       },
     ],
     Unknown: [
@@ -139,14 +136,16 @@ const getCyclePhaseInsights = (phase) => {
         icon: 'calendar',
         background: '#E8E5FF',
         accent: '#6B4FD4',
+        sourceCategory: 'general_wellness',
       },
       {
         key: 'general',
         title: 'General Wellness',
-        description: 'Maintain a balanced diet, stay hydrated, and get regular exercise for optimal health.',
+        description: 'Balanced meals, hydration, movement, and sleep may help you understand your wellness patterns.',
         icon: 'heart',
         background: '#E5F4F6',
         accent: '#0F8C94',
+        sourceCategory: 'general_wellness',
       },
     ],
   };
@@ -309,7 +308,7 @@ const getEnergyOptimizationEmptyContent = (cyclePhase) => {
       title: 'Supporting Your Energy',
       description: 'Your cycle is longer than usual. Here are ways to maintain energy:',
       tips: [
-        'Stress management techniques can help regulate your cycle and energy',
+        'Stress management routines can help support a steadier wellness rhythm',
         'Ensure you\'re getting adequate sleep and rest',
         'Stay hydrated and maintain a balanced diet',
       ],
@@ -373,7 +372,7 @@ const getHealthPatternsEmptyContent = (cyclePhase) => {
       insights: [
         'Stress and lifestyle factors can affect cycle length',
         'Tracking symptoms helps identify patterns',
-        'Consistent logging reveals your personal health trends',
+        'Consistent logging reveals your personal wellness trends',
       ],
     },
     Unknown: {
@@ -394,17 +393,17 @@ const getHealthPatternsEmptyContent = (cyclePhase) => {
 const getCyclePhaseInsight = (phase, daysSince) => {
   switch (phase) {
     case 'Menstrual':
-      return `Your period started ${daysSince} day${daysSince !== 1 ? 's' : ''} ago. Focus on rest and iron-rich foods to replenish nutrients.`;
+      return `Your period started ${daysSince} day${daysSince !== 1 ? 's' : ''} ago. Gentle routines, hydration, and iron-rich foods may support wellbeing.`;
     case 'Follicular':
-      return `You're in your follicular phase! Energy levels are rising - great time for trying new workouts or activities.`;
+      return 'You are in your follicular phase. Energy may be rising, which can be a helpful time to try new activities.';
     case 'Ovulation':
-      return `You're in your ovulation phase! You may feel more energetic and social. Stay hydrated and listen to your body.`;
+      return 'You are in your ovulation phase. Some people feel more energetic here, so hydration and recovery habits can be helpful.';
     case 'Luteal':
-      return `You're in your luteal phase. You may experience PMS symptoms soon. Focus on stress management and self-care.`;
+      return 'You are in your luteal phase. If your energy or mood shifts, lighter routines and self-care habits may help.';
     case 'Late Cycle':
-      return `Your cycle is running longer than usual. If your period is late, consider logging any symptoms you're experiencing.`;
+      return 'Your cycle appears longer than your recent average. Logging updates can help you understand your pattern over time.';
     default:
-      return 'Log your period to start tracking personalized cycle insights and wellness recommendations!';
+      return 'Log your period to start tracking personalized cycle insights and general wellness suggestions.';
   }
 };
 
@@ -421,18 +420,13 @@ const HomeScreen = () => {
   const [energyInsights, setEnergyInsights] = useState(null);
   const [energyChartData, setEnergyChartData] = useState(null);
   const [optimizationTips, setOptimizationTips] = useState([]);
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
   const navigation = useNavigation();
   const route = useRoute();
   const { flags } = useFeatureFlags();
   const chatbotEnabled = flags?.chatbot !== false;
-  const openSourceUrl = async (url) => {
-    if (!url) return;
-    try {
-      await Linking.openURL(url);
-    } catch (err) {
-      console.log('Open source link failed', err);
-    }
-  };
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'general_wellness');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   const today = useMemo(() => new Date(), []);
   const greeting = useMemo(() => {
@@ -672,16 +666,23 @@ const HomeScreen = () => {
 
           {/* Wellness Progress Card */}
           <View style={[styles.card, styles.wellnessCard]}>
-            <View style={styles.wellnessHeader}>
-              <View>
-                <Text style={styles.wellnessTitle}>Your Wellness Progress</Text>
-                <Text style={styles.wellnessStatus}>
-                  {healthData.cyclePhase} Phase
-                </Text>
-              </View>
-              <View style={styles.improvementBadge}>
-                <Ionicons name="trending-up" size={16} color="#2C9A45" />
-                <Text style={styles.improvementText}>Improved</Text>
+              <View style={styles.wellnessHeader}>
+                <View>
+                  <Text style={styles.wellnessTitle}>Your Wellness Progress</Text>
+                  <Text style={styles.wellnessStatus}>
+                    {healthData.cyclePhase} Phase
+                  </Text>
+                </View>
+              <View style={styles.wellnessMeta}>
+                <InfoIcon
+                  tint="#FFFFFF"
+                  style={styles.wellnessInfoIcon}
+                  onPress={() => openSourcesModal('cycle_phase_patterns')}
+                />
+                <View style={styles.improvementBadge}>
+                  <Ionicons name="trending-up" size={16} color="#2C9A45" />
+                  <Text style={styles.improvementText}>Improved</Text>
+                </View>
               </View>
             </View>
 
@@ -727,7 +728,10 @@ const HomeScreen = () => {
           {energyInsights && energyInsights.dataPoints >= MIN_DATA_DAYS ? (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Energy Optimization</Text>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.cardTitle}>Energy Optimization</Text>
+                  <InfoIcon onPress={() => openSourcesModal('energy_patterns')} />
+                </View>
                 {energyInsights.avgEnergy >= 60 ? (
                   <View style={styles.statusPill}>
                     <Text style={styles.statusText}>Doing good!</Text>
@@ -736,7 +740,7 @@ const HomeScreen = () => {
               </View>
               {energyInsights.weekendBoost != null ? (
                 <Text style={styles.cardBodyText}>
-                  Based on {energyInsights.monthsOfData} {energyInsights.monthsOfData === 1 ? 'month' : 'months'} of data, your energy levels are {Math.abs(energyInsights.weekendBoost)}% {energyInsights.weekendBoost > 0 ? 'higher' : 'lower'} on weekends{energyInsights.weekendBoost > 0 ? ', likely due to better sleep patterns' : ''}.
+                  Based on {energyInsights.monthsOfData} {energyInsights.monthsOfData === 1 ? 'month' : 'months'} of data, your energy logs are {Math.abs(energyInsights.weekendBoost)}% {energyInsights.weekendBoost > 0 ? 'higher' : 'lower'} on weekends{energyInsights.weekendBoost > 0 ? ', which may reflect routine differences' : ''}.
                 </Text>
               ) : (
                 <Text style={styles.cardBodyText}>
@@ -762,7 +766,10 @@ const HomeScreen = () => {
           ) : (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Energy Optimization</Text>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.cardTitle}>Energy Optimization</Text>
+                  <InfoIcon onPress={() => openSourcesModal('energy_patterns')} />
+                </View>
               </View>
               {(() => {
                 const emptyContent = getEnergyOptimizationEmptyContent(healthData.cyclePhase);
@@ -797,7 +804,10 @@ const HomeScreen = () => {
 
           {energyInsights && energyChartData && energyChartData.length > 0 ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Your Health Patterns</Text>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.cardTitle}>Your Wellness Patterns</Text>
+                <InfoIcon onPress={() => openSourcesModal('energy_patterns')} />
+              </View>
               <Text style={styles.cardBodyTextSecondary}>
                 Energy levels over the past {energyChartData.length} {energyChartData.length === 1 ? 'month' : 'months'}
               </Text>
@@ -850,7 +860,10 @@ const HomeScreen = () => {
             </View>
           ) : (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Your Health Patterns</Text>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.cardTitle}>Your Wellness Patterns</Text>
+                <InfoIcon onPress={() => openSourcesModal('energy_patterns')} />
+              </View>
               {(() => {
                 const emptyContent = getHealthPatternsEmptyContent(healthData.cyclePhase);
                 return (
@@ -881,11 +894,14 @@ const HomeScreen = () => {
           )}
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              {healthData.cyclePhase !== 'Unknown'
-                ? `${healthData.cyclePhase} Phase Insights`
-                : 'More Insights'}
-            </Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.cardTitle}>
+                {healthData.cyclePhase !== 'Unknown'
+                  ? `${healthData.cyclePhase} Phase Insights`
+                  : 'More Insights'}
+              </Text>
+              <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
+            </View>
             <View style={styles.insightStack}>
               {getCyclePhaseInsights(healthData.cyclePhase).map((insight) => {
                 // Map icon names to Ionicons
@@ -913,31 +929,28 @@ const HomeScreen = () => {
                       />
                     </View>
                     <View style={styles.insightContent}>
-                      <Text style={[styles.insightTitle, { color: insight.accent }]}>{insight.title}</Text>
+                      <View style={styles.insightTitleRow}>
+                        <Text style={[styles.insightTitle, { color: insight.accent }]}>{insight.title}</Text>
+                        <InfoIcon
+                          tint={insight.accent}
+                          onPress={() => openSourcesModal(insight.sourceCategory || 'cycle_phase_patterns')}
+                        />
+                      </View>
                       <Text style={styles.insightDescription}>{insight.description}</Text>
-                      {insight.sources?.length ? (
-                        <View style={styles.sourceList}>
-                          <Text style={styles.sourceLabel}>Sources</Text>
-                          {insight.sources.map((source, index) => (
-                            <Text
-                              key={`${insight.key}-source-${index}`}
-                              style={styles.sourceLink}
-                              onPress={() => openSourceUrl(source.url)}
-                            >
-                              {source.label}
-                            </Text>
-                          ))}
-                        </View>
-                      ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={`${insight.accent}CC`} />
                   </View>
                 );
               })}
             </View>
           </View>
+          <Disclaimer compact style={styles.disclaimerFooter} />
           </ScrollView>
         </View>
+        <SourcesModal
+          visible={Boolean(activeSourcesKey)}
+          onClose={closeSourcesModal}
+          categoryKey={activeSourcesKey || 'general_wellness'}
+        />
         <BottomTaskbar activeKey="Home" />
         {chatbotEnabled && (
           <ChatbotModal visible={chatbotVisible} onClose={() => setChatbotVisible(false)} />
@@ -1028,8 +1041,13 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   cardTitle: {
     fontSize: 18,
@@ -1148,6 +1166,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  insightTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   insightTitle: {
     fontSize: 14,
     fontWeight: '700',
@@ -1156,22 +1180,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#5F5478',
-  },
-  sourceList: {
-    marginTop: 6,
-    gap: 4,
-  },
-  sourceLabel: {
-    fontSize: 11,
-    color: '#5F5478',
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  sourceLink: {
-    fontSize: 12,
-    color: '#3C2C8B',
-    textDecorationLine: 'underline',
   },
   wellnessCard: {
     backgroundColor: '#7FD99F',
@@ -1199,6 +1207,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.85)',
+  },
+  wellnessMeta: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  wellnessInfoIcon: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   improvementBadge: {
     flexDirection: 'row',
@@ -1297,5 +1312,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: '#5F5478',
+  },
+  disclaimerFooter: {
+    marginTop: 2,
   },
 });

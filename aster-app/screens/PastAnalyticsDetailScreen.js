@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Disclaimer from '../components/Disclaimer';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
 
 const H_PADDING = 24;
 const CARD_RADIUS = 20;
@@ -70,6 +73,7 @@ const buildChartPaths = (points, chartWidth) => {
 export default function PastAnalyticsDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
   const monthLabel = route.params?.month || 'Previous Month';
   const monthOffset = route.params?.offset || 0;
 
@@ -87,6 +91,8 @@ export default function PastAnalyticsDetailScreen() {
     () => buildChartPaths(chartPoints, chartWidth),
     [chartPoints, chartWidth],
   );
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'monthly_reports');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -113,7 +119,10 @@ export default function PastAnalyticsDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Analytics Recap</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle}>Analytics Recap</Text>
+            <InfoIcon onPress={() => openSourcesModal('monthly_reports')} />
+          </View>
           <Text style={styles.cardSubtitle}>Overview for {monthLabel}</Text>
           <View style={styles.metricRow}>
             {summaryMetrics.map((metric) => (
@@ -127,7 +136,10 @@ export default function PastAnalyticsDetailScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Energy Optimization</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.cardTitle}>Energy Optimization</Text>
+              <InfoIcon onPress={() => openSourcesModal('energy_patterns')} />
+            </View>
             <View style={styles.statusPill}>
               <Text style={styles.statusText}>Past trend</Text>
             </View>
@@ -156,7 +168,10 @@ export default function PastAnalyticsDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Health Patterns</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle}>Wellness Patterns</Text>
+            <InfoIcon onPress={() => openSourcesModal('monthly_reports')} />
+          </View>
           <Text style={styles.cardBodyTextSecondary}>
             Energy levels tracked across {monthLabel}
           </Text>
@@ -183,7 +198,10 @@ export default function PastAnalyticsDetailScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Insights to carry forward</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.cardTitle}>Insights to carry forward</Text>
+            <InfoIcon onPress={() => openSourcesModal('monthly_reports')} />
+          </View>
           <View style={styles.insightStack}>
             {insights.map((insight) => (
               <View key={insight.title} style={styles.insightRow}>
@@ -196,7 +214,13 @@ export default function PastAnalyticsDetailScreen() {
             ))}
           </View>
         </View>
+        <Disclaimer compact style={styles.disclaimerFooter} />
       </ScrollView>
+      <SourcesModal
+        visible={Boolean(activeSourcesKey)}
+        onClose={closeSourcesModal}
+        categoryKey={activeSourcesKey || 'monthly_reports'}
+      />
     </SafeAreaView>
   );
 }
@@ -253,8 +277,13 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 10,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   cardTitle: {
     fontSize: 18,
@@ -384,5 +413,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: '#5F5478',
+  },
+  disclaimerFooter: {
+    marginTop: 2,
   },
 });
