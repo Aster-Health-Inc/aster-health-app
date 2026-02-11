@@ -1,0 +1,2 @@
+-- Placeholder migration to align local migration history with remote.
+-- The original migration SQL was not present in this repository snapshot.

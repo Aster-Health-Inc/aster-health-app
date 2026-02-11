@@ -20,22 +20,55 @@ CREATE INDEX IF NOT EXISTS ai_disclaimer_consents_user_time_idx
 ALTER TABLE public.ai_disclaimer_consents ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own consents
-CREATE POLICY "Users can view own ai disclaimer consents"
-ON public.ai_disclaimer_consents
-FOR SELECT
-USING (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'ai_disclaimer_consents'
+      AND policyname = 'Users can view own ai disclaimer consents'
+  ) THEN
+    CREATE POLICY "Users can view own ai disclaimer consents"
+    ON public.ai_disclaimer_consents
+    FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Users can insert their own consent records
-CREATE POLICY "Users can insert own ai disclaimer consents"
-ON public.ai_disclaimer_consents
-FOR INSERT
-WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'ai_disclaimer_consents'
+      AND policyname = 'Users can insert own ai disclaimer consents'
+  ) THEN
+    CREATE POLICY "Users can insert own ai disclaimer consents"
+    ON public.ai_disclaimer_consents
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Optional: allow users to update their own row (if you later add fields)
-CREATE POLICY "Users can update own ai disclaimer consents"
-ON public.ai_disclaimer_consents
-FOR UPDATE
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'ai_disclaimer_consents'
+      AND policyname = 'Users can update own ai disclaimer consents'
+  ) THEN
+    CREATE POLICY "Users can update own ai disclaimer consents"
+    ON public.ai_disclaimer_consents
+    FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
 
 COMMENT ON TABLE public.ai_disclaimer_consents IS 'User acknowledgments for AI wellness disclaimer';

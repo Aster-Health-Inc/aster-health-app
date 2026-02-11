@@ -35,6 +35,8 @@ jest.mock('../../utils/authUser', () => ({
 // Mock prediction updater to avoid network
 jest.mock('../../utils/cyclePredictions', () => ({
   updatePredictionsForUser: jest.fn().mockResolvedValue(null),
+  updatePredictionStatus: jest.fn().mockResolvedValue(null),
+  submitPredictionFeedback: jest.fn().mockResolvedValue(true),
 }));
 
 const makeSupabase = () => {
@@ -49,14 +51,15 @@ const makeSupabase = () => {
   const periodsBuilder = {
     select: jest.fn().mockReturnThis(),
     in: jest.fn().mockReturnThis(),
-    order: jest.fn().mockReturnThis(),
-    limit: jest.fn().mockResolvedValue({
+    order: jest.fn().mockResolvedValue({
       data: [
-        { user_id: 'user-1', start_date: '2025-12-14', end_date: '2025-12-18' }, // Day 3 on Dec 16
+        { id: 'period-1', user_id: 'user-1', start_date: '2025-12-14', end_date: '2025-12-18' }, // Day 3 on Dec 16
       ],
       error: null,
     }),
     upsert: jest.fn().mockResolvedValue({ data: null, error: null }),
+    delete: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
   };
 
   const dailyLogsBuilder = {
@@ -78,12 +81,31 @@ const makeSupabase = () => {
     eq: jest.fn().mockResolvedValue({ data: [], error: null }),
   };
 
+  const cyclePredictionsBuilder = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+    update: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
+  };
+
+  const predictionFeedbackBuilder = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+    insert: jest.fn().mockResolvedValue({ data: null, error: null }),
+  };
+
   const from = jest.fn((table) => {
     if (table === 'users') return usersBuilder;
     if (table === 'periods') return periodsBuilder;
     if (table === 'daily_logs') return dailyLogsBuilder;
     if (table === 'user_symptoms') return symptomsBuilder;
     if (table === 'user_moods') return moodsBuilder;
+    if (table === 'cycle_predictions') return cyclePredictionsBuilder;
+    if (table === 'prediction_feedback') return predictionFeedbackBuilder;
     return usersBuilder;
   });
 
@@ -109,11 +131,11 @@ describe('CycleHomeScreen (integration)', () => {
     );
 
     await waitFor(() => {
-      expect(getByText('Cycle Day')).toBeTruthy();
+      expect(getByText('Monthly Cycle')).toBeTruthy();
     });
 
     expect(getByText('Menstrual Phase')).toBeTruthy();
-    expect(getByText('Cycle Day')).toBeTruthy();
-    expect(getByText(/Next period in 25 days/i)).toBeTruthy();
+    expect(getByText('Day 3')).toBeTruthy();
+    expect(getByText("Today's symptoms")).toBeTruthy();
   });
 });

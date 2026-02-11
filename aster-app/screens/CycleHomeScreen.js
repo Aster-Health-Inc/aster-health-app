@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Modal, Pressable, Alert, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,10 +11,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { calculateCyclePhase, getPhaseInfo, parseYMD, toUtcMidnight } from '../utils/cycleCalculations';
 import { getCanonicalUserId, getVerifiedUser } from '../utils/authUser';
-import { updatePredictionsForUser } from '../utils/cyclePredictions';
+import {
+  submitPredictionFeedback,
+  updatePredictionsForUser,
+  updatePredictionStatus,
+} from '../utils/cyclePredictions';
 import BottomTaskbar from '../components/BottomTaskbar';
 import Disclaimer from '../components/Disclaimer';
 import InfoIcon from '../components/InfoIcon';
+import PeriodCheckInSheet from '../components/PeriodCheckInSheet';
 import SourcesModal from '../components/SourcesModal';
 import TabSwipeWrapper from '../components/TabSwipeWrapper';
 
@@ -35,10 +40,20 @@ const PHASE_BADGE = {
 
 const LEGEND_ITEMS = [
   {
-    key: 'menstrual',
+    key: 'confirmed_period',
     label: 'Period',
     dotStyle: {
-      backgroundColor: '#FDE6EF',
+      backgroundColor: '#F6B8C8',
+      borderWidth: 1.4,
+      borderColor: '#EA5C7B',
+      borderStyle: 'dotted',
+    },
+  },
+  {
+    key: 'predicted_period',
+    label: 'Predicted',
+    dotStyle: {
+      backgroundColor: 'transparent',
       borderWidth: 1.4,
       borderColor: '#EA5C7B',
       borderStyle: 'dotted',
@@ -111,6 +126,9 @@ const parseEnergyPercent = (raw) => {
 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const normalizeDateArray = (value) =>
+  (Array.isArray(value) ? value : [])
+    .filter((v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
 
 const FIRST_OPEN_KEY = 'aster_first_open_at';
 const RATING_DONE_KEY = 'aster_rating_done';
@@ -176,7 +194,11 @@ const chunk = (array, size) => {
 };
 
 const toYMD = (date) => {
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
   const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -184,10 +206,23 @@ const toYMD = (date) => {
 };
 
 const addDays = (date, days) => {
-  const d = new Date(date);
+  let d;
+  if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const [year, month, day] = date.split('-').map((value) => Number.parseInt(value, 10));
+    d = new Date(year, month - 1, day);
+  } else {
+    d = new Date(date);
+  }
   d.setDate(d.getDate() + days);
   d.setHours(0, 0, 0, 0);
   return d;
+};
+
+const daysBetween = (laterDateYmd, earlierDateYmd) => {
+  const laterDate = parseYMD(laterDateYmd);
+  const earlierDate = parseYMD(earlierDateYmd);
+  if (!laterDate || !earlierDate) return null;
+  return Math.floor((laterDate.getTime() - earlierDate.getTime()) / MS_IN_DAY);
 };
 
 const addDaysUtc = (date, days) => {
@@ -218,18 +253,18 @@ const CycleHomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [cycleData, setCycleData] = useState(null);
   const [periodHistory, setPeriodHistory] = useState([]);
+  const [activePrediction, setActivePrediction] = useState(null);
+  const [feedbackHistory, setFeedbackHistory] = useState([]);
   const [avgPeriodLength, setAvgPeriodLength] = useState(5);
-  const [avgCycleLength, setAvgCycleLength] = useState(28);
   const [symptomCards, setSymptomCards] = useState(() => getDefaultSymptomCards());
-  const cleanupAttemptedRef = useRef(false);
   const [calendarDate, setCalendarDate] = useState(() => {
     const initial = new Date();
     initial.setHours(0, 0, 0, 0);
     return initial;
   });
-  const [calendarExpanded, setCalendarExpanded] = useState(true);
-  const [dayModalVisible, setDayModalVisible] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(null);
+  const [periodCheckInVisible, setPeriodCheckInVisible] = useState(false);
+  const [selectedDayMeta, setSelectedDayMeta] = useState(null);
+  const [periodCheckInView, setPeriodCheckInView] = useState('log');
   const [periodDay, setPeriodDay] = useState(1);
   const [flowLevel, setFlowLevel] = useState('none'); // none | light | medium | heavy
   const [savingDay, setSavingDay] = useState(false);
@@ -271,8 +306,9 @@ const CycleHomeScreen = () => {
       if (!user) {
         setCycleData(null);
         setPeriodHistory([]);
+        setActivePrediction(null);
+        setFeedbackHistory([]);
         setAvgPeriodLength(5);
-        setAvgCycleLength(28);
         setSymptomCards(getDefaultSymptomCards());
         return;
       }
@@ -285,15 +321,17 @@ const CycleHomeScreen = () => {
         { data: userData, error: userDataError },
         { data: periods, error: periodsError },
         dailyLogResult,
+        predictionResult,
+        feedbackResult,
       ] = await Promise.all([
         supabase
           .from('users')
           .select('average_cycle_length, average_period_length')
-          .eq('id', user.id)
+          .eq('id', canonicalUserId)
           .maybeSingle(),
         supabase
           .from('periods')
-          .select('user_id, start_date, end_date, created_at')
+          .select('id, user_id, start_date, end_date, created_at')
           .in('user_id', canonicalUserId === user.id ? [canonicalUserId] : [canonicalUserId, user.id])
           .order('start_date', { ascending: false }),
         supabase
@@ -302,6 +340,18 @@ const CycleHomeScreen = () => {
           .eq('user_id', user.id)
           .eq('date', todayISO)
           .maybeSingle(),
+        supabase
+          .from('cycle_predictions')
+          .select('*')
+          .eq('user_id', canonicalUserId)
+          .order('created_at', { ascending: false })
+          .limit(12),
+        supabase
+          .from('prediction_feedback')
+          .select('id, predicted_start_date, feedback_type, corrected_start_date, created_at')
+          .eq('user_id', canonicalUserId)
+          .order('created_at', { ascending: false })
+          .limit(8),
       ]);
 
       if (userDataError) throw userDataError;
@@ -327,45 +377,46 @@ const CycleHomeScreen = () => {
       }
 
       periodRows = canonicalRows.length ? canonicalRows : legacyRows;
-      const latestByMonth = new Map();
+      const latestByStart = new Map();
       periodRows.forEach((row) => {
         if (!row.start_date) return;
-        const key = row.start_date.slice(0, 7);
-        const existing = latestByMonth.get(key);
+        const key = row.start_date;
+        const existing = latestByStart.get(key);
         if (!existing) {
-          latestByMonth.set(key, row);
+          latestByStart.set(key, row);
           return;
         }
         if (row.created_at && existing.created_at) {
           if (new Date(row.created_at) > new Date(existing.created_at)) {
-            latestByMonth.set(key, row);
+            latestByStart.set(key, row);
           }
           return;
         }
-        if (row.start_date > existing.start_date) {
-          latestByMonth.set(key, row);
+        if ((row.id || '').localeCompare(existing.id || '') > 0) {
+          latestByStart.set(key, row);
         }
       });
-      const dedupedRows = Array.from(latestByMonth.values()).sort((a, b) =>
+      const dedupedRows = Array.from(latestByStart.values()).sort((a, b) =>
         b.start_date.localeCompare(a.start_date),
       );
 
-      if (!cleanupAttemptedRef.current && periodRows.length > dedupedRows.length) {
-        cleanupAttemptedRef.current = true;
-        const keepStartDates = dedupedRows.map((row) => row.start_date).filter(Boolean);
-        if (keepStartDates.length) {
-          const { error: cleanupError } = await supabase.rpc('delete_periods_not_in_start_dates', {
-            keep_start_dates: keepStartDates,
-          });
-          if (cleanupError) {
-            console.log('Cleanup periods RPC failed', cleanupError);
-          }
-        }
-      }
+      const predictionRows = predictionResult?.data ?? [];
+      let activePredictionRow =
+        predictionRows.find((row) => row.is_active && (!row.status || row.status === 'predicted')) ??
+        predictionRows.find((row) => row.status === 'predicted') ??
+        null;
 
-      if (dedupedRows.length) {
+      if (!activePredictionRow && dedupedRows.length) {
         try {
           await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
+          const refetch = await supabase
+            .from('cycle_predictions')
+            .select('*')
+            .eq('user_id', canonicalUserId)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          activePredictionRow = refetch.data?.[0] || null;
         } catch (predictionErr) {
           console.log('CycleHome update predictions error', predictionErr);
         }
@@ -373,23 +424,25 @@ const CycleHomeScreen = () => {
 
       let computedCycleData = null;
       if (dedupedRows?.length) {
-        const cycleLength = userData?.average_cycle_length ?? 28;
+        const cycleLength =
+          Number(activePredictionRow?.predicted_cycle_length) || userData?.average_cycle_length || 28;
         const periodLength = userData?.average_period_length ?? 5;
-      const lastPeriodDate = dedupedRows[0].start_date;
-      const info = calculateCyclePhase(lastPeriodDate, cycleLength);
+        const lastPeriodDate = dedupedRows[0].start_date;
+        const info = calculateCyclePhase(lastPeriodDate, cycleLength);
 
-      if (info) {
-        computedCycleData = {
-          ...info,
-          periodLength,
+        if (info) {
+          computedCycleData = {
+            ...info,
+            periodLength,
             lastPeriodDate,
           };
         }
       }
 
       setAvgPeriodLength(userData?.average_period_length ?? 5);
-      setAvgCycleLength(userData?.average_cycle_length ?? 28);
       setPeriodHistory(dedupedRows);
+      setActivePrediction(activePredictionRow);
+      setFeedbackHistory(feedbackResult?.error ? [] : feedbackResult?.data ?? []);
       setCycleData(computedCycleData);
 
       const logData = dailyLogResult.data ?? null;
@@ -441,6 +494,9 @@ const CycleHomeScreen = () => {
     } catch (error) {
       console.error('CycleHomeScreen loadCycleData error', error);
       setCycleData(null);
+      setPeriodHistory([]);
+      setActivePrediction(null);
+      setFeedbackHistory([]);
       setSymptomCards(getDefaultSymptomCards());
     } finally {
       setLoading(false);
@@ -457,59 +513,120 @@ const CycleHomeScreen = () => {
     loadCycleData();
   }, [loadCycleData]);
 
+  const activePredictionAnchor = activePrediction?.cycle_anchor_date || activePrediction?.predicted_period_date || null;
+  const fallbackPredictedAnchor = cycleData?.nextPeriodDate || null;
+
+  const confirmedDayMap = useMemo(() => {
+    const result = new Map();
+    periodHistory.forEach((period) => {
+      const startYmd = toYMD(period.start_date);
+      if (!startYmd) return;
+      const endYmd = toYMD(period.end_date || addDays(startYmd, Math.max(1, avgPeriodLength - 1)));
+      if (!endYmd) return;
+
+      const distance = daysBetween(endYmd, startYmd);
+      if (distance == null || distance < 0) return;
+
+      for (let idx = 0; idx <= distance; idx += 1) {
+        const day = toYMD(addDays(startYmd, idx));
+        if (day) result.set(day, period);
+      }
+    });
+    return result;
+  }, [avgPeriodLength, periodHistory]);
+
+  const confirmedStartSet = useMemo(
+    () => new Set(periodHistory.map((row) => row.start_date).filter(Boolean)),
+    [periodHistory],
+  );
+
+  const predictedPeriodDays = useMemo(() => {
+    if (!activePrediction || activePrediction.status === 'rejected') return [];
+    const fromPrediction = normalizeDateArray(activePrediction.predicted_period_days);
+    if (fromPrediction.length) return fromPrediction;
+    if (!activePredictionAnchor) return [];
+    return Array.from({ length: Math.max(2, avgPeriodLength) }, (_, idx) =>
+      toYMD(addDays(activePredictionAnchor, idx)),
+    );
+  }, [activePrediction, activePredictionAnchor, avgPeriodLength]);
+
+  const predictedPeriodDaysWithFallback = useMemo(() => {
+    if (predictedPeriodDays.length) return predictedPeriodDays;
+    if (!fallbackPredictedAnchor) return [];
+    return Array.from({ length: Math.max(2, avgPeriodLength) }, (_, idx) =>
+      toYMD(addDays(fallbackPredictedAnchor, idx)),
+    );
+  }, [avgPeriodLength, fallbackPredictedAnchor, predictedPeriodDays]);
+
+  const predictedPeriodSet = useMemo(
+    () => new Set(predictedPeriodDaysWithFallback),
+    [predictedPeriodDaysWithFallback],
+  );
+
+  const predictedStartAnchor = activePredictionAnchor || fallbackPredictedAnchor || null;
+  const predictedStartSet = useMemo(
+    () => new Set(predictedStartAnchor ? [predictedStartAnchor] : []),
+    [predictedStartAnchor],
+  );
+
+  const fertileSet = useMemo(() => {
+    const fromPrediction = normalizeDateArray(activePrediction?.predicted_fertile_days);
+    if (fromPrediction.length) return new Set(fromPrediction);
+    return new Set();
+  }, [activePrediction]);
+
+  const pmsSet = useMemo(() => {
+    const fromPrediction = normalizeDateArray(activePrediction?.predicted_pms_days);
+    if (fromPrediction.length) return new Set(fromPrediction);
+    return new Set();
+  }, [activePrediction]);
+
+  const markedDates = useMemo(() => {
+    const next = {};
+    const precedence = {
+      default: 0,
+      fertile: 1,
+      pms: 1,
+      predicted_period: 2,
+      confirmed_period: 3,
+    };
+
+    const mergeState = (ymd, state) => {
+      if (!ymd) return;
+      const current = next[ymd]?.state || 'default';
+      if (precedence[state] >= precedence[current]) {
+        next[ymd] = { state };
+      }
+    };
+
+    fertileSet.forEach((ymd) => mergeState(ymd, 'fertile'));
+    pmsSet.forEach((ymd) => mergeState(ymd, 'pms'));
+    predictedPeriodSet.forEach((ymd) => mergeState(ymd, 'predicted_period'));
+    confirmedDayMap.forEach((_, ymd) => mergeState(ymd, 'confirmed_period'));
+
+    return next;
+  }, [confirmedDayMap, fertileSet, pmsSet, predictedPeriodSet]);
+
   const getCycleStateForDate = useCallback(
     (date) => {
+      const ymd = toYMD(date);
+      if (!ymd) return 'default';
+
+      if (markedDates[ymd]?.state) return markedDates[ymd].state;
+
       const targetDate = toUtcMidnight(date);
-      if (!targetDate) return 'default';
-
-      if (periodHistory.length) {
-        let baseStart = null;
-        let baseEnd = null;
-        for (const period of periodHistory) {
-          const start = parseYMD(period.start_date);
-          if (!start) continue;
-          if (start <= targetDate) {
-            baseStart = start;
-            baseEnd = period.end_date
-              ? parseYMD(period.end_date)
-              : addDaysUtc(start, Math.max(0, avgPeriodLength - 1));
-            break;
-          }
-        }
-
-        if (baseStart && baseEnd && targetDate >= baseStart && targetDate <= baseEnd) {
-          return 'menstrual';
-        }
-
-        if (baseStart) {
-          const diff = Math.floor((targetDate.getTime() - baseStart.getTime()) / MS_IN_DAY);
-          if (diff >= 0) {
-            const cycleDay = (diff % avgCycleLength) + 1;
-            const daysUntilNextPeriod = Math.max(0, avgCycleLength - cycleDay);
-            if (cycleDay >= 13 && cycleDay <= 16) return 'fertile';
-            if (daysUntilNextPeriod <= 5) return 'pms';
-          }
-        }
-      }
-
-      if (!cycleData?.lastPeriodDate) return 'default';
-
+      if (!targetDate || !cycleData?.lastPeriodDate) return 'default';
       const lastPeriod = parseYMD(cycleData.lastPeriodDate) || toUtcMidnight(cycleData.lastPeriodDate);
       if (!lastPeriod) return 'default';
-
       const diff = Math.floor((targetDate.getTime() - lastPeriod.getTime()) / MS_IN_DAY);
       if (diff < 0) return 'default';
-
       const cycleDay = (diff % cycleData.cycleLength) + 1;
-
       const daysUntilNextPeriod = Math.max(0, cycleData.cycleLength - cycleDay);
-
-      if (cycleDay <= cycleData.periodLength) return 'menstrual';
       if (cycleDay >= 13 && cycleDay <= 16) return 'fertile';
       if (daysUntilNextPeriod <= 5) return 'pms';
       return 'default';
     },
-    [avgCycleLength, avgPeriodLength, cycleData, periodHistory],
+    [markedDates, cycleData],
   );
 
   const calendarMatrix = useMemo(() => {
@@ -524,22 +641,24 @@ const CycleHomeScreen = () => {
       cellDate.setDate(1 + (index - firstWeekday));
 
       const isCurrentMonth = cellDate.getMonth() === calendarDate.getMonth();
+      const ymd = toYMD(cellDate);
       const state = getCycleStateForDate(cellDate);
 
       cells.push({
         key: `${cellDate.toISOString()}-${index}`,
         label: cellDate.getDate(),
         date: cellDate,
+        ymd,
         isCurrentMonth,
         state,
         isToday: isSameDay(cellDate, today),
+        isPredictedStart: predictedStartSet.has(ymd) && !confirmedStartSet.has(ymd),
+        confirmedPeriod: confirmedDayMap.get(ymd) || null,
       });
     }
 
     return chunk(cells, 7);
-  }, [calendarDate, getCycleStateForDate, today]);
-
-  const compactWeeks = useMemo(() => calendarMatrix.slice(0, 2), [calendarMatrix]);
+  }, [calendarDate, confirmedDayMap, confirmedStartSet, getCycleStateForDate, predictedStartSet, today]);
 
   const monthLabel = useMemo(
     () =>
@@ -560,14 +679,6 @@ const CycleHomeScreen = () => {
 
   const progressPercent = cycleData ? clamp(cycleData.progress, 0, 100) : 0;
   const dashOffset = CIRC * (1 - progressPercent / 100);
-
-  const nextPeriodDays = cycleData?.daysUntilNextPeriod ?? cycleData?.daysUntilNext ?? null;
-  const nextPeriodCopy = (() => {
-    if (nextPeriodDays == null) return 'Track your cycle to see date estimates';
-    if (nextPeriodDays === 0) return 'Next period estimate: today';
-    if (nextPeriodDays === 1) return 'Next period estimate: 1 day';
-    return `Next period estimate: ${nextPeriodDays} days`;
-  })();
   const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'cycle_estimates');
   const closeSourcesModal = () => setActiveSourcesKey(null);
 
@@ -577,8 +688,6 @@ const CycleHomeScreen = () => {
     day: 'numeric',
   });
 
-  const toggleCalendar = () => setCalendarExpanded((prev) => !prev);
-
   const handlePrevMonth = () => setCalendarDate((prev) => addMonths(prev, -1));
   const handleNextMonth = () => setCalendarDate((prev) => addMonths(prev, 1));
 
@@ -586,68 +695,277 @@ const CycleHomeScreen = () => {
     navigation.navigate('SymptomLog');
   };
 
-  const handleDayPress = (date) => {
-    setSelectedDay(date);
-    setPeriodDay(1);
+  const openPeriodCheckInSheet = (meta) => {
+    const inferredPeriodDay =
+      meta?.period?.start_date && meta?.ymd
+        ? Math.max(1, (daysBetween(meta.ymd, meta.period.start_date) ?? 0) + 1)
+        : 1;
+    setSelectedDayMeta(meta);
+    setPeriodDay(meta?.periodDay || inferredPeriodDay || 1);
     setFlowLevel('heavy');
-    setDayModalVisible(true);
+    setPeriodCheckInView(meta?.initialView || 'log');
+    setPeriodCheckInVisible(true);
+  };
+
+  const closePeriodCheckInSheet = () => {
+    setPeriodCheckInVisible(false);
+    setSelectedDayMeta(null);
+    setPeriodCheckInView('log');
+  };
+
+  const getUserContext = async () => {
+    const user = await getVerifiedUser();
+    if (!user) throw new Error('Please sign in to track your cycle.');
+    const canonicalUserId = await getCanonicalUserId(user);
+    return { user, canonicalUserId };
+  };
+
+  const clearOverlappingPeriods = async (canonicalUserId, startYmd, endYmd, excludedPeriodId = null) => {
+    const { data: existingRows, error } = await supabase
+      .from('periods')
+      .select('id, start_date, end_date')
+      .eq('user_id', canonicalUserId)
+      .order('start_date', { ascending: false });
+    if (error || !existingRows?.length) return;
+
+    const incomingStart = parseYMD(startYmd);
+    const incomingEnd = parseYMD(endYmd);
+    if (!incomingStart || !incomingEnd) return;
+
+    const overlappingIds = existingRows
+      .filter((row) => row.id !== excludedPeriodId)
+      .filter((row) => {
+        const rowStart = parseYMD(row.start_date);
+        if (!rowStart) return false;
+        const rowEnd = row.end_date ? parseYMD(row.end_date) : addDaysUtc(rowStart, Math.max(1, avgPeriodLength - 1));
+        if (!rowEnd) return false;
+        return rowStart <= incomingEnd && rowEnd >= incomingStart;
+      })
+      .map((row) => row.id);
+
+    if (!overlappingIds.length) return;
+    await supabase.from('periods').delete().in('id', overlappingIds);
+  };
+
+  const handleDayPress = (date, dayMeta) => {
+    if (dayMeta?.isPredictedStart) {
+      openPeriodCheckInSheet({
+        mode: 'predicted_start',
+        ymd: dayMeta.ymd,
+        date,
+        predictionId: activePrediction?.id || null,
+        isPredictedStartDay: true,
+        initialView: 'confirm',
+      });
+      return;
+    }
+
+    if (dayMeta?.confirmedPeriod) {
+      openPeriodCheckInSheet({
+        mode: 'confirmed_day',
+        ymd: dayMeta.ymd,
+        date,
+        period: dayMeta.confirmedPeriod,
+        initialView: 'log',
+      });
+      return;
+    }
+
+    openPeriodCheckInSheet({
+      mode: 'manual',
+      ymd: dayMeta?.ymd || toYMD(date),
+      date,
+      initialView: 'log',
+    });
+  };
+
+  const handleOpenEditDates = () => {
+    setPeriodCheckInView('log');
+  };
+
+  const handleConfirmPredictedStart = async () => {
+    if (!selectedDayMeta?.ymd) return;
+    setSavingDay(true);
+    try {
+      const { user, canonicalUserId } = await getUserContext();
+      const startYmd = selectedDayMeta.ymd;
+      const endYmd = toYMD(addDays(startYmd, Math.max(1, avgPeriodLength - 1)));
+
+      await clearOverlappingPeriods(canonicalUserId, startYmd, endYmd);
+      await supabase
+        .from('periods')
+        .upsert(
+          [
+            {
+              user_id: canonicalUserId,
+              start_date: startYmd,
+              end_date: endYmd,
+            },
+          ],
+          { onConflict: 'user_id,start_date' },
+        );
+
+      await submitPredictionFeedback({
+        userId: canonicalUserId,
+        predictionId: activePrediction?.id || null,
+        predictedStartDate: startYmd,
+        feedbackType: 'confirmed',
+        correctedStartDate: startYmd,
+      });
+
+      await updatePredictionStatus({
+        predictionId: activePrediction?.id || null,
+        userId: canonicalUserId,
+        status: 'confirmed',
+        isActive: false,
+      });
+
+      await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
+
+      posthog?.capture('cycle_prediction_feedback', {
+        action: 'confirmed',
+        source: 'cycle_calendar',
+        predicted_start_date: startYmd,
+      });
+
+      closePeriodCheckInSheet();
+      setToast('Period confirmed');
+      setTimeout(() => setToast(null), 1800);
+      loadCycleData();
+    } catch (err) {
+      console.error('Confirm predicted start failed', err);
+      Alert.alert('Update failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingDay(false);
+    }
+  };
+
+  const handleRejectPredictedStart = async () => {
+    if (!selectedDayMeta?.ymd) return;
+    setSavingDay(true);
+    try {
+      const { user, canonicalUserId } = await getUserContext();
+
+      await submitPredictionFeedback({
+        userId: canonicalUserId,
+        predictionId: activePrediction?.id || null,
+        predictedStartDate: selectedDayMeta.ymd,
+        feedbackType: 'rejected',
+      });
+
+      await updatePredictionStatus({
+        predictionId: activePrediction?.id || null,
+        userId: canonicalUserId,
+        status: 'rejected',
+        isActive: false,
+      });
+
+      await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
+
+      posthog?.capture('cycle_prediction_feedback', {
+        action: 'rejected',
+        source: 'cycle_calendar',
+        predicted_start_date: selectedDayMeta.ymd,
+      });
+
+      closePeriodCheckInSheet();
+      setToast('Prediction updated');
+      setTimeout(() => setToast(null), 1800);
+      loadCycleData();
+    } catch (err) {
+      console.error('Reject predicted start failed', err);
+      Alert.alert('Update failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingDay(false);
+    }
+  };
+
+  const handleMarkConfirmedIncorrect = async () => {
+    if (!selectedDayMeta?.period?.id) return;
+    setSavingDay(true);
+    try {
+      const { user, canonicalUserId } = await getUserContext();
+      await supabase
+        .from('periods')
+        .delete()
+        .eq('id', selectedDayMeta.period.id)
+        .eq('user_id', canonicalUserId);
+
+      await submitPredictionFeedback({
+        userId: canonicalUserId,
+        predictionId: activePrediction?.id || null,
+        predictedStartDate: activePredictionAnchor || selectedDayMeta.period.start_date,
+        feedbackType: 'corrected',
+      });
+
+      await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
+      closePeriodCheckInSheet();
+      setToast('Period entry removed');
+      setTimeout(() => setToast(null), 1800);
+      loadCycleData();
+    } catch (err) {
+      console.error('Mark incorrect failed', err);
+      Alert.alert('Update failed', err?.message ?? 'Please try again.');
+    } finally {
+      setSavingDay(false);
+    }
   };
 
   const handleSaveDay = async () => {
-    if (!selectedDay) return;
+    if (!selectedDayMeta?.date) return;
     setSavingDay(true);
     try {
-      const user = await getVerifiedUser();
-      if (!user) {
-        Alert.alert('Sign in required', 'Please sign in to log your period day.');
-        return;
-      }
+      const { user, canonicalUserId } = await getUserContext();
+      const startDate = addDays(selectedDayMeta.date, -(periodDay - 1));
+      const estimatedPeriodLength = Math.max(2, avgPeriodLength, periodDay);
+      const endDate = addDays(startDate, estimatedPeriodLength - 1);
+      const startYmd = toYMD(startDate);
+      const endYmd = toYMD(endDate);
+      if (!startYmd || !endYmd) throw new Error('Invalid date selected');
 
-      const canonicalUserId = await getCanonicalUserId(user);
-      const startDate = addDays(selectedDay, -(periodDay - 1));
-      const endDate = addDays(startDate, Math.max(periodDay, 4)); // basic default duration
-      const monthStart = new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1);
-      const monthEnd = new Date(selectedDay.getFullYear(), selectedDay.getMonth() + 1, 0);
-      const monthStartYmd = toYMD(monthStart);
-      const monthEndYmd = toYMD(monthEnd);
-
-      const { error: deleteError } = await supabase.rpc('delete_periods_for_month', {
-        month_start: monthStartYmd,
-        month_end: monthEndYmd,
-      });
-
-      if (deleteError) {
-        if (String(deleteError.message || '').toLowerCase().includes('delete_periods_for_month')) {
-          throw new Error('Missing migration: delete_periods_for_month RPC not installed.');
-        }
-        throw deleteError;
-      }
+      await clearOverlappingPeriods(canonicalUserId, startYmd, endYmd, selectedDayMeta?.period?.id || null);
 
       await supabase
         .from('periods')
         .upsert(
           [{
             user_id: canonicalUserId,
-            start_date: toYMD(startDate),
-            end_date: toYMD(endDate),
+            start_date: startYmd,
+            end_date: endYmd,
           }],
           { onConflict: 'user_id,start_date' },
         );
 
+      if (selectedDayMeta?.mode === 'predicted_start' || selectedDayMeta?.mode === 'confirmed_day') {
+        await submitPredictionFeedback({
+          userId: canonicalUserId,
+          predictionId: selectedDayMeta?.predictionId || activePrediction?.id || null,
+          predictedStartDate: selectedDayMeta?.ymd || activePredictionAnchor || startYmd,
+          feedbackType: 'corrected',
+          correctedStartDate: startYmd,
+        });
+        await updatePredictionStatus({
+          predictionId: selectedDayMeta?.predictionId || activePrediction?.id || null,
+          userId: canonicalUserId,
+          status: 'superseded',
+          isActive: false,
+        });
+      }
+
       try {
-        await updatePredictionsForUser(canonicalUserId);
+        await updatePredictionsForUser(canonicalUserId, { includeUserIds: [user.id] });
       } catch (err) {
         console.log('Prediction refresh failed', err);
       }
 
       posthog?.capture('cycle_logged', {
         source: 'cycle_home',
-        start_date: toYMD(startDate),
-        end_date: toYMD(endDate),
+        start_date: startYmd,
+        end_date: endYmd,
         period_day: periodDay,
       });
 
-      setDayModalVisible(false);
+      closePeriodCheckInSheet();
       setToast('Period day saved');
       setTimeout(() => setToast(null), 1800);
       loadCycleData();
@@ -757,246 +1075,132 @@ const CycleHomeScreen = () => {
             </TouchableOpacity>
           </View>
 
-          {calendarExpanded ? (
-            <>
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryHeader}>
-                  <View style={styles.summaryTitleRow}>
-                    <Text style={styles.summaryTitle}>Cycle Day</Text>
-                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
-                  </View>
-                  <View style={[styles.phaseBadge, { backgroundColor: phaseBadgeStyle.bg }]}>
-                    <Text style={[styles.phaseBadgeText, { color: phaseBadgeStyle.text }]}>
-                      {phaseLabel}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.summaryBody}>
-                  <View style={styles.summaryDayCircle}>
-                    <Text style={styles.summaryDayValue}>{cycleDayLabel}</Text>
-                  </View>
-                  <View style={styles.summaryInfo}>
-                    <Text style={styles.summaryInfoTitle}>{nextPeriodCopy}</Text>
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.summaryToggle}
-                    activeOpacity={0.85}
-                    onPress={toggleCalendar}
-                  >
-                    <Ionicons name="remove" size={18} color="#4B117B" />
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={styles.summaryTitleRow}>
+                <Text style={styles.cardTitle}>Monthly Cycle</Text>
+                <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
               </View>
-
-              <View style={styles.calendarCard}>
-                <View style={styles.calendarHeader}>
-                  <View style={styles.calendarTitleRow}>
-                    <Text style={styles.calendarTitle}>{monthLabel}</Text>
-                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
-                  </View>
-                  <View style={styles.calendarArrows}>
-                    <TouchableOpacity
-                      style={styles.calendarArrowButton}
-                      onPress={handlePrevMonth}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="chevron-back" size={18} color="#4B117B" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.calendarArrowButton}
-                      onPress={handleNextMonth}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="chevron-forward" size={18} color="#4B117B" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.calendarWeekLabels}>
-                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => (
-                    <Text key={`${label}-${index}`} style={styles.calendarWeekLabel}>
-                      {label}
-                    </Text>
-                  ))}
-                </View>
-                <View style={styles.calendarGrid}>
-                  {calendarMatrix.map((week, row) => (
-                    <View key={`week-${row}`} style={styles.calendarRow}>
-                      {week.map((day) => {
-                        const dayStyles = [styles.calendarDay];
-                        const textStyles = [styles.calendarDayText];
-
-                        if (!day.isCurrentMonth) {
-                          dayStyles.push(styles.calendarDayMuted);
-                          textStyles.push(styles.calendarDayMutedText);
-                        }
-
-                        if (day.state === 'menstrual') {
-                          dayStyles.push(styles.calendarDayMenstrual);
-                          textStyles.push(styles.calendarDayMenstrualText);
-                        } else if (day.state === 'fertile') {
-                          dayStyles.push(styles.calendarDayFertile);
-                          textStyles.push(styles.calendarDayFertileText);
-                        } else if (day.state === 'pms') {
-                          dayStyles.push(styles.calendarDayPms);
-                          textStyles.push(styles.calendarDayPmsText);
-                        }
-
-                        if (day.isToday) {
-                          dayStyles.push(styles.calendarDayToday);
-                          textStyles.push(styles.calendarDayTodayText);
-                        }
-
-                        return (
-                          <TouchableOpacity
-                            key={day.key}
-                            style={dayStyles}
-                            activeOpacity={0.8}
-                            onPress={() => handleDayPress(day.date)}
-                          >
-                            <Text style={textStyles}>{day.label}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
-                <View style={styles.calendarLegend}>
-                  {LEGEND_ITEMS.map((item) => (
-                    <View key={item.key} style={styles.legendItem}>
-                      <View style={[styles.legendDot, item.dotStyle]} />
-                      <Text style={styles.legendText}>{item.label}</Text>
-                    </View>
-                  ))}
-                </View>
+              <View style={[styles.phaseBadge, { backgroundColor: phaseBadgeStyle.bg }]}>
+                <Text style={[styles.phaseBadgeText, { color: phaseBadgeStyle.text }]}>
+                  {phaseLabel}
+                </Text>
               </View>
-            </>
-          ) : (
-            <>
-              <View style={styles.compactCalendarCard}>
-                <View style={styles.compactCalendarHeader}>
-                  <View style={styles.calendarTitleRow}>
-                    <Text style={styles.compactCalendarMonth}>{monthLabel}</Text>
-                    <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
-                  </View>
-                  <View style={styles.calendarArrows}>
-                    <TouchableOpacity
-                      style={styles.calendarArrowButton}
-                      onPress={handlePrevMonth}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="chevron-back" size={18} color="#4B117B" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.calendarArrowButton}
-                      onPress={handleNextMonth}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="chevron-forward" size={18} color="#4B117B" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.compactCalendarWeekLabels}>
-                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => (
-                    <Text key={`compact-${label}-${index}`} style={styles.compactCalendarWeekLabel}>
-                      {label}
-                    </Text>
-                  ))}
-                </View>
-                {compactWeeks.map((week, row) => (
-                  <View key={`compact-week-${row}`} style={styles.compactCalendarRow}>
-                    {week.map((day) => {
-                      const dayStyles = [styles.compactCalendarDay];
-                      const textStyles = [styles.compactCalendarDayText];
-
-                      if (!day.isCurrentMonth) {
-                        dayStyles.push(styles.calendarDayMuted);
-                        textStyles.push(styles.compactCalendarDayMutedText);
-                      }
-
-                      if (day.state === 'menstrual') {
-                        dayStyles.push(styles.calendarDayMenstrual);
-                        textStyles.push(styles.calendarDayMenstrualText);
-                      } else if (day.state === 'fertile') {
-                        dayStyles.push(styles.calendarDayFertile);
-                        textStyles.push(styles.calendarDayFertileText);
-                      } else if (day.state === 'pms') {
-                        dayStyles.push(styles.calendarDayPms);
-                        textStyles.push(styles.calendarDayPmsText);
-                      }
-
-                      if (day.isToday) {
-                        dayStyles.push(styles.calendarDayToday);
-                        textStyles.push(styles.calendarDayTodayText);
-                      }
-
-                      return (
-                        <TouchableOpacity
-                          key={`compact-${day.key}`}
-                          style={dayStyles}
-                          activeOpacity={0.8}
-                          onPress={() => handleDayPress(day.date)}
-                        >
-                          <Text style={textStyles}>{day.label}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ))}
+            </View>
+            <View style={styles.ringWrapper}>
+              <Svg width={RING_SIZE} height={RING_SIZE}>
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RADIUS}
+                  stroke="#ECE7FF"
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                />
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RADIUS}
+                  stroke="#4B117B"
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                  strokeDasharray={CIRC}
+                  strokeDashoffset={dashOffset}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+                />
+              </Svg>
+              <View style={styles.ringCenter}>
+                <Text style={styles.cycleDay}>{`Day ${cycleDayLabel}`}</Text>
+                <Text style={styles.cyclePhaseText}>{phaseLabel}</Text>
               </View>
+            </View>
+          </View>
 
-              <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.summaryTitleRow}>
-                    <Text style={styles.cardTitle}>Monthly Cycle</Text>
-                    <InfoIcon onPress={() => openSourcesModal('cycle_phase_patterns')} />
-                  </View>
-                  <View style={[styles.phaseBadge, { backgroundColor: phaseBadgeStyle.bg }]}>
-                    <Text style={[styles.phaseBadgeText, { color: phaseBadgeStyle.text }]}>
-                      {phaseLabel}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.ringWrapper}>
-                  <Svg width={RING_SIZE} height={RING_SIZE}>
-                    <Circle
-                      cx={RING_SIZE / 2}
-                      cy={RING_SIZE / 2}
-                      r={RADIUS}
-                      stroke="#ECE7FF"
-                      strokeWidth={RING_STROKE}
-                      fill="none"
-                    />
-                    <Circle
-                      cx={RING_SIZE / 2}
-                      cy={RING_SIZE / 2}
-                      r={RADIUS}
-                      stroke="#4B117B"
-                      strokeWidth={RING_STROKE}
-                      fill="none"
-                      strokeDasharray={CIRC}
-                      strokeDashoffset={dashOffset}
-                      strokeLinecap="round"
-                      transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
-                    />
-                  </Svg>
-                  <View style={styles.ringCenter}>
-                    <Text style={styles.cycleDay}>{`Day ${cycleDayLabel}`}</Text>
-                    <Text style={styles.cyclePhaseText}>{phaseLabel}</Text>
-                    <TouchableOpacity
-                      style={styles.ringCenterButton}
-                      activeOpacity={0.85}
-                      onPress={toggleCalendar}
-                    >
-                      <Ionicons name="add" size={22} color="#4B117B" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeader}>
+              <View style={styles.calendarTitleRow}>
+                <Text style={styles.calendarTitle}>{monthLabel}</Text>
+                <InfoIcon onPress={() => openSourcesModal('cycle_estimates')} />
               </View>
-            </>
-          )}
+              <View style={styles.calendarArrows}>
+                <TouchableOpacity
+                  style={styles.calendarArrowButton}
+                  onPress={handlePrevMonth}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-back" size={18} color="#4B117B" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.calendarArrowButton}
+                  onPress={handleNextMonth}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chevron-forward" size={18} color="#4B117B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.calendarWeekLabels}>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => (
+                <Text key={`${label}-${index}`} style={styles.calendarWeekLabel}>
+                  {label}
+                </Text>
+              ))}
+            </View>
+            <View style={styles.calendarGrid}>
+              {calendarMatrix.map((week, row) => (
+                <View key={`week-${row}`} style={styles.calendarRow}>
+                  {week.map((day) => {
+                    const dayStyles = [styles.calendarDay];
+                    const textStyles = [styles.calendarDayText];
+
+                    if (!day.isCurrentMonth) {
+                      dayStyles.push(styles.calendarDayMuted);
+                      textStyles.push(styles.calendarDayMutedText);
+                    }
+
+                    if (day.state === 'confirmed_period') {
+                      dayStyles.push(styles.calendarDayConfirmedPeriod);
+                      textStyles.push(styles.calendarDayConfirmedPeriodText);
+                    } else if (day.state === 'predicted_period') {
+                      dayStyles.push(styles.calendarDayPredictedPeriod);
+                      textStyles.push(styles.calendarDayPredictedPeriodText);
+                    } else if (day.state === 'fertile') {
+                      dayStyles.push(styles.calendarDayFertile);
+                      textStyles.push(styles.calendarDayFertileText);
+                    } else if (day.state === 'pms') {
+                      dayStyles.push(styles.calendarDayPms);
+                      textStyles.push(styles.calendarDayPmsText);
+                    }
+
+                    if (day.isToday && day.state !== 'confirmed_period' && day.state !== 'predicted_period') {
+                      dayStyles.push(styles.calendarDayToday);
+                      textStyles.push(styles.calendarDayTodayText);
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={day.key}
+                        style={dayStyles}
+                        activeOpacity={0.8}
+                        onPress={() => handleDayPress(day.date, day)}
+                      >
+                        <Text style={textStyles}>{day.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+            <View style={styles.calendarLegend}>
+              {LEGEND_ITEMS.map((item) => (
+                <View key={item.key} style={styles.legendItem}>
+                  <View style={[styles.legendDot, item.dotStyle]} />
+                  <Text style={styles.legendText}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           <View style={[styles.card, styles.moodCard]}>
             <View style={styles.cardHeader}>
@@ -1033,6 +1237,17 @@ const CycleHomeScreen = () => {
               <Text style={styles.symptomButtonText}>Log symptoms</Text>
             </TouchableOpacity>
           </View>
+          {__DEV__ ? (
+            <View style={styles.devCard}>
+              <Text style={styles.devTitle}>Cycle debug</Text>
+              <Text style={styles.devLine}>
+                {`period logs: ${periodHistory.length} | active prediction: ${activePredictionAnchor || 'none'}`}
+              </Text>
+              <Text style={styles.devLine}>
+                {`feedback entries: ${feedbackHistory.length}`}
+              </Text>
+            </View>
+          ) : null}
           <Disclaimer compact style={styles.disclaimerBlock} />
         </ScrollView>
       </View>
@@ -1043,105 +1258,25 @@ const CycleHomeScreen = () => {
         </View>
       )}
 
-      <Modal
-        visible={dayModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDayModalVisible(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setDayModalVisible(false)}>
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Log period day</Text>
-                <Text style={styles.modalSubtitle}>
-                  {selectedDay
-                    ? selectedDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                    : ''}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setDayModalVisible(false)}
-                style={styles.modalClose}
-                accessibilityRole="button"
-              >
-                <Ionicons name="close" size={18} color="#4B117B" />
-              </Pressable>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Period day</Text>
-              <View style={styles.stepperRow}>
-                <TouchableOpacity
-                  onPress={() => setPeriodDay((v) => Math.max(1, v - 1))}
-                  style={styles.stepperBtn}
-                >
-                  <Ionicons name="remove" size={18} color="#4B117B" />
-                </TouchableOpacity>
-                <Text style={styles.stepperValue}>{periodDay}</Text>
-                <TouchableOpacity
-                  onPress={() => setPeriodDay((v) => Math.min(10, v + 1))}
-                  style={styles.stepperBtn}
-                >
-                  <Ionicons name="add" size={18} color="#4B117B" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Flow</Text>
-              <View style={styles.flowRow}>
-                {FLOW_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    style={[
-                      styles.flowPill,
-                      flowLevel === opt.key && { borderColor: opt.color, backgroundColor: '#FFF5F7' },
-                    ]}
-                    activeOpacity={0.85}
-                    onPress={() => setFlowLevel(opt.key)}
-                  >
-                    <View style={styles.flowIconRow}>
-                      {Array.from({ length: Math.max(1, opt.drops) }).map((_, idx) => (
-                        <Ionicons
-                          key={`${opt.key}-${idx}`}
-                          name="water"
-                          size={16}
-                          color={flowLevel === opt.key ? '#FB6887' : '#D4C4D4'}
-                          style={{ marginLeft: idx === 0 ? 0 : 2 }}
-                        />
-                      ))}
-                      {opt.drops === 0 && (
-                        <Ionicons name="water-outline" size={16} color="#D4C4D4" />
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.flowLabel,
-                        flowLevel === opt.key && { color: '#4B117B', fontWeight: '700' },
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, savingDay && { opacity: 0.6 }]}
-              disabled={savingDay}
-              onPress={handleSaveDay}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.primaryBtnText}>{savingDay ? 'Saving...' : 'Save'}</Text>
-            </TouchableOpacity>
-            <Text style={styles.helperText}>
-              We backfill earlier days of this period based on the chosen day to keep cycle estimates in sync.
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <PeriodCheckInSheet
+        visible={periodCheckInVisible}
+        selectedDate={selectedDayMeta?.date || null}
+        viewMode={periodCheckInView}
+        isPredictedStartDay={Boolean(selectedDayMeta?.isPredictedStartDay)}
+        isConfirmedPeriodDay={selectedDayMeta?.mode === 'confirmed_day'}
+        periodDay={periodDay}
+        flowLevel={flowLevel}
+        flowOptions={FLOW_OPTIONS}
+        saving={savingDay}
+        onClose={closePeriodCheckInSheet}
+        onSwitchToLog={handleOpenEditDates}
+        onConfirmStart={handleConfirmPredictedStart}
+        onRejectStart={handleRejectPredictedStart}
+        onPeriodDayChange={setPeriodDay}
+        onFlowLevelChange={setFlowLevel}
+        onSave={handleSaveDay}
+        onMarkIncorrect={handleMarkConfirmedIncorrect}
+      />
 
       <Modal
         visible={showRatingModal}
@@ -1450,13 +1585,23 @@ const styles = StyleSheet.create({
   calendarDayMutedText: {
     color: '#5B4F76',
   },
-  calendarDayMenstrual: {
-    backgroundColor: '#FDE6EF',
+  calendarDayConfirmedPeriod: {
+    backgroundColor: '#F6B8C8',
     borderWidth: 1.6,
     borderStyle: 'dotted',
     borderColor: '#EA5C7B',
   },
-  calendarDayMenstrualText: {
+  calendarDayConfirmedPeriodText: {
+    color: '#922B4A',
+    fontWeight: '700',
+  },
+  calendarDayPredictedPeriod: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.6,
+    borderStyle: 'dotted',
+    borderColor: '#EA5C7B',
+  },
+  calendarDayPredictedPeriodText: {
     color: '#C2446C',
   },
   calendarDayFertile: {
@@ -1536,28 +1681,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingBottom: 36,
   },
   ringCenter: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-  },
-  ringCenterButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2DCFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4B117B',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
   cycleDay: {
     fontSize: 28,
@@ -1640,113 +1769,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    justifyContent: 'center',
-    padding: 18,
-  },
-  modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    gap: 14,
-    shadowColor: '#2F1E57',
-    shadowOpacity: 0.2,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#3A1F78',
-  },
-  modalSubtitle: {
-    color: '#6A5A9B',
-    marginTop: 4,
-  },
-  modalClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F0EAFB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSection: {
-    gap: 8,
-  },
-  modalLabel: {
-    fontWeight: '700',
-    color: '#3A1F78',
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stepperBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#D6C8F3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F7F3FF',
-  },
-  stepperValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#3A1F78',
-    minWidth: 36,
-    textAlign: 'center',
-  },
-  flowRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  flowPill: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
+  devCard: {
+    backgroundColor: '#F7F1FF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E6DFF1',
-    backgroundColor: '#FFFFFF',
-    gap: 6,
+    borderColor: '#E6D7FF',
+    padding: 12,
+    gap: 3,
   },
-  flowIconRow: {
-    flexDirection: 'row',
-  },
-  flowLabel: {
-    color: '#7A708C',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  primaryBtn: {
-    backgroundColor: '#4B117B',
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    color: '#FFFFFF',
+  devTitle: {
+    color: '#43206B',
     fontWeight: '700',
-    fontSize: 15,
-  },
-  helperText: {
-    color: '#6E6483',
     fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
+  },
+  devLine: {
+    color: '#655283',
+    fontSize: 12,
   },
   disclaimerBlock: {
     marginTop: 2,
