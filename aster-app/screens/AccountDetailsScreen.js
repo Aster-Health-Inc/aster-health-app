@@ -1,5 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Keyboard, Platform, InputAccessoryView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  Keyboard,
+  Platform,
+  InputAccessoryView,
+  Modal,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { usePostHog } from 'posthog-react-native';
@@ -55,6 +68,9 @@ const AccountDetailsScreen = () => {
   const [activeField, setActiveField] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState('');
   const ageRef = useRef(null);
   const heightFeetRef = useRef(null);
   const heightInchesRef = useRef(null);
@@ -213,6 +229,63 @@ const AccountDetailsScreen = () => {
     if (next === 'heightFeet') heightFeetRef.current?.focus();
     if (next === 'heightInches') heightInchesRef.current?.focus();
     if (next === 'weight') weightRef.current?.focus();
+  };
+
+  const getErrorMessage = (err) => {
+    const message = err?.message || err?.error_description || err?.details || '';
+    if (!message) return 'Unable to delete account right now. Please try again.';
+    return String(message);
+  };
+
+  const openDeleteConfirm = () => {
+    if (deletingAccount) return;
+    if (__DEV__) {
+      console.log('[AccountDetails] Delete My Account pressed');
+    }
+    setDeleteAccountError('');
+    setShowDeleteConfirm(true);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (deletingAccount) return;
+    setShowDeleteConfirm(false);
+    setDeleteAccountError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    setDeleteAccountError('');
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) throw new Error('Not signed in');
+
+      const { error } = await supabase.rpc('delete_my_account');
+      if (error) throw error;
+
+      posthog?.capture('account_deleted');
+
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutErr) {
+        console.warn('Sign out after account deletion failed', signOutErr);
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch (localSignOutErr) {
+          console.warn('Local sign out fallback failed', localSignOutErr);
+        }
+      }
+
+      setShowDeleteConfirm(false);
+      setDeletingAccount(false);
+      Alert.alert('Account deleted', 'Your account and data have been permanently deleted.');
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setDeleteAccountError(message);
+      Alert.alert('Delete account failed', message);
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -549,8 +622,17 @@ const AccountDetailsScreen = () => {
                 <TouchableOpacity style={styles.editButton} activeOpacity={0.9} onPress={() => setEditing(true)}>
                   <Text style={styles.editText}>Edit Details</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.dangerButton} activeOpacity={0.9}>
-                  <Text style={styles.dangerText}>Delete My Account</Text>
+                <TouchableOpacity
+                  style={[styles.dangerButton, deletingAccount && styles.dangerButtonDisabled]}
+                  activeOpacity={0.9}
+                  onPress={openDeleteConfirm}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete my account"
+                  disabled={deletingAccount}
+                  testID="delete-account-button"
+                >
+                  <Text style={styles.dangerText}>{deletingAccount ? 'Deleting...' : 'Delete My Account'}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -582,6 +664,61 @@ const AccountDetailsScreen = () => {
             </TouchableOpacity>
           </View>
         )}
+
+        <Modal
+          animationType="fade"
+          transparent
+          visible={showDeleteConfirm}
+          onRequestClose={closeDeleteConfirm}
+        >
+          <View style={styles.deleteModalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              activeOpacity={1}
+              onPress={closeDeleteConfirm}
+              disabled={deletingAccount}
+            />
+            <View style={styles.deleteModalCard}>
+              <Text style={styles.deleteModalTitle}>Delete account</Text>
+              <Text style={styles.deleteModalBody}>
+                This permanently deletes your account and data. This cannot be undone.
+              </Text>
+              {!!deleteAccountError && (
+                <Text style={styles.deleteModalError}>{deleteAccountError}</Text>
+              )}
+              <View style={styles.deleteModalActions}>
+                <TouchableOpacity
+                  style={[styles.deleteModalButton, styles.deleteModalCancelButton]}
+                  activeOpacity={0.88}
+                  onPress={closeDeleteConfirm}
+                  disabled={deletingAccount}
+                >
+                  <Text style={styles.deleteModalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.deleteModalButton,
+                    styles.deleteModalDeleteButton,
+                    deletingAccount && styles.deleteModalDeleteButtonDisabled,
+                  ]}
+                  activeOpacity={0.88}
+                  onPress={handleDeleteAccount}
+                  disabled={deletingAccount}
+                  testID="confirm-delete-account-button"
+                >
+                  {deletingAccount ? (
+                    <View style={styles.deleteLoadingRow}>
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                      <Text style={styles.deleteModalDeleteText}>Deleting...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.deleteModalDeleteText}>Delete</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -698,6 +835,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    width: '100%',
+  },
+  dangerButtonDisabled: {
+    opacity: 0.7,
   },
   editButton: {
     backgroundColor: '#C7F2D4',
@@ -791,5 +934,72 @@ const styles = StyleSheet.create({
   },
   keyboardBarTextPrimary: {
     color: '#FFFFFF',
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(20, 14, 36, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  deleteModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    gap: 12,
+  },
+  deleteModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#241A3A',
+  },
+  deleteModalBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4D4465',
+  },
+  deleteModalError: {
+    fontSize: 13,
+    color: '#B42318',
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+  },
+  deleteModalButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  deleteModalCancelButton: {
+    backgroundColor: '#F2ECFF',
+  },
+  deleteModalDeleteButton: {
+    backgroundColor: '#C94242',
+  },
+  deleteModalDeleteButtonDisabled: {
+    opacity: 0.75,
+  },
+  deleteModalCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4B117B',
+  },
+  deleteModalDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  deleteLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 });
