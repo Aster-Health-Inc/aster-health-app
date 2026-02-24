@@ -10,6 +10,9 @@ import { fetchUserDailyLogs } from '../utils/meallogger';
 import { getUserNutritionGoals } from '../utils/nutritionCalculator';
 import BottomTaskbar from '../components/BottomTaskbar';
 import TabSwipeWrapper from '../components/TabSwipeWrapper';
+import InfoIcon from '../components/InfoIcon';
+import SourcesModal from '../components/SourcesModal';
+import { healthInsightSources } from '../data/healthInsightSources';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -145,6 +148,7 @@ const FoodLogScreen = () => {
     water: '',
   });
   const [inlineError, setInlineError] = useState(null);
+  const [sourcesKey, setSourcesKey] = useState(null);
   const slideAnim = useMemo(() => new Animated.Value(300), []);
 
   const dateKey = useMemo(() => {
@@ -526,6 +530,10 @@ const saveWaterLog = async () => {
         ) : (
           <>
             <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Nutrition Summary</Text>
+                <InfoIcon onPress={() => setSourcesKey('manual_nutrition_logs')} />
+              </View>
               <View style={styles.cardHeaderRow}>
                 <Text style={styles.cardTitle}>Calories</Text>
                 <View style={styles.goalChip}>
@@ -634,6 +642,13 @@ const saveWaterLog = async () => {
         )}
       </ScrollView>
       <BottomTaskbar activeKey="Food" />
+      <SourcesModal
+        visible={!!sourcesKey}
+        onClose={() => setSourcesKey(null)}
+        title="Sources and Methodology"
+        contextText={healthInsightSources[sourcesKey]?.contextText}
+        sources={healthInsightSources[sourcesKey]?.sources}
+      />
 
       <Modal
         visible={editModalVisible}
@@ -875,6 +890,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEXT_PRIMARY,
   },
   cardTitle: {
     fontSize: 16,

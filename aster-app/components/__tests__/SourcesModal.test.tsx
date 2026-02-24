@@ -1,8 +1,9 @@
 import React from 'react';
 import { Linking } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 import SourcesModal from '../SourcesModal';
+import { healthInsightSources } from '../../data/healthInsightSources';
 
 describe('SourcesModal', () => {
   beforeEach(() => {
@@ -36,5 +37,24 @@ describe('SourcesModal', () => {
       getByText('This nutrition summary reflects your logged food data and general public health guidance.'),
     ).toBeTruthy();
     expect(getByText('WHO: Healthy Diet Fact Sheet')).toBeTruthy();
+  });
+
+  it('renders manual nutrition sources data and opens source links', () => {
+    const sourceData = healthInsightSources.manual_nutrition_logs;
+    const { getByText } = render(
+      <SourcesModal
+        visible
+        onClose={jest.fn()}
+        title="Sources and Methodology"
+        contextText={sourceData.contextText}
+        sources={sourceData.sources}
+      />,
+    );
+
+    expect(getByText('Public Nutrition Dataset (Kaggle)')).toBeTruthy();
+    fireEvent.press(getByText('Public Nutrition Dataset (Kaggle)'));
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      'https://www.kaggle.com/datasets/trolukovich/nutritional-values-for-common-foods-and-products',
+    );
   });
 });

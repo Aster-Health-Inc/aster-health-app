@@ -184,6 +184,16 @@ export const HEALTH_INSIGHT_SOURCES = {
       },
     ],
   },
+  manual_nutrition_logs: {
+    contextText:
+      'Nutrition insights summarize your self-reported food logs and show trends over time.\n\nAster calculates daily totals and rolling averages from your entries. Nutrient values are based on a publicly available nutrition dataset and may vary by brand, recipe, and preparation method.\n\nNutrition trends are educational signals only and should not be used as medical advice.',
+    sources: [
+      {
+        title: 'Public Nutrition Dataset (Kaggle)',
+        url: 'https://www.kaggle.com/datasets/trolukovich/nutritional-values-for-common-foods-and-products',
+      },
+    ],
+  },
 };
 
 export const healthInsightSources = HEALTH_INSIGHT_SOURCES;
