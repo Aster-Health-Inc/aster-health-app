@@ -38,8 +38,9 @@ export async function analyzeFood(base64Image) {
     // 3. Call Gemini API with server-side API key
     // 4. Return nutrition data
 
-    const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_FOOD_ANALYSIS_URL ||
-                              'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/food-analysis';
+    const EDGE_FUNCTION_URL =
+      (process.env.EXPO_PUBLIC_FOOD_ANALYSIS_URL || '').trim() ||
+      'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/food-analysis';
 
     log('Calling Edge Function:', EDGE_FUNCTION_URL);
 

@@ -723,7 +723,7 @@ const CycleHomeScreen = () => {
   const clearOverlappingPeriods = async (canonicalUserId, startYmd, endYmd, excludedPeriodId = null) => {
     const { data: existingRows, error } = await supabase
       .from('periods')
-      .select('id, start_date, end_date')
+      .select('id, start_date, end_date, is_validated_separate_cycle')
       .eq('user_id', canonicalUserId)
       .order('start_date', { ascending: false });
     if (error || !existingRows?.length) return;
@@ -734,6 +734,7 @@ const CycleHomeScreen = () => {
 
     const overlappingIds = existingRows
       .filter((row) => row.id !== excludedPeriodId)
+      .filter((row) => !row.is_validated_separate_cycle)
       .filter((row) => {
         const rowStart = parseYMD(row.start_date);
         if (!rowStart) return false;

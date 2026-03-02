@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { usePostHog } from 'posthog-react-native';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,9 +26,9 @@ const SURFACE = '#FFFFFF';
 const ACCESSORY_ID = 'account-details-accessory';
 
 const BASE_PERSONAL_FIELDS = [
-  { key: 'name', label: 'Name', value: 'Jane Doe' },
-  { key: 'email', label: 'Email', value: 'jane.doe@email.com' },
-  { key: 'phone', label: 'Phone Number', value: '+1 (813) 777-8888' },
+  { key: 'name', label: 'Name', value: '—' },
+  { key: 'email', label: 'Email', value: '—' },
+  { key: 'phone', label: 'Phone Number', value: '—' },
   { key: 'password', label: 'Password', value: '**********' },
 ];
 
@@ -252,6 +253,38 @@ const AccountDetailsScreen = () => {
     setDeleteAccountError('');
   };
 
+  const clearLocalAuthState = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter(
+        (key) =>
+          key.startsWith('sb-') ||
+          (key.toLowerCase().includes('supabase') && key.toLowerCase().includes('auth'))
+      );
+      if (authKeys.length) {
+        await AsyncStorage.multiRemove(authKeys);
+      }
+    } catch (storageErr) {
+      console.warn('Auth storage cleanup failed', storageErr);
+    }
+  };
+
+  const resetToAuth = () => {
+    try {
+      navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+      return;
+    } catch {}
+
+    try {
+      navigation.reset({ index: 0, routes: [{ name: 'SignUp' }] });
+    } catch (resetErr) {
+      console.warn('Navigation reset after deletion failed', resetErr);
+      try {
+        navigation.navigate('SignUp');
+      } catch {}
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (deletingAccount) return;
     setDeletingAccount(true);
@@ -277,8 +310,12 @@ const AccountDetailsScreen = () => {
         }
       }
 
+      // Extra safety to prevent stale local auth cache after deletion.
+      await clearLocalAuthState();
+
       setShowDeleteConfirm(false);
       setDeletingAccount(false);
+      resetToAuth();
       Alert.alert('Account deleted', 'Your account and data have been permanently deleted.');
     } catch (err) {
       const message = getErrorMessage(err);

@@ -1,16 +1,18 @@
 import React from 'react';
-import { act, waitFor } from '@testing-library/react-native';
+import { waitFor } from '@testing-library/react-native';
 import SymptomLogScreen from '../SymptomLogScreen';
-import { renderWithProviders, createSupabaseMock } from '../testUtils';
+import { renderWithProviders } from '../testUtils';
+
+const mockNavigation = {
+  navigate: jest.fn(),
+  goBack: jest.fn(),
+};
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: () => ({
-      navigate: jest.fn(),
-      goBack: jest.fn(),
-    }),
+    useNavigation: () => mockNavigation,
   };
 });
 
@@ -20,18 +22,15 @@ jest.mock('../../lib/supabase', () => {
 });
 
 describe('SymptomLogScreen (integration)', () => {
+  beforeEach(() => {
+    jest.useRealTimers();
+  });
+
   it('renders symptom and mood sections with default mock data', async () => {
-    const { getByPlaceholderText, getByText } = renderWithProviders(<SymptomLogScreen />);
-    const flushPromises = () => new Promise((resolve) => setImmediate(resolve));
+    const { findByPlaceholderText, getByText } = renderWithProviders(<SymptomLogScreen />);
 
-    await act(async () => {
-      await flushPromises();
-    });
-
-    await waitFor(() => {
-      expect(getByPlaceholderText('Search')).toBeTruthy();
-      expect(getByText('Symptoms')).toBeTruthy();
-      expect(getByText('Moods')).toBeTruthy();
-    });
+    expect(await findByPlaceholderText('Search')).toBeTruthy();
+    await waitFor(() => expect(getByText('Symptoms')).toBeTruthy());
+    expect(getByText('Moods')).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +16,10 @@ const MealLogScreen = () => {
     navigation.goBack();
   };
 
+  const handleUnavailable = () => {
+    Alert.alert('Coming soon', 'This feature is not available yet.');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Modal Header */}
@@ -24,7 +28,7 @@ const MealLogScreen = () => {
           <Ionicons name="close" size={24} color="#666" />
         </TouchableOpacity>
         <Text style={styles.modalTitle}>Select Meal Type</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleUnavailable}>
           <Ionicons name="arrow-up" size={24} color="#666" />
         </TouchableOpacity>
       </View>

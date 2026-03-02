@@ -4,13 +4,13 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 import NutritionSummaryScreen from '../NutritionSummaryScreen';
 
-const goBack = jest.fn();
-const navigate = jest.fn();
+const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
-    goBack,
-    navigate,
+    goBack: mockGoBack,
+    navigate: mockNavigate,
   }),
   useRoute: () => ({
     params: {
@@ -80,9 +80,9 @@ describe('NutritionSummaryScreen compliance wiring', () => {
   });
 
   it('shows info icons, opens sources modal on press, and keeps disclaimer visible', () => {
-    const { getAllByA11yLabel, getByText } = render(<NutritionSummaryScreen />);
+    const { getAllByLabelText, getByText } = render(<NutritionSummaryScreen />);
 
-    const infoIcons = getAllByA11yLabel(/sources and methodology/i);
+    const infoIcons = getAllByLabelText(/sources and methodology/i);
     expect(infoIcons.length).toBeGreaterThan(0);
 
     fireEvent.press(infoIcons[0]);

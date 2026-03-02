@@ -142,6 +142,7 @@ export default function MealLogHomeScreen() {
 
   const handleLogFood = () => navigation.navigate('MealLog');
   const handleLogWater = () => setWaterModalVisible(true);
+  const showUnavailableAlert = () => Alert.alert('Coming soon', 'This feature is not available yet.');
 
   const openGoalModal = () => {
     setGoalDraft(String(calorieGoal));
@@ -153,11 +154,11 @@ export default function MealLogHomeScreen() {
       <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
         <View style={styles.topActions}>
-          <TouchableOpacity style={styles.circleButton}>
+          <TouchableOpacity style={styles.circleButton} onPress={showUnavailableAlert}>
             <Ionicons name="person-outline" size={18} color="#4B117B" />
           </TouchableOpacity>
           <View style={styles.rightActions}>
-            <TouchableOpacity style={styles.circleButton}>
+            <TouchableOpacity style={styles.circleButton} onPress={showUnavailableAlert}>
               <Feather name="pie-chart" size={18} color="#4B117B" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.circleButton} onPress={openGoalModal}>
@@ -665,7 +666,8 @@ const styles = StyleSheet.create({
   goalChipText: { fontSize: 12, fontWeight: '600', color: '#4B117B' },
   calorieCardWrapper: {
     alignSelf: 'center',
-    width: 300,
+    width: '100%',
+    maxWidth: 300,
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',

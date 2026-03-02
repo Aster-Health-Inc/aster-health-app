@@ -16,7 +16,7 @@ const envBool = (val, fallback=false) => {
 
 // Build-time defaults (Expo reads EXPO_PUBLIC_* at runtime too)
 const DEFAULT_FLAGS = {
-  chatbot: envBool(process.env.EXPO_PUBLIC_ENABLE_CHATBOT, true),
+  chatbot: envBool(process.env.EXPO_PUBLIC_ENABLE_CHATBOT, false),
 };
 
 export function FeatureFlagsProvider({ children }) {

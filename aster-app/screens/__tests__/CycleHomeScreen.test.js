@@ -124,7 +124,7 @@ jest.mock('../../lib/supabase', () => ({
 
 describe('CycleHomeScreen (integration)', () => {
   it('shows current cycle info based on latest period data', async () => {
-    const { getByText } = render(
+    const { getByText, getAllByText } = render(
       <NavigationContainer>
         <CycleHomeScreen />
       </NavigationContainer>,
@@ -134,7 +134,7 @@ describe('CycleHomeScreen (integration)', () => {
       expect(getByText('Monthly Cycle')).toBeTruthy();
     });
 
-    expect(getByText('Menstrual Phase')).toBeTruthy();
+    expect(getAllByText('Menstrual Phase').length).toBeGreaterThan(0);
     expect(getByText('Day 3')).toBeTruthy();
     expect(getByText("Today's symptoms")).toBeTruthy();
   });

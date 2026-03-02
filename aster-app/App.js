@@ -222,7 +222,9 @@ export default function App() {
     );
   }
 
-  console.log('App render - Session:', session, 'User:', session?.user);
+  if (__DEV__) {
+    console.log('App render - Session:', session, 'User:', session?.user);
+  }
 
   return (
     <GestureHandlerRootView style={styles.flex}>
@@ -230,7 +232,9 @@ export default function App() {
         <NavigationContainer
           onStateChange={(state) => {
             const routeNames = state?.routes?.map((r) => r.name) || [];
-            console.log('Navigation state changed:', routeNames);
+            if (__DEV__) {
+              console.log('Navigation state changed:', routeNames);
+            }
             // Manually track screens to avoid PostHog navigation hook warnings
             const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
             if (currentRoute?.name) {

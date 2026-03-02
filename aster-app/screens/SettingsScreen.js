@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -68,6 +68,10 @@ const SettingsScreen = () => {
     }
     if (item.key === 'privacy') {
       navigation.navigate('PrivacyConsent', { fromSettings: true });
+      return;
+    }
+    if (item.key === 'import') {
+      Alert.alert('Coming soon', 'This feature is not available yet.');
       return;
     }
     if (item.navigateTo) {

@@ -70,8 +70,9 @@ export class ChatbotAPIService {
       // 4. Log to audit trail
       // 5. Return response
 
-      const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_SUPABASE_EDGE_FUNCTION_URL ||
-                                'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/chatbot-proxy';
+      const EDGE_FUNCTION_URL =
+        (process.env.EXPO_PUBLIC_SUPABASE_EDGE_FUNCTION_URL || '').trim() ||
+        'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/chatbot-proxy';
 
       log('Calling Edge Function:', EDGE_FUNCTION_URL);
 
@@ -206,8 +207,9 @@ export class ChatbotAPIService {
         throw new Error('No session');
       }
 
-      const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_SUPABASE_EDGE_FUNCTION_URL ||
-                                'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/chatbot-proxy';
+      const EDGE_FUNCTION_URL =
+        (process.env.EXPO_PUBLIC_SUPABASE_EDGE_FUNCTION_URL || '').trim() ||
+        'https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/chatbot-proxy';
 
       const response = await fetch(EDGE_FUNCTION_URL, {
         method: 'POST',

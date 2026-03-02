@@ -30,9 +30,15 @@
       "ios": { "simulator": false }
     },
     "production": {
+      "autoIncrement": "buildNumber",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://iinbwdrzmmcwajbmuynh.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpbmJ3ZHJ6bW1jd2FqYm11eW5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODEwNjgsImV4cCI6MjA2NzA1NzA2OH0.31o5g-ES31ary6-JIe_QeRDctrP03NZ07V9icf2VWNU"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpbmJ3ZHJ6bW1jd2FqYm11eW5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODEwNjgsImV4cCI6MjA2NzA1NzA2OH0.31o5g-ES31ary6-JIe_QeRDctrP03NZ07V9icf2VWNU",
+        "EXPO_PUBLIC_SUPABASE_EDGE_FUNCTION_URL": "https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/chatbot-proxy",
+        "EXPO_PUBLIC_FOOD_ANALYSIS_URL": "https://iinbwdrzmmcwajbmuynh.supabase.co/functions/v1/food-analysis",
+        "EXPO_PUBLIC_ENABLE_CHATBOT": "true",
+        "EXPO_PUBLIC_LOG_LEVEL": "warn",
+        "EXPO_PUBLIC_CYCLE_DEBUG": "0"
       },
       "distribution": "store",
       "cache": {

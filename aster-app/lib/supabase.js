@@ -160,28 +160,46 @@ const ensureRandomValues = () => {
   }
 
   let generator = null
+  const fillTypedArray = (typedArray, randomBytes) => {
+    if (
+      !typedArray ||
+      !ArrayBuffer.isView(typedArray) ||
+      typeof typedArray.BYTES_PER_ELEMENT !== 'number'
+    ) {
+      throw new TypeError('Expected a TypedArray')
+    }
+
+    const target = new Uint8Array(
+      typedArray.buffer,
+      typedArray.byteOffset || 0,
+      typedArray.byteLength
+    )
+    target.set(randomBytes)
+    return typedArray
+  }
 
   try {
-    const expoRandom = require('expo-random')
-    if (expoRandom?.getRandomValues) {
-      generator = expoRandom.getRandomValues
+    // Some environments set this polyfill by side effect.
+    require('react-native-get-random-values')
+  } catch {}
+
+  if (typeof (globalThis.crypto || {}).getRandomValues === 'function') {
+    return
+  }
+
+  try {
+    const expoCrypto = require('expo-crypto')
+    if (typeof expoCrypto?.getRandomBytes === 'function') {
+      generator = (typedArray) => fillTypedArray(typedArray, expoCrypto.getRandomBytes(typedArray.byteLength))
     }
   } catch (error) {
-    console.log('[warn] expo-random unavailable, falling back to Math.random for getRandomValues')
+    console.warn('[warn] secure RNG module unavailable for getRandomValues')
   }
 
   if (!generator) {
-    generator = (typedArray) => {
-      if (!typedArray || typeof typedArray.length !== 'number') {
-        throw new TypeError('Expected a TypedArray')
-      }
-
-      for (let index = 0; index < typedArray.length; index += 1) {
-        typedArray[index] = Math.floor(Math.random() * 256)
-      }
-
-      return typedArray
-    }
+    throw new Error(
+      'Secure random generator unavailable. Install expo-crypto or react-native-get-random-values.'
+    )
   }
 
   globalCrypto.getRandomValues = generator
