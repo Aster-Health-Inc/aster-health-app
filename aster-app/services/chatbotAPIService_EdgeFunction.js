@@ -11,6 +11,7 @@
 import { supabase } from '../lib/supabase';
 import { HealthGuardrails } from '../utils/healthGuardrails';
 import { log, error as logError } from '../utils/CrashLogger';
+import { isUserDataSharingConsentGranted } from '../utils/userDataSharingConsent';
 
 export class ChatbotAPIService {
 
@@ -22,6 +23,16 @@ export class ChatbotAPIService {
    */
   static async sendMessage(message, userContext) {
     log('ChatbotAPIService: sendMessage called (Edge Function mode)');
+
+    const consentGranted = await isUserDataSharingConsentGranted();
+    if (!consentGranted) {
+      return {
+        success: false,
+        error: 'AI processing is disabled by your privacy settings.',
+        response:
+          'AI responses are currently off. Turn on "Allow AI features to process my data" in Settings to continue.',
+      };
+    }
 
     // ====== LAYER 1: VALIDATE USER INPUT ======
     const inputValidation = HealthGuardrails.validateUserInput(message);

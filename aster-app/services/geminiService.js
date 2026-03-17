@@ -9,6 +9,7 @@
 
 import { supabase } from '../lib/supabase';
 import { log, error as logError } from '../utils/CrashLogger';
+import { isUserDataSharingConsentGranted } from '../utils/userDataSharingConsent';
 
 /**
  * Analyze food image using Gemini AI via secure Edge Function
@@ -18,6 +19,11 @@ import { log, error as logError } from '../utils/CrashLogger';
 export async function analyzeFood(base64Image) {
   try {
     log('Starting food analysis via Edge Function...');
+
+    const consentGranted = await isUserDataSharingConsentGranted();
+    if (!consentGranted) {
+      throw new Error('AI processing is disabled. Enable Data & AI Processing in Settings to continue.');
+    }
 
     // Validate input
     if (!base64Image || typeof base64Image !== 'string') {
@@ -84,6 +90,8 @@ export async function analyzeFood(base64Image) {
     // Provide user-friendly error messages
     if (error.message.includes('not authenticated')) {
       throw new Error('Please log in to use food analysis');
+    } else if (error.message.includes('AI processing is disabled')) {
+      throw new Error('AI analysis is off. Enable Data & AI Processing in Settings to continue.');
     } else if (error.message.includes('blocked')) {
       throw new Error('Unable to analyze this image. Please try a different photo.');
     } else if (error.message.includes('network')) {

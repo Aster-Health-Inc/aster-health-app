@@ -34,7 +34,7 @@ const FAQ_ITEMS = [
   {
     question: 'How does the AI chatbot keep my data private?',
     answer:
-      'Your health data is encrypted and never shared with third parties. The AI uses your logged data to provide general wellness information, and conversations remain secure in your account.',
+      'You control this in Settings. If you allow Data & AI Processing, limited data may be sent to PostHog (analytics) and AI processing services to generate wellness insights. If you choose Not now or turn it off, AI requests and analytics sharing stay disabled.',
   },
   {
     question: 'What do the insights actually tell me?',

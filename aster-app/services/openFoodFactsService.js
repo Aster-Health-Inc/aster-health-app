@@ -1,8 +1,17 @@
 // Open Food Facts API service for barcode scanning
+import { isUserDataSharingConsentGranted } from '../utils/userDataSharingConsent';
+
 const OPEN_FOOD_FACTS_API = 'https://world.openfoodfacts.org/api/v0/product';
 
 export async function getProductByBarcode(barcode) {
   try {
+    const consentGranted = await isUserDataSharingConsentGranted();
+    if (!consentGranted) {
+      throw new Error(
+        'Third-party data processing is disabled. Enable Data & AI Processing in Settings to continue.',
+      );
+    }
+
     console.log('Fetching product data for barcode:', barcode);
     
     const response = await fetch(`${OPEN_FOOD_FACTS_API}/${barcode}.json`);

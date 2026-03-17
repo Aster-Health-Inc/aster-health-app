@@ -587,11 +587,14 @@ const saveWaterLog = async () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Macros</Text>
-              <View style={styles.macroList}>
-                {macrosData.map((macro) => (
-                  <MacroBar
+	            <View style={styles.card}>
+	              <View style={styles.sectionHeaderRow}>
+	                <Text style={styles.cardTitle}>Macros</Text>
+	                <InfoIcon onPress={() => setSourcesKey('manual_nutrition_logs')} />
+	              </View>
+	              <View style={styles.macroList}>
+	                {macrosData.map((macro) => (
+	                  <MacroBar
                     key={macro.key}
                     label={macro.label}
                     value={macro.value}
@@ -602,9 +605,12 @@ const saveWaterLog = async () => {
               </View>
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Water</Text>
-              <View style={styles.waterTopRow}>
+	            <View style={styles.card}>
+	              <View style={styles.sectionHeaderRow}>
+	                <Text style={styles.cardTitle}>Water</Text>
+	                <InfoIcon onPress={() => setSourcesKey('manual_nutrition_logs')} />
+	              </View>
+	              <View style={styles.waterTopRow}>
                 <View style={styles.waterInfoItem}>
                   <View style={styles.infoRow}>
                     <GoalIcon size={16} />

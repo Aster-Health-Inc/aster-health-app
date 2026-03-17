@@ -4,6 +4,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { analyzeFood } from '../services/geminiService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUserDataSharingConsent } from '../hooks/useUserDataSharingConsent';
 
 const BACKGROUND = '#E6E0F3';
 const SURFACE = '#FFFFFF';
@@ -14,10 +15,20 @@ const PhotoConfirmationScreen = () => {
   const navigation = useNavigation();
   const { image, base64, selectedDate } = route.params;
   const [analyzing, setAnalyzing] = useState(false);
+  const { requestConsent } = useUserDataSharingConsent();
 
   const handleAnalyzePhoto = async () => {
     if (!base64) {
       Alert.alert('Error', 'Image data not available for analysis');
+      return;
+    }
+
+    const consentGranted = await requestConsent();
+    if (!consentGranted) {
+      Alert.alert(
+        'AI Analysis Unavailable',
+        'AI analysis is currently off. You can enable Data & AI Processing in Settings any time.',
+      );
       return;
     }
 

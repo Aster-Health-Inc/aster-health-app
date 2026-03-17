@@ -184,6 +184,36 @@ export const HEALTH_INSIGHT_SOURCES = {
       },
     ],
   },
+  chatbot_health_responses: {
+    context:
+      'Chatbot responses are generated from your prompt, selected logged context (such as recent cycle or nutrition entries), and public wellness references.',
+    methodology:
+      'Aster sanitizes and summarizes available context, then an AI model generates educational wellness guidance. Responses are filtered with safety guardrails and are not medical diagnosis or treatment.',
+    wellnessReminder:
+      'Chatbot responses are for general wellness education only and should not replace professional medical advice.',
+    sources: [
+      {
+        title: 'CDC: Women\'s Health',
+        url: 'https://www.cdc.gov/womenshealth/',
+        note: 'General women\'s health guidance used for wellness context.',
+      },
+      {
+        title: 'NIH MedlinePlus: Menstruation',
+        url: 'https://medlineplus.gov/menstruation.html',
+        note: 'Cycle education references for period-related questions.',
+      },
+      {
+        title: 'ACOG: Your Menstrual Cycle',
+        url: 'https://www.acog.org/womens-health/faqs/your-menstrual-cycle',
+        note: 'Clinical education reference for cycle timing and variability.',
+      },
+      {
+        title: 'WHO: Healthy Diet Fact Sheet',
+        url: 'https://www.who.int/news-room/fact-sheets/detail/healthy-diet',
+        note: 'Public health nutrition reference for food and wellness topics.',
+      },
+    ],
+  },
   manual_nutrition_logs: {
     contextText:
       'Nutrition insights summarize your self-reported food logs and show trends over time.\n\nAster calculates daily totals and rolling averages from your entries. Nutrient values are based on a publicly available nutrition dataset and may vary by brand, recipe, and preparation method.\n\nNutrition trends are educational signals only and should not be used as medical advice.',

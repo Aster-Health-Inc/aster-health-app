@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { CardStyleInterpolators, createStackNavigator } from '@react-navigation/stack';
@@ -30,7 +30,6 @@ import ReminderScreen from './screens/ReminderScreen';
 import OnboardingRouterScreen from './screens/OnboardingRouterScreen';
 import HomeScreen from './screens/HomeScreen';
 import AnonymousUpgradeScreen from './screens/AnonymousUpgradeScreen';
-import AuthScreenBase from './screens/AuthScreenBase';
 import SymptomLogScreen from './screens/SymptomLogScreen';
 // Food-related screens
 import MealLogHomeScreen from './screens/MealLogHomeScreen';
@@ -58,6 +57,10 @@ import { initGlobalErrorHandler, initLogging, log, error } from './utils/CrashLo
 // ✅ import PostHog client + provider
 import { PostHogProvider, PostHog } from 'posthog-react-native';
 import * as Notifications from 'expo-notifications';
+import {
+  UserDataSharingConsentProvider,
+  useUserDataSharingConsentManager,
+} from './hooks/useUserDataSharingConsent';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -69,10 +72,13 @@ Notifications.setNotificationHandler({
 
 const Stack = createStackNavigator();
 
-export default function App() {
+function AppContent() {
   // 1) Hooks at the top
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [posthogClient, setPosthogClient] = useState(null);
+  const { consentGranted, consentLoaded, consentStatus, requestConsent } =
+    useUserDataSharingConsentManager();
   const isInvalidRefreshToken = (err) =>
     String(err?.message || err || '').toLowerCase().includes('invalid refresh token');
 
@@ -86,11 +92,11 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+    supabase.auth.getSession().then(async ({ data: { session }, error: sessionError }) => {
       if (!isMounted) return;
-      if (error) {
-        error('[Auth] getSession error:', error);
-        if (isInvalidRefreshToken(error)) {
+      if (sessionError) {
+        error('[Auth] getSession error:', sessionError);
+        if (isInvalidRefreshToken(sessionError)) {
           try {
             await supabase.auth.signOut();
           } catch {}
@@ -127,32 +133,65 @@ export default function App() {
     // error('This is a test error log');
   }, []);
 
-  // PostHog client created once; screen capture handled manually to avoid navigation hook errors
-  const posthogClient = useMemo(
-    () =>
-      new PostHog('phc_bb786hqaz5EACriYfwC1qUDn1NOWNW24IqNAnJzUA8o', {
-        host: 'https://us.i.posthog.com',
-        enableSessionReplay: true,
-        enablePersistSessionIdAcrossRestart: true,
-        sessionReplayConfig: {
-          maskAllTextInputs: true,
-          maskAllImages: true,
-          maskAllSandboxedViews: true,
-          captureLog: false,
-          captureNetworkTelemetry: false,
-          throttleDelayMs: 1500,
-        },
-        autocapture: false,  // Disabled: Autocapture sends large payloads with photo data
-      }),
-    []
-  );
+  useEffect(() => {
+    if (!session?.user?.id || !consentLoaded || consentStatus !== null) {
+      return;
+    }
+    void requestConsent();
+  }, [consentLoaded, consentStatus, requestConsent, session?.user?.id]);
+
+  useEffect(() => {
+    if (!consentGranted || posthogClient) {
+      return;
+    }
+    const client = new PostHog('phc_bb786hqaz5EACriYfwC1qUDn1NOWNW24IqNAnJzUA8o', {
+      host: 'https://us.i.posthog.com',
+      enableSessionReplay: true,
+      enablePersistSessionIdAcrossRestart: true,
+      sessionReplayConfig: {
+        maskAllTextInputs: true,
+        maskAllImages: true,
+        maskAllSandboxedViews: true,
+        captureLog: false,
+        captureNetworkTelemetry: false,
+        throttleDelayMs: 1500,
+      },
+      autocapture: false, // Disabled: Autocapture sends large payloads with photo data
+    });
+    setPosthogClient(client);
+  }, [consentGranted, posthogClient]);
+
+  useEffect(() => {
+    if (!posthogClient) return;
+    const syncPosthogConsent = async () => {
+      try {
+        if (consentGranted) {
+          await posthogClient.optIn();
+          return;
+        }
+        await posthogClient.optOut();
+        posthogClient.reset();
+        setPosthogClient(null);
+      } catch (err) {
+        console.log('[PostHog] consent sync failed', err);
+      }
+    };
+    void syncPosthogConsent();
+  }, [consentGranted, posthogClient]);
+
   const appStateRef = useRef(AppState.currentState);
   const lastActiveAtRef = useRef(null);
   const identifiedUserRef = useRef(null);
   const sessionStartSentRef = useRef(null);
 
   useEffect(() => {
-    if (!posthogClient) return;
+    if (consentGranted) return;
+    identifiedUserRef.current = null;
+    sessionStartSentRef.current = null;
+  }, [consentGranted]);
+
+  useEffect(() => {
+    if (!posthogClient || !consentGranted) return;
     const userId = session?.user?.id ?? null;
 
     if (userId) {
@@ -176,10 +215,10 @@ export default function App() {
       sessionStartSentRef.current = null;
       posthogClient.reset();
     }
-  }, [posthogClient, session?.user?.email, session?.user?.id]);
+  }, [consentGranted, posthogClient, session?.user?.email, session?.user?.id]);
 
   useEffect(() => {
-    if (!posthogClient) return;
+    if (!posthogClient || !consentGranted) return;
 
     const handleAppStateChange = (nextState) => {
       const previousState = appStateRef.current;
@@ -211,7 +250,7 @@ export default function App() {
       posthogClient.capture('application_became_active');
     }
     return () => subscription.remove();
-  }, [posthogClient, session?.user?.id]);
+  }, [consentGranted, posthogClient, session?.user?.id]);
 
   // 5) Early return AFTER all hooks
   if (loading) {
@@ -226,6 +265,98 @@ export default function App() {
     console.log('App render - Session:', session, 'User:', session?.user);
   }
 
+  const navigationTree = (
+    <OnboardingProvider>
+      <FeatureFlagsProvider>
+        <StatusBar style="auto" />
+        <Stack.Navigator
+          screenOptions={({ route }) => {
+            const tabDirection = route?.params?.tabTransition?.direction;
+            const isRtl = tabDirection === 'rtl';
+            return {
+              headerShown: false,
+              gestureDirection: isRtl ? 'horizontal-inverted' : 'horizontal',
+              // Use stable built-in interpolator; flip gesture direction for RTL moves
+              cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+            };
+          }}
+        >
+          {!session || !session.user ? (
+            <>
+              <Stack.Screen name="Welcome" component={WelcomeScreen} />
+              <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
+              <Stack.Screen name="Consent" component={ConsentScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="SignUp" component={SignUpScreen} />
+              <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+
+              {/* Food testing routes */}
+              <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+              <Stack.Screen name="MealLog" component={MealLogScreen} />
+              <Stack.Screen name="Camera" component={CameraScreen} />
+              <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+              <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+              <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+              <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
+              <Stack.Screen name="SignUp" component={SignUpScreen} />
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen} />
+              <Stack.Screen name="Feedback" component={FeedbackScreen} />
+              <Stack.Screen name="ReportBug" component={ReportBugScreen} />
+              <Stack.Screen name="Support" component={SupportScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
+              <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
+              <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
+              <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
+              <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
+              <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
+              <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
+              <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
+              <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
+              <Stack.Screen name="Reminder" component={ReminderScreen} />
+              <Stack.Screen
+                name="SymptomLog"
+                component={SymptomLogScreen}
+                options={{
+                  presentation: 'transparentModal',
+                  cardStyle: { backgroundColor: 'transparent' },
+                  animationEnabled: true,
+                  gestureDirection: 'vertical',
+                  cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
+                }}
+              />
+              <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
+              <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
+              <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
+              <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
+
+              {/* Food-related */}
+              <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
+              <Stack.Screen name="MealLog" component={MealLogScreen} />
+              <Stack.Screen name="Camera" component={CameraScreen} />
+              <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
+              <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
+              <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
+              <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
+              <Stack.Screen name="FoodLog" component={FoodLogScreen} />
+              <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+        <ConnectivityOverlay />
+      </FeatureFlagsProvider>
+    </OnboardingProvider>
+  );
+
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
@@ -237,109 +368,30 @@ export default function App() {
             }
             // Manually track screens to avoid PostHog navigation hook warnings
             const currentRoute = state?.routes?.[state.index ?? routeNames.length - 1];
-            if (currentRoute?.name) {
+            if (consentGranted && currentRoute?.name) {
               // Don't send params to avoid large payloads (e.g., photo data)
               posthogClient?.screen(currentRoute.name);
             }
           }}
         >
-          <PostHogProvider
-            client={posthogClient}
-            autocapture={false}
-          >
-            <OnboardingProvider>
-              <FeatureFlagsProvider>
-                <StatusBar style="auto" />
-                <Stack.Navigator
-                  screenOptions={({ route }) => {
-                    const tabDirection = route?.params?.tabTransition?.direction;
-                    const isRtl = tabDirection === 'rtl';
-                    return {
-                      headerShown: false,
-                      gestureDirection: isRtl ? 'horizontal-inverted' : 'horizontal',
-                      // Use stable built-in interpolator; flip gesture direction for RTL moves
-                      cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-                    };
-                  }}
-                >
-                {!session || !session.user ? (
-                  <>
-                    <Stack.Screen name="Welcome" component={WelcomeScreen} />
-                    <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
-                    <Stack.Screen name="Consent" component={ConsentScreen} />
-                    <Stack.Screen name="Login" component={LoginScreen} />
-                    <Stack.Screen name="SignUp" component={SignUpScreen} />
-                    <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
-
-                    {/* Food testing routes */}
-                    <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
-                    <Stack.Screen name="MealLog" component={MealLogScreen} />
-                    <Stack.Screen name="Camera" component={CameraScreen} />
-                    <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
-                    <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
-                    <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
-                    <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
-                    <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
-                    <Stack.Screen name="FoodLog" component={FoodLogScreen} />
-                  </>
-                ) : (
-                  <>
-                    <Stack.Screen name="OnboardingRouter" component={OnboardingRouterScreen} />
-                    <Stack.Screen name="SignUp" component={SignUpScreen} />
-                    <Stack.Screen name="Home" component={HomeScreen} />
-                    <Stack.Screen name="CycleHome" component={CycleHomeScreen} />
-                    <Stack.Screen name="Settings" component={SettingsScreen} />
-                    <Stack.Screen name="HelpFeedback" component={HelpFeedbackScreen} />
-                    <Stack.Screen name="Feedback" component={FeedbackScreen} />
-                    <Stack.Screen name="ReportBug" component={ReportBugScreen} />
-                    <Stack.Screen name="Support" component={SupportScreen} />
-                    <Stack.Screen name="Notifications" component={NotificationsScreen} />
-                    <Stack.Screen name="AccountDetails" component={AccountDetailsScreen} />
-                    <Stack.Screen name="AnonymousUpgrade" component={AnonymousUpgradeScreen} />
-                    <Stack.Screen name="BasicInfo" component={BasicInfoScreen} />
-                    <Stack.Screen name="CycleDetails" component={CycleDetailsScreen} />
-                    <Stack.Screen name="FlowIntensity" component={FlowIntensityScreen} />
-                    <Stack.Screen name="OptionalCycleHistory" component={OptionalCycleHistoryScreen} />
-                    <Stack.Screen name="AdditionalInfo" component={AdditionalInfoScreen} />
-                    <Stack.Screen name="ReminderSetup" component={ReminderSetupScreen} />
-                    <Stack.Screen name="Reminder" component={ReminderScreen} />
-                    <Stack.Screen
-                      name="SymptomLog"
-                      component={SymptomLogScreen}
-                      options={{
-                        presentation: 'transparentModal',
-                        cardStyle: { backgroundColor: 'transparent' },
-                        animationEnabled: true,
-                        gestureDirection: 'vertical',
-                        cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
-                      }}
-                    />
-                    <Stack.Screen name="PastAnalytics" component={PastAnalyticsScreen} />
-                    <Stack.Screen name="PastAnalyticsDetail" component={PastAnalyticsDetailScreen} />
-                    <Stack.Screen name="PastCycleCalendar" component={PastCycleCalendarScreen} />
-                    <Stack.Screen name="PrivacyConsent" component={PrivacyConsentScreen} />
-
-                    {/* Food-related */}
-                    <Stack.Screen name="MealLogHome" component={MealLogHomeScreen} />
-                    <Stack.Screen name="MealLog" component={MealLogScreen} />
-                    <Stack.Screen name="Camera" component={CameraScreen} />
-                    <Stack.Screen name="PhotoConfirmation" component={PhotoConfirmationScreen} />
-                    <Stack.Screen name="NutritionSummary" component={NutritionSummaryScreen} />
-                    <Stack.Screen name="AddFoodScreen" component={AddFoodScreen} options={{ headerShown: false }} />
-                    <Stack.Screen name="TimeAmountScreen" component={TimeAmountScreen} options={{ headerShown: false }} />
-                    <Stack.Screen name="EditGoals" component={EditGoalsScreen} />
-                    <Stack.Screen name="FoodLog" component={FoodLogScreen} />
-                    <Stack.Screen name="DeleteMeals" component={DeleteMealsScreen} />
-                  </>
-                )}
-                </Stack.Navigator>
-                <ConnectivityOverlay />
-              </FeatureFlagsProvider>
-            </OnboardingProvider>
-          </PostHogProvider>
+          {consentGranted && posthogClient ? (
+            <PostHogProvider client={posthogClient} autocapture={false}>
+              {navigationTree}
+            </PostHogProvider>
+          ) : (
+            navigationTree
+          )}
         </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <UserDataSharingConsentProvider>
+      <AppContent />
+    </UserDataSharingConsentProvider>
   );
 }
 

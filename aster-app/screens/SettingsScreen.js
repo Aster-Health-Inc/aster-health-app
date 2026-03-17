@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  Modal,
+  Alert,
+  Linking,
+  Switch,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -7,9 +18,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '../lib/supabase';
 import Disclaimer from '../components/Disclaimer';
+import { useUserDataSharingConsentManager } from '../hooks/useUserDataSharingConsent';
 
 const BACKGROUND = '#EEE7FF';
 const SURFACE = '#FFFFFF';
+const PRIVACY_POLICY_URL = 'https://aster.fit/privacypolicy/';
 
 const SETTINGS_ITEMS = [
   { key: 'account', label: 'Account Details', navigateTo: 'AccountDetails' },
@@ -22,6 +35,7 @@ const SETTINGS_ITEMS = [
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
+  const { consentGranted, setConsentGranted } = useUserDataSharingConsentManager();
   const [userProfile, setUserProfile] = useState({
     name: 'Jane Doe',
     plan: 'Premium Member',
@@ -102,6 +116,18 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleToggleDataSharing = async (nextValue) => {
+    await setConsentGranted(nextValue);
+  };
+
+  const openPrivacyPolicy = async () => {
+    try {
+      await Linking.openURL(PRIVACY_POLICY_URL);
+    } catch (err) {
+      console.log('Privacy policy link failed', err);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -163,9 +189,9 @@ const SettingsScreen = () => {
             ))}
           </View>
 
-          <View style={styles.legalCard}>
-            <View style={styles.legalHeaderRow}>
-              <Text style={styles.legalTitle}>Information & Legal</Text>
+	          <View style={styles.legalCard}>
+	            <View style={styles.legalHeaderRow}>
+	              <Text style={styles.legalTitle}>Information & Legal</Text>
               <TouchableOpacity
                 style={styles.legalAction}
                 onPress={() => navigation.navigate('PrivacyConsent', { fromSettings: true })}
@@ -173,11 +199,48 @@ const SettingsScreen = () => {
               >
                 <Text style={styles.legalActionText}>View Details</Text>
               </TouchableOpacity>
+	            </View>
+	            <Disclaimer compact />
+	          </View>
+
+          <View style={styles.dataProcessingCard}>
+            <Text style={styles.dataProcessingTitle}>Data & AI Processing</Text>
+            <Text style={styles.dataProcessingBody}>
+              Aster uses limited third-party processing only to provide analytics and AI features.
+            </Text>
+            <Text style={styles.dataProcessingBody}>
+              Data collected can include food logs, cycle tracking entries, optional chatbot messages, and
+              device analytics.
+            </Text>
+            <Text style={styles.dataProcessingBody}>
+              Third-party services used for these features include PostHog (analytics) and AI processing
+              services for insights. Optional nutrition barcode lookups can query Open Food Facts.
+            </Text>
+            <Text style={styles.dataProcessingBody}>
+              These services follow privacy and data protection practices and are used only to provide app
+              functionality.
+            </Text>
+
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Allow AI features to process my data</Text>
+              <Switch
+                value={consentGranted}
+                onValueChange={handleToggleDataSharing}
+                thumbColor={consentGranted ? '#FFFFFF' : '#F4F3F4'}
+                trackColor={{ false: '#D2C7E8', true: '#4B117B' }}
+              />
             </View>
-            <Disclaimer compact />
+
+            <TouchableOpacity
+              style={styles.privacyPolicyButton}
+              onPress={openPrivacyPolicy}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.privacyPolicyButtonText}>Open Privacy Policy</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </View>
+	        </ScrollView>
+	      </View>
 
       <Modal
         animationType="fade"
@@ -359,6 +422,49 @@ const styles = StyleSheet.create({
   },
   legalActionText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#4B117B',
+  },
+  dataProcessingCard: {
+    backgroundColor: SURFACE,
+    borderRadius: 22,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(63,37,96,0.12)',
+    gap: 10,
+  },
+  dataProcessingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#3F2560',
+  },
+  dataProcessingBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#4A3B66',
+  },
+  toggleRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3F2560',
+  },
+  privacyPolicyButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F2ECFF',
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  privacyPolicyButtonText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#4B117B',
   },

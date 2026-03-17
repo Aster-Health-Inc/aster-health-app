@@ -21,6 +21,12 @@ import { supabase } from '../lib/supabase';
 import { usePostHog } from 'posthog-react-native';
 import ChatbotDataService from '../services/chatbotDataService';
 import ChatbotAPIService from '../services/chatbotAPIService_EdgeFunction';
+import InfoIcon from './InfoIcon';
+import SourcesModal from './SourcesModal';
+import { useUserDataSharingConsent } from '../hooks/useUserDataSharingConsent';
+
+const AI_DISABLED_MESSAGE =
+  'AI responses are currently off. Turn on "Allow AI features to process my data" in Settings to continue.';
 
 export default function ChatbotModal({ visible, onClose }) {
   const insets = useSafeAreaInsets();
@@ -31,7 +37,9 @@ export default function ChatbotModal({ visible, onClose }) {
   const [userContext, setUserContext] = useState(null);
   const [messages, setMessages] = useState([]);
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
+  const [activeSourcesKey, setActiveSourcesKey] = useState(null);
   const scrollRef = useRef(null);
+  const { requestConsent } = useUserDataSharingConsent();
   const waveOffsets = Array.from(
     { length: Math.ceil(Dimensions.get('window').height / 28) + 2 },
     (_, i) => i * 28,
@@ -47,6 +55,9 @@ export default function ChatbotModal({ visible, onClose }) {
       }
     }
   }, [visible, hasShownWelcome]);
+
+  const openSourcesModal = (categoryKey) => setActiveSourcesKey(categoryKey || 'chatbot_health_responses');
+  const closeSourcesModal = () => setActiveSourcesKey(null);
 
   /**
    * Load user data when modal opens
@@ -196,6 +207,15 @@ const MarkdownBubble = ({ text }) => {
     const text = (overrideText ?? input).trim();
     if (!text || sending) return;
 
+    const consentGranted = await requestConsent();
+    if (!consentGranted) {
+      setMessages((m) => [
+        ...m,
+        { id: `consent-blocked-${Date.now()}`, role: 'assistant', text: AI_DISABLED_MESSAGE },
+      ]);
+      return;
+    }
+
     const userMsg = { id: String(Date.now()), role: "user", text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
@@ -332,15 +352,21 @@ const MarkdownBubble = ({ text }) => {
             ))}
           </Svg>
 
-          <View style={styles.header}>
-            <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
-              <Ionicons name="close" size={22} color="#3F2560" />
-            </Pressable>
-            <Pressable onPress={handleEndChat} style={styles.endChatBtn} accessibilityRole="button">
-              <Ionicons name="refresh" size={20} color="#3F2560" />
-              <Text style={styles.endChatText}>New Chat</Text>
-            </Pressable>
-          </View>
+	          <View style={styles.header}>
+	            <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
+	              <Ionicons name="close" size={22} color="#3F2560" />
+	            </Pressable>
+	            <View style={styles.headerCenter}>
+	              <View style={styles.headerTitleRow}>
+	                <Text style={styles.headerTitle}>AI Wellness Assistant</Text>
+	                <InfoIcon onPress={() => openSourcesModal('chatbot_health_responses')} />
+	              </View>
+	            </View>
+	            <Pressable onPress={handleEndChat} style={styles.endChatBtn} accessibilityRole="button">
+	              <Ionicons name="refresh" size={20} color="#3F2560" />
+	              <Text style={styles.endChatText}>New Chat</Text>
+	            </Pressable>
+	          </View>
 
           <KeyboardAvoidingView
             style={{ flex: 1 }}
@@ -448,9 +474,14 @@ const MarkdownBubble = ({ text }) => {
             </View>
           </KeyboardAvoidingView>
         </View>
-      </SafeAreaView>
-    </Modal>
-  );
+	      </SafeAreaView>
+	      <SourcesModal
+	        visible={Boolean(activeSourcesKey)}
+	        onClose={closeSourcesModal}
+	        categoryKey={activeSourcesKey || 'chatbot_health_responses'}
+	      />
+	    </Modal>
+	  );
 }
 
 const styles = StyleSheet.create({
@@ -464,6 +495,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 6,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  headerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3F2560',
   },
   closeBtn: {
     width: 38,

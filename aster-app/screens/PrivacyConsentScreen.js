@@ -63,13 +63,15 @@ const PrivacyConsentScreen = ({ navigation, route }) => {
         <Text style={styles.title}>Your body. Your data.</Text>
         <Text style={styles.subtitle}>
           We collect health and wellness inputs to personalize your Aster insights. You can delete your
-          data at any time.
+          data at any time. Some features may use approved third-party analytics and AI processing services
+          when enabled.
         </Text>
 
         <View style={styles.noticeCard}>
           <Ionicons name="information-circle" size={20} color="#4B117B" />
           <Text style={styles.noticeText}>
             Aster provides cycle and wellness estimates based on your logged data and general research references.
+            You can control Data & AI Processing in Settings.
           </Text>
         </View>
         <Disclaimer compact style={styles.disclaimerBlock} />
