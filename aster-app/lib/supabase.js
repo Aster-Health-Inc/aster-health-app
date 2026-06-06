@@ -2,6 +2,27 @@ import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Linking from 'expo-linking'
+import Constants from 'expo-constants'
+
+const SUPABASE_FETCH_TIMEOUT_MS = 15000
+
+const fetchWithTimeout = (input, init = {}) => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), SUPABASE_FETCH_TIMEOUT_MS)
+
+  const upstreamSignal = init.signal
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      controller.abort()
+    } else {
+      upstreamSignal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+  }
+
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId)
+  })
+}
 
 const ensureSha256Digest = () => {
   const globalCrypto = globalThis.crypto || {}
@@ -214,8 +235,10 @@ if (typeof globalThis.structuredClone === 'undefined') {
   globalThis.structuredClone = (obj) => JSON.parse(JSON.stringify(obj))
 }
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || Constants.expoConfig?.extra?.supabaseUrl
+const supabaseAnonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || Constants.expoConfig?.extra?.supabaseAnonKey
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
@@ -224,6 +247,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: fetchWithTimeout,
+  },
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

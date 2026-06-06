@@ -60,6 +60,31 @@ const COLORS = {
 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const AUTH_TIMEOUT_MS = 20000;
+
+const withAuthTimeout = (promise, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `${label} timed out. Check your internet connection and that the Supabase project is active.`
+            )
+          ),
+        AUTH_TIMEOUT_MS
+      )
+    ),
+  ]);
+
+const formatAuthError = (err) => {
+  const message = err?.message ?? 'Please try again.';
+  if (/aborted|timed out|fetch failed|network request failed/i.test(message)) {
+    return 'Could not reach the server. Check your internet connection and try again.';
+  }
+  return message;
+};
 
 const assets = {
   google: require('../assets/Google.png'),
@@ -438,7 +463,10 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
     setOauthLoading('anonymous');
     try {
       logInfo('[Anon] Starting anonymous sign-in', { username: anonUsername.trim() });
-      const { data, error } = await supabase.auth.signInAnonymously();
+      const { data, error } = await withAuthTimeout(
+        supabase.auth.signInAnonymously(),
+        'Anonymous sign in'
+      );
       if (error) throw error;
       const user = data?.user;
       if (user) {
@@ -595,10 +623,13 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
       );
 
       if (mode === Mode.SIGN_UP) {
-        const { data, error } = await supabase.auth.signUp({
-          email: normalizedEmail,
-          password,
-        });
+        const { data, error } = await withAuthTimeout(
+          supabase.auth.signUp({
+            email: normalizedEmail,
+            password,
+          }),
+          'Sign up'
+        );
         if (error) throw error;
         logInfo('[Auth] Email sign-up response', {
           userId: data?.user?.id,
@@ -611,10 +642,13 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           const {
             data: signInData,
             error: signInError,
-          } = await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password,
-          });
+          } = await withAuthTimeout(
+            supabase.auth.signInWithPassword({
+              email: normalizedEmail,
+              password,
+            }),
+            'Sign in after sign up'
+          );
 
           if (signInError) {
             logError('[Auth] Post-signup sign-in failed', signInError);
@@ -646,10 +680,13 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
           posthog?.capture('sign_up', { method: 'email' });
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
+        const { error } = await withAuthTimeout(
+          supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          }),
+          'Sign in'
+        );
         if (error) throw error;
 
         const { data: userData } = await supabase.auth.getUser();
@@ -668,7 +705,7 @@ const AuthScreenBase = ({ initialMode = Mode.SIGN_UP }) => {
         posthog?.capture('sign_in', { method: 'email' });
       }
     } catch (err) {
-      const message = err?.message ?? 'Please try again.';
+      const message = formatAuthError(err);
       logError('[Auth] Email authentication error', mode, err);
       if (mode === Mode.SIGN_IN && /invalid login credentials/i.test(message)) {
         Alert.alert('Invalid password', 'The password you entered is incorrect.');
