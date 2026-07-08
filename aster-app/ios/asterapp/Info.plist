@@ -55,12 +55,8 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Aster uses the camera to take photos of meals for food logging and nutrition tracking, such as capturing a meal photo to attach to a nutrition entry.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
-    <key>NSMotionUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your device motion</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>Aster accesses your photo library so you can choose an existing photo of a meal to attach to a food log for nutrition tracking.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>
