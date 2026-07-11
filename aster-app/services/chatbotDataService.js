@@ -364,39 +364,6 @@ export class ChatbotDataService {
 
     return contextString;
   }
-
-  /**
-   * Create a table for storing chatbot analytics if needed
-   * Call this once to set up the analytics table
-   */
-  static async createAnalyticsTable() {
-    const createTableSQL = `
-      CREATE TABLE IF NOT EXISTS chatbot_analytics (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-        date DATE NOT NULL,
-        total_interactions INTEGER DEFAULT 0,
-        fallbacks INTEGER DEFAULT 0,
-        matches INTEGER DEFAULT 0,
-        conversions INTEGER DEFAULT 0,
-        fallback_rate NUMERIC(5,2) DEFAULT 0,
-        accuracy NUMERIC(5,2) DEFAULT 0,
-        conversion_rate NUMERIC(5,2) DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(user_id, date)
-      );
-    `;
-
-    try {
-      const { error } = await supabase.rpc('exec_sql', { sql: createTableSQL });
-      if (error) throw error;
-      console.log('Chatbot analytics table created successfully');
-      return true;
-    } catch (error) {
-      console.error('Error creating analytics table:', error);
-      return false;
-    }
-  }
 }
 
 export default ChatbotDataService;

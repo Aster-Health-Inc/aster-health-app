@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Aster is a women's health tracking app built with React Native (Expo) and Supabase. The app focuses on period tracking, nutrition logging, health monitoring, and integrates with Apple HealthKit. The primary codebase is in the `aster-app/` directory.
+Aster is a women's health tracking app built with React Native (Expo) and Supabase. The app focuses on period tracking, nutrition logging, and health monitoring. The primary codebase is in the `aster-app/` directory.
 
 **Tech Stack:**
 - Frontend: React Native 0.81.4 with Expo 54
 - Backend: Supabase (PostgreSQL + Auth + Edge Functions)
 - Navigation: React Navigation (Stack Navigator)
 - State: React Context (FeatureFlags + OnboardingContext) + Supabase real-time
-- Platform: iOS-first (Apple HealthKit integration), Android-ready
+- Platform: iOS-first, Android-ready
 - Testing: Jest with jest-expo preset (fully configured with npm scripts)
 - Analytics: PostHog (product analytics + session replay)
 
@@ -100,7 +100,7 @@ npm run ios-sim
 2. **Auth Methods**:
    - Email/password authentication via Supabase Auth
    - Anonymous users can upgrade to full accounts
-   - Session persists in AsyncStorage with PKCE flow
+   - Session persists via the Supabase auth storage adapter (PKCE flow). NOTE: currently plain AsyncStorage — migrate to expo-secure-store (Keychain/Keystore) for token-at-rest security.
    - Deep linking support for OAuth callbacks
 
 ### Core Data Models
@@ -117,7 +117,7 @@ npm run ios-sim
 - `feature_flags`: Runtime feature toggle overrides
 - `chatbot_audit_logs`: AI chatbot interaction history
 
-**Security Note:** All tables have Row Level Security (RLS) enabled. Most recent security update (Dec 20, 2024) added RLS policies to nutrition_goals, public_users, app_ratings, and mood_categories tables.
+**Security Note (VERIFY — do not assume):** RLS must be ENABLED and owner-scoped (`auth.uid() = user_id`; `id` for `users`) on ALL user-data tables (`users`, `periods`, `daily_logs`, `meal_logs`, `water_logs`, `cycle_predictions`, `user_profiles`, `user_symptoms`, `user_moods`, etc.). The Dec 2024 fix only covered nutrition_goals/public_users/app_ratings/mood_categories; the core health tables' RLS state is NOT defined in any tracked migration. Verify with `SELECT relname, relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r';` and apply the RLS lockdown migration in `supabase/migrations/`.
 
 ### Key Architectural Patterns
 
@@ -141,11 +141,9 @@ npm run ios-sim
   - `resetOnboarding()` - Clears all onboarding state
 - Access via `useOnboarding()` hook
 
-**2. Health Integration** (`lib/healthkit.js`, `lib/healthkitSync.js`):
-- iOS-only via `react-native-health`
-- Permission management for workouts, heart rate, steps, etc.
-- Syncs data bidirectionally with Apple Health
-- Gracefully degrades when unavailable (e.g., in Expo Go)
+**2. Health Integration** — PLANNED, NOT IMPLEMENTED:
+- Apple HealthKit sync is on the roadmap but not built. There is no `lib/healthkit.js`/`lib/healthkitSync.js`, no `react-native-health` dependency, and `EXPO_PUBLIC_ENABLE_APPLE_HEALTH` defaults off.
+- Add the real files and update this section when the integration ships.
 
 **3. Error Handling** (`utils/CrashLogger.js`):
 - Global error handler captures JS runtime errors and unhandled rejections
@@ -166,27 +164,25 @@ npm run ios-sim
 - Feature-flagged (chatbot flag)
 
 **6. Nutrition Tracking**:
-- Barcode scanning with camera integration
-- OpenFoodFacts API integration (`services/openFoodFactsService.js`)
+- Camera-based food logging analyzed by Gemini Vision (`food-analysis` edge function)
 - Calorie/macro calculations (`utils/nutritionCalculator.js`)
-- Health guardrails system (`utils/healthGuardrails.js`, `utils/guardrailsMonitor.js`)
+- Health guardrails system (`utils/healthGuardrails.js`)
 
 ### Directory Structure
 
 ```
 aster-app/
-├── screens/          # 40 screen components (authentication, onboarding, tracking)
+├── screens/          # 38 screen components (authentication, onboarding, tracking)
 ├── src/              # Modular feature code
-│   ├── context/      # React Context providers (OnboardingContext)
-│   └── workouts/     # Workouts feature (in development)
-├── components/       # 11 reusable UI components (BottomTaskbar, ChatBotModal, SymptomSelector, etc.)
-├── lib/              # Core integrations (supabase.js, healthkit.js, FeatureFlag.js)
+│   └── context/      # React Context providers (OnboardingContext)
+├── components/       # 16 reusable UI components (BottomTaskbar, ChatBotModal, etc.)
+├── lib/              # Core integrations (supabase.js, FeatureFlag.js)
 ├── services/         # External API services (chatbot, OpenFoodFacts, Gemini)
 ├── utils/            # Helpers (CrashLogger, cycle calculations, nutrition, guardrails)
 │   └── __tests__/    # Jest test files (healthGuardrails.test.js, nutritionCalculator.test.js, etc.)
 ├── assets/           # Images, fonts, icons
 ├── android/          # Native Android code
-├── ios/              # Native iOS code (HealthKit entitlements)
+├── ios/              # Native iOS code
 └── App.js            # Root component with navigation and auth state
 ```
 
@@ -237,12 +233,6 @@ supabase gen types typescript --local > types/supabase.ts
 - Provider nesting order: OnboardingProvider → FeatureFlagsProvider → NavigationContainer
 - Use Supabase real-time subscriptions for data sync
 - Local state with useState/useEffect for component-specific data
-
-### HealthKit Integration
-- HealthKit features ONLY work in development/production builds (not Expo Go)
-- Always check `healthKitAvailable` before calling HealthKit methods
-- Handle permission denials gracefully
-- iOS entitlements configured in `app.config.js`
 
 ### Navigation
 - All screens must be registered in App.js Stack.Navigator
@@ -305,11 +295,6 @@ npx expo start --clear
 ```bash
 npm install --legacy-peer-deps
 ```
-
-**HealthKit not working:**
-- Ensure running on device/simulator (not Expo Go)
-- Check entitlements in `app.config.js`
-- Rebuild native app after pod changes
 
 **Supabase connection:**
 - Verify credentials in `lib/supabase.js`
@@ -444,5 +429,5 @@ npm test -- healthGuardrails.test.js
 6. **utils/CrashLogger.js**: Logging and error capture system
 7. **utils/healthGuardrails.js**: AI safety validation system with comprehensive tests
 8. **components/BottomTaskbar.js**: Main navigation component
-9. **lib/healthkit.js**: Apple Health integration abstraction
+9. **utils/nutritionCalculator.js**: Calorie/macro calculation logic
 10. **supabase/functions/chatbot-proxy/index.ts**: Secure API proxy with data sanitization
